@@ -1479,7 +1479,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ── BILLS PAGE ───────────────────────────────────────────────────────────
     function loadBillsPage() {
-        fetch('/api/bills')
+        fetch((window.API_BASE_URL || '') + '/api/bills')
             .then(r => r.json())
             .then(bills => renderBillsAdmin(bills))
             .catch(() => renderBillsAdmin([]));
@@ -1509,7 +1509,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Expose to inline onclick handlers
     window.editBill = function(id) {
-        fetch('/api/bills')
+        fetch((window.API_BASE_URL || '') + '/api/bills')
             .then(r => r.json())
             .then(bills => {
                 const b = bills.find(x => x.id === id);
@@ -1531,7 +1531,7 @@ document.addEventListener('DOMContentLoaded', function () {
     window.deleteBill = function(id) {
         if (!confirm('Delete this bill?')) return;
         const s = DigifinwizAuth.getSession();
-        fetch('/api/bills/' + id, {
+        fetch((window.API_BASE_URL || '') + '/api/bills/' + id, {
             method: 'DELETE',
             headers: { 'X-User-Id': String(s.userId), 'X-User-Role': s.role }
         }).then(() => { showToast('Bill deleted.', 'info'); loadBillsPage(); })
@@ -1559,7 +1559,7 @@ document.addEventListener('DOMContentLoaded', function () {
             dueDate:       document.getElementById('billDueDate').value.trim(),
             active:        true
         };
-        const url    = editId ? '/api/bills/' + editId : '/api/bills';
+        const url    = (window.API_BASE_URL || '') + (editId ? '/api/bills/' + editId : '/api/bills');
         const method = editId ? 'PUT' : 'POST';
         fetch(url, {
             method,

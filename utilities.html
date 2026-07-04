@@ -273,6 +273,7 @@
         </main>
     </div>
 
+    <script src="config.js"></script>
     <script src="auth.js"></script>
     <script src="db.js"></script>
     <script src="script.js"></script>
@@ -343,7 +344,7 @@
 
     /* ── Bill cards ────────────────────────────────────────────────── */
     function loadBills(payments) {
-        fetch('/api/bills')
+        fetch((window.API_BASE_URL || '') + '/api/bills')
             .then(function(r){ return r.json(); })
             .then(function(bills) {
                 LOADED_BILLS     = bills;

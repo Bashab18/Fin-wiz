@@ -9,4 +9,8 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 20.11.0
+      # Set this to your Netlify site's origin (e.g. https://your-site.netlify.app)
+      # once the frontend is deployed there, so CORS only allows that origin.
+      - key: ALLOWED_ORIGIN
+        value: "*"
     autoDeploy: true

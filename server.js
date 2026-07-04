@@ -1,12 +1,18 @@
 'use strict';
 
 const express  = require('express');
+const cors     = require('cors');
 const fs       = require('fs');
 const path     = require('path');
 
 const app      = express();
 const PORT     = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
+
+// Origin of the static frontend when it's hosted separately (e.g. on Netlify)
+// from this API (e.g. on Render). '*' is fine here since auth uses custom
+// headers rather than cookies, so no credentials are ever sent cross-origin.
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
 
 // ── Ensure data directory + JSON files exist ─────────────────────────────────
 const DATA_FILES = ['users', 'transactions', 'payments', 'purchases', 'challenges', 'messages', 'cart', 'bills'];
@@ -265,6 +271,11 @@ function checkAndCompleteChallengesForUser(userId, context) {
 }
 
 // ── Middleware ────────────────────────────────────────────────────────────────
+app.use(cors({
+    origin:      ALLOWED_ORIGIN,
+    methods:     ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'X-User-Id', 'X-User-Role']
+}));
 app.use(express.json());
 app.use(express.static(__dirname));
 

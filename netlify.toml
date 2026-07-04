@@ -1,0 +1,4 @@
+# Static frontend deploy — the actual API server (server.js) runs separately
+# on Render (see render.yaml). This site just serves the HTML/CSS/JS as-is.
+[build]
+  publish = "."

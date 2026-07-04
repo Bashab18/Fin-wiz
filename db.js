@@ -33,7 +33,7 @@ const DigifinwizDB = (() => {
         if (body !== undefined) {
             opts.body = JSON.stringify(body);
         }
-        const res = await fetch(url, opts);
+        const res = await fetch((window.API_BASE_URL || '') + url, opts);
         if (!res.ok) {
             let msg = res.statusText;
             try {
