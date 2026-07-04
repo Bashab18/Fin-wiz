@@ -1,0 +1,760 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digifinwiz - Challenges</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">Digifinwiz</div>
+            <button class="nav-toggle" aria-label="Toggle navigation"><span></span><span></span><span></span></button>
+            <ul class="nav-menu">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="tutorials.html">Tutorials</a></li>
+                <li><a href="challenges.html" class="active">Challenges</a></li>
+                <li><a href="about.html">About Us</a></li>
+                <li><a href="admin.html">Admin</a></li>
+                <li><a href="messages.html">Messages</a></li>
+                <li><a href="profile.html">Profile</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <aside class="sidebar">
+            <div class="user-profile">
+                <div class="avatar">
+                    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect fill='%23667eea' width='80' height='80'/%3E%3Ctext x='50%25' y='50%25' font-size='32' fill='white' text-anchor='middle' dy='.3em'%3EJD%3C/text%3E%3C/svg%3E" alt="Jane Doe">
+                </div>
+                <h3>Jane Doe</h3>
+                <p class="username">@janeDoee123</p>
+            </div>
+            <p class="sidebar-desc">Visit any of these pages to complete new tasks such as online shopping, paying bills or banking</p>
+            <nav class="sidebar-nav">
+                <a href="ecommerce.html" class="nav-item">
+                    <span>Ecommerce<sup class="nav-badge" id="sidebarBadgeEcommerce">5</sup></span>
+                    <span class="arrow">&#8594;</span>
+                </a>
+                <a href="banking.html" class="nav-item">
+                    <span>Banking<sup class="nav-badge" id="sidebarBadgeBanking" style="display:none">0</sup></span>
+                    <span class="arrow">&#8594;</span>
+                </a>
+                <a href="utilities.html" class="nav-item">
+                    <span>Utilities<sup class="nav-badge" id="sidebarBadgeUtilities" style="display:none">0</sup></span>
+                    <span class="arrow">&#8594;</span>
+                </a>
+                <a href="account-balances.html" class="nav-item">
+                    <span>View account balances</span>
+                    <span class="arrow">&#8594;</span>
+                </a>
+                <a href="account-progress.html" class="nav-item">
+                    <span>View account progress</span>
+                    <span class="arrow">&#8594;</span>
+                </a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <div class="progress-header">
+                <h1 id="progressHeaderText">Loading your progress...</h1>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" style="width: 0%;"></div>
+                </div>
+                <p id="progressSubtext" style="font-size:0.9rem;color:#64748b;margin-top:4px"></p>
+            </div>
+
+            <!-- Tab Navigation -->
+            <div style="display:flex;gap:0.5rem;margin-bottom:1.25rem;border-bottom:2px solid #e2e8f0;padding-bottom:0">
+                <button id="tab-btn-challenges" onclick="switchTab('challenges')"
+                    style="padding:0.5rem 1.25rem;font-size:0.9rem;font-weight:600;border:none;border-radius:8px 8px 0 0;cursor:pointer;background:#6366f1;color:#fff;margin-bottom:-2px;border-bottom:2px solid #6366f1">
+                    &#127919; Challenges
+                </button>
+                <button id="tab-btn-badges" onclick="switchTab('badges')"
+                    style="padding:0.5rem 1.25rem;font-size:0.9rem;font-weight:600;border:none;border-radius:8px 8px 0 0;cursor:pointer;background:#f8fafc;color:#64748b;margin-bottom:-2px;border-bottom:2px solid transparent">
+                    &#127942; Badges
+                </button>
+            </div>
+
+            <!-- Challenges Tab Panel -->
+            <div id="tab-panel-challenges">
+
+            <!-- Level 1 Requirements Panel (hidden for level 2+ users) -->
+            <div id="level1-requirements-panel"></div>
+
+            <!-- Overall Stats Row -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0.75rem;margin-bottom:1.25rem">
+                <div style="background:linear-gradient(135deg,#667eea,#764ba2);border-radius:12px;padding:1rem;color:white;text-align:center">
+                    <div style="font-size:1.5rem;font-weight:700" id="chalStatTotal">&#8212;</div>
+                    <div style="font-size:0.75rem;opacity:0.85">Total Challenges</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#10b981,#059669);border-radius:12px;padding:1rem;color:white;text-align:center">
+                    <div style="font-size:1.5rem;font-weight:700" id="chalStatDone">&#8212;</div>
+                    <div style="font-size:0.75rem;opacity:0.85">Completed</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:12px;padding:1rem;color:white;text-align:center">
+                    <div style="font-size:1.5rem;font-weight:700" id="chalStatXp">&#8212;</div>
+                    <div style="font-size:0.75rem;opacity:0.85">XP Earned</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#3b82f6,#2563eb);border-radius:12px;padding:1rem;color:white;text-align:center">
+                    <div style="font-size:1.5rem;font-weight:700" id="chalStatLevel">&#8212;</div>
+                    <div style="font-size:0.75rem;opacity:0.85">Current Level</div>
+                </div>
+            </div>
+
+            <!-- Category Breakdown Cards -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0.75rem;margin-bottom:1.5rem">
+                <!-- Banking -->
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:1rem">
+                    <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem">
+                        <span style="font-size:1.25rem">&#127970;</span>
+                        <span style="font-weight:700;font-size:0.9rem">Banking</span>
+                        <span style="margin-left:auto;font-size:0.75rem;color:#64748b" id="bankChalCount">&#8212;</span>
+                    </div>
+                    <div style="background:#e2e8f0;border-radius:4px;height:8px;overflow:hidden;margin-bottom:0.5rem">
+                        <div id="bankChalBar" style="height:100%;width:0%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:4px;transition:width 0.7s ease"></div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:#64748b">
+                        <span id="bankChalXp">0 XP earned</span>
+                        <span id="bankChalPct">0%</span>
+                    </div>
+                </div>
+                <!-- Ecommerce -->
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:1rem">
+                    <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem">
+                        <span style="font-size:1.25rem">&#128722;</span>
+                        <span style="font-weight:700;font-size:0.9rem">Ecommerce</span>
+                        <span style="margin-left:auto;font-size:0.75rem;color:#64748b" id="ecoChalCount">&#8212;</span>
+                    </div>
+                    <div style="background:#e2e8f0;border-radius:4px;height:8px;overflow:hidden;margin-bottom:0.5rem">
+                        <div id="ecoChalBar" style="height:100%;width:0%;background:linear-gradient(90deg,#f59e0b,#d97706);border-radius:4px;transition:width 0.7s ease"></div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:#64748b">
+                        <span id="ecoChalXp">0 XP earned</span>
+                        <span id="ecoChalPct">0%</span>
+                    </div>
+                </div>
+                <!-- Utilities -->
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:1rem">
+                    <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem">
+                        <span style="font-size:1.25rem">&#9889;</span>
+                        <span style="font-weight:700;font-size:0.9rem">Utilities</span>
+                        <span style="margin-left:auto;font-size:0.75rem;color:#64748b" id="utilChalCount">&#8212;</span>
+                    </div>
+                    <div style="background:#e2e8f0;border-radius:4px;height:8px;overflow:hidden;margin-bottom:0.5rem">
+                        <div id="utilChalBar" style="height:100%;width:0%;background:linear-gradient(90deg,#10b981,#059669);border-radius:4px;transition:width 0.7s ease"></div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:#64748b">
+                        <span id="utilChalXp">0 XP earned</span>
+                        <span id="utilChalPct">0%</span>
+                    </div>
+                </div>
+            </div>
+
+            <section class="current-challenge">
+                <div class="section-header">
+                    <h2>Your current challenge &#11088;</h2>
+                    <button class="btn btn-priority">First priority</button>
+                </div>
+                <p class="section-desc">Completing challenges allow you to earn points in the game which help you increase in levels. Some challenges will require you to use your florins.</p>
+
+                <div class="challenge-featured" id="featured-challenge">
+                    <div class="challenge-illustration">
+                        <div style="width:140px;height:140px;background:linear-gradient(135deg,#667eea,#764ba2);
+                                    border-radius:24px;display:flex;align-items:center;justify-content:center;
+                                    font-size:3.5rem;box-shadow:0 8px 24px rgba(102,102,234,0.3)" id="featuredIllustrationIcon">&#127919;</div>
+                    </div>
+                    <div class="challenge-details">
+                        <h3 id="featured-title">Loading...</h3>
+                        <p id="featured-desc">Completing challenges allow you to earn points in the game which help you increase in levels.</p>
+                        <div class="challenge-actions">
+                            <div class="challenge-rewards" id="featured-rewards"></div>
+                        </div>
+                        <div id="featured-progress" style="margin-top:0.75rem"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="stats-section">
+                <h2>Check out how you've been doing</h2>
+                <p class="section-desc">XP earned per activity type, updated live from your account.</p>
+
+                <div class="chart-container">
+                    <div class="bar-chart">
+                        <div class="bar-wrapper">
+                            <div class="bar" style="height: 5%;">
+                                <div class="bar-fill bar-ecommerce"></div>
+                            </div>
+                            <div class="bar-value" id="chartValEcom">0 PTS</div>
+                            <div class="bar-label">Ecommerce</div>
+                        </div>
+                        <div class="bar-wrapper">
+                            <div class="bar" style="height: 5%;">
+                                <div class="bar-fill bar-utilities"></div>
+                            </div>
+                            <div class="bar-value" id="chartValUtil">0 PTS</div>
+                            <div class="bar-label">Utilities</div>
+                        </div>
+                        <div class="bar-wrapper">
+                            <div class="bar" style="height: 5%;">
+                                <div class="bar-fill bar-banking"></div>
+                            </div>
+                            <div class="bar-value" id="chartValBank">0 PTS</div>
+                            <div class="bar-label">Banking</div>
+                        </div>
+                        <div class="bar-wrapper">
+                            <div class="bar" style="height: 5%;">
+                                <div class="bar-fill bar-credit"></div>
+                            </div>
+                            <div class="bar-value" id="chartValBonus">0 PTS</div>
+                            <div class="bar-label">Bonus XP</div>
+                        </div>
+                        <div class="bar-wrapper">
+                            <div class="bar" style="height: 5%;">
+                                <div class="bar-fill bar-transfer"></div>
+                            </div>
+                            <div class="bar-value" id="chartValTransfers">0 PTS</div>
+                            <div class="bar-label">Transfers</div>
+                        </div>
+                        <div class="bar-wrapper">
+                            <div class="bar" style="height: 5%;">
+                                <div class="bar-fill bar-level"></div>
+                            </div>
+                            <div class="bar-value" id="chartValLevel">0 PTS</div>
+                            <div class="bar-label">Leveling up</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- XP Breakdown Table -->
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:1rem;margin-top:1rem">
+                    <div style="font-size:0.8rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.75rem">XP Breakdown</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;font-size:0.85rem" id="xpBreakdownTable">
+                        <div style="color:#64748b">Transfers</div><div style="text-align:right;font-weight:600;color:#6366f1" id="xpRowTransfers">0 XP</div><div style="text-align:right;font-size:0.72rem;color:#94a3b8" id="xpRowTransfersPct">&#8212;</div>
+                        <div style="color:#64748b">Bill Payments</div><div style="text-align:right;font-weight:600;color:#10b981" id="xpRowPayments">0 XP</div><div style="text-align:right;font-size:0.72rem;color:#94a3b8" id="xpRowPaymentsPct">&#8212;</div>
+                        <div style="color:#64748b">Purchases</div><div style="text-align:right;font-weight:600;color:#f59e0b" id="xpRowPurchases">0 XP</div><div style="text-align:right;font-size:0.72rem;color:#94a3b8" id="xpRowPurchasesPct">&#8212;</div>
+                        <div style="color:#64748b;padding-top:0.5rem;border-top:1px solid #f1f5f9;font-weight:700">Total XP</div><div style="text-align:right;font-weight:700;color:#1e293b;padding-top:0.5rem;border-top:1px solid #f1f5f9" id="xpRowTotal">0 XP</div><div style="padding-top:0.5rem;border-top:1px solid #f1f5f9"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="other-challenges" id="challenges-list-section">
+                <div class="section-header">
+                    <h2>Your other challenges &#11088;</h2>
+                </div>
+                <p class="section-desc">Completing challenges allow you to earn points in the game which help you increase in levels. Some challenges will require you to use your florins.</p>
+
+                <!-- Filter bar: search + category pills -->
+                <div class="chal-filter-bar">
+                    <input type="search" class="chal-filter-search" id="chalSearchInput" placeholder="&#128269; Search challenges..." oninput="applyChalFilter()" autocomplete="off">
+                    <button class="chal-cat-btn active" id="chalCat-all"        onclick="setChalCat('all')">All</button>
+                    <button class="chal-cat-btn"        id="chalCat-banking"    onclick="setChalCat('banking')">&#127970; Banking</button>
+                    <button class="chal-cat-btn"        id="chalCat-ecommerce"  onclick="setChalCat('ecommerce')">&#128722; Ecommerce</button>
+                    <button class="chal-cat-btn"        id="chalCat-utilities"  onclick="setChalCat('utilities')">&#9889; Utilities</button>
+                    <span class="chal-count-badge" id="chalCountBadge"></span>
+                </div>
+
+                <!-- Dynamically populated from IndexedDB -->
+                <div id="challenges-dynamic-list">
+                    <p style="color:#64748b;padding:20px 0">Loading challenges...</p>
+                </div>
+            </section>
+
+            </div><!-- /tab-panel-challenges -->
+
+            <!-- Badges Tab Panel -->
+            <div id="tab-panel-badges" style="display:none">
+                <p style="color:#64748b;font-size:0.9rem;margin-bottom:1.25rem">
+                    Badges are lifetime achievements earned by reaching milestones across banking, shopping, and utilities.
+                </p>
+                <div class="badges-grid" id="badges-dynamic-grid">
+                    <!-- 8 badge cards — rendered by loadBadgesTab() -->
+                    <div class="badge-card locked"><div class="badge-icon">&#127942;</div><h4>First Purchase</h4><p>Made your first ecommerce purchase</p><span class="badge-progress">0/1</span></div>
+                    <div class="badge-card locked"><div class="badge-icon">&#128176;</div><h4>Money Mover</h4><p>Transferred money 5 times</p><span class="badge-progress">0/5</span></div>
+                    <div class="badge-card locked"><div class="badge-icon">&#9889;</div><h4>Bill Payer</h4><p>Paid 3 utility bills</p><span class="badge-progress">0/3</span></div>
+                    <div class="badge-card locked"><div class="badge-icon">&#127881;</div><h4>Level 10</h4><p>Reached level 10</p><span class="badge-progress">Level 1/10</span></div>
+                    <div class="badge-card locked"><div class="badge-icon">&#127970;</div><h4>Expert Banker</h4><p>Complete 20 banking transfers</p><span class="badge-progress">0/20</span></div>
+                    <div class="badge-card locked"><div class="badge-icon">&#127775;</div><h4>Level 20</h4><p>Reach level 20</p><span class="badge-progress">Level 1/20</span></div>
+                    <div class="badge-card locked"><div class="badge-icon">&#128722;</div><h4>Big Spender</h4><p>Spend over &#402;10,000 in ecommerce</p><span class="badge-progress">&#402;0/&#402;10,000</span></div>
+                    <div class="badge-card locked"><div class="badge-icon">&#9889;</div><h4>Power User</h4><p>Complete 30 total activities</p><span class="badge-progress">0/30</span></div>
+                </div>
+            </div><!-- /tab-panel-badges -->
+
+        </main>
+    </div>
+
+    <script src="auth.js"></script>
+    <script src="db.js"></script>
+    <script src="script.js"></script>
+    <script>
+    // ── Challenge filter state ────────────────────────────────────────────
+    var _chalCatFilter  = 'all';
+    var _chalStatsCache = null;
+    var _chalDataCache  = null;
+    var _chalFeaturedId = null;
+
+    function setChalCat(cat) {
+        _chalCatFilter = cat;
+        ['all','banking','ecommerce','utilities'].forEach(function(c) {
+            var btn = document.getElementById('chalCat-' + c);
+            if (btn) btn.classList.toggle('active', c === cat);
+        });
+        renderFilteredChallenges();
+    }
+
+    function applyChalFilter() { renderFilteredChallenges(); }
+
+    function renderFilteredChallenges() {
+        if (!_chalDataCache || !_chalStatsCache) return;
+        var stats    = _chalStatsCache;
+        var featured = _chalFeaturedId;
+        var search   = (document.getElementById('chalSearchInput') || {}).value || '';
+        var searchLc = search.trim().toLowerCase();
+
+        var active = _chalDataCache.filter(function(c) { return c.active !== false; });
+        var groups  = { banking: [], ecommerce: [], utilities: [], general: [] };
+
+        active.forEach(function(c) {
+            if (featured && c.id === featured) return;
+            var cat = groups[c.category] ? c.category : 'general';
+            if (_chalCatFilter !== 'all' && cat !== _chalCatFilter) return;
+            if (searchLc && c.title.toLowerCase().indexOf(searchLc) === -1 &&
+                (c.description || '').toLowerCase().indexOf(searchLc) === -1) return;
+            groups[cat].push(c);
+        });
+
+        // Sort each group: incomplete first
+        Object.keys(groups).forEach(function(cat) {
+            groups[cat].sort(function(a, b) {
+                return (a.completed ? 1 : 0) - (b.completed ? 1 : 0);
+            });
+        });
+
+        var catLabels = {
+            banking:   '&#127970; Banking challenges',
+            ecommerce: '&#128722; Ecommerce challenges',
+            utilities: '&#9889; Utilities challenges',
+            general:   '&#11088; General challenges'
+        };
+        var html = '';
+        var anySection = false;
+        var totalShown = 0;
+
+        Object.keys(groups).forEach(function(cat) {
+            if (groups[cat].length === 0) return;
+            anySection = true;
+            totalShown += groups[cat].length;
+            var doneInCat   = groups[cat].filter(function(c) { return c.completed; }).length;
+            var totalXpCat  = groups[cat].reduce(function(s, c) { return s + (c.points || 0); }, 0);
+            var earnedXpCat = groups[cat].filter(function(c){ return c.completed; }).reduce(function(s, c) { return s + (c.points || 0); }, 0);
+            var countTag = ' <span style="font-size:0.75em;background:' + (doneInCat === groups[cat].length ? '#dcfce7' : '#ede9fe') + ';color:' + (doneInCat === groups[cat].length ? '#16a34a' : '#7c3aed') + ';padding:1px 8px;border-radius:99px;font-weight:600">' + doneInCat + '/' + groups[cat].length + ' done · +' + earnedXpCat + '/' + totalXpCat + ' XP</span>';
+            html += '<div class="collapsible-section">' +
+                '<button class="collapsible-header" onclick="toggleSection(this)">' +
+                '<span>' + catLabels[cat] + countTag + '</span>' +
+                '<span class="toggle-icon">−</span>' +
+                '</button>' +
+                '<div class="collapsible-content active">';
+            groups[cat].forEach(function(c) { html += buildChallengeCard(c, stats); });
+            html += '</div></div>';
+        });
+
+        if (!anySection) {
+            var msg = searchLc
+                ? 'No challenges match "' + escHtml(search) + '". <button onclick="document.getElementById(\'chalSearchInput\').value=\'\'; renderFilteredChallenges()" style="background:none;border:none;color:#6366f1;cursor:pointer;text-decoration:underline;padding:0;font-family:inherit">Clear search</button>'
+                : '<p style="color:#64748b">No challenges in this category yet. Create more in the <a href="admin.html">Admin panel</a>.</p>';
+            html = '<p style="color:#64748b;padding:20px 0">' + msg + '</p>';
+        }
+
+        var container = document.getElementById('challenges-dynamic-list');
+        if (container) container.innerHTML = html;
+
+        var badge = document.getElementById('chalCountBadge');
+        if (badge) badge.textContent = totalShown > 0 ? totalShown + ' challenge' + (totalShown !== 1 ? 's' : '') : '';
+    }
+
+    // -- SVG icons per category --------------------------------------------
+    var CAT_SVG = {
+        banking: '<svg viewBox="0 0 120 120" class="illustration-svg"><rect x="20" y="50" width="80" height="55" fill="#667eea" rx="5"/><rect x="30" y="60" width="15" height="25" fill="#fff" rx="2" opacity="0.8"/><rect x="52" y="60" width="15" height="25" fill="#fff" rx="2" opacity="0.8"/><rect x="74" y="60" width="16" height="25" fill="#fff" rx="2" opacity="0.8"/><rect x="15" y="45" width="90" height="12" fill="#4c51bf" rx="3"/><polygon points="60,15 15,45 105,45" fill="#5a67d8"/></svg>',
+        ecommerce: '<svg viewBox="0 0 120 120" class="illustration-svg"><rect x="20" y="50" width="40" height="50" fill="#d4a373" rx="3"/><rect x="22" y="53" width="36" height="20" fill="#8b6f47"/><circle cx="80" cy="60" r="18" fill="#ffdbac"/><rect x="72" y="78" width="16" height="25" fill="#4a5568"/></svg>',
+        utilities: '<svg viewBox="0 0 120 120" class="illustration-svg"><rect x="30" y="30" width="60" height="70" fill="#48bb78" rx="6"/><rect x="40" y="45" width="40" height="6" fill="#fff" rx="3" opacity="0.8"/><rect x="40" y="58" width="30" height="6" fill="#fff" rx="3" opacity="0.8"/><rect x="40" y="71" width="35" height="6" fill="#fff" rx="3" opacity="0.8"/><circle cx="60" cy="22" r="8" fill="#38a169"/></svg>',
+        general: '<svg viewBox="0 0 120 120" class="illustration-svg"><circle cx="60" cy="60" r="40" fill="#667eea" opacity="0.15"/><circle cx="60" cy="60" r="28" fill="#667eea" opacity="0.3"/><circle cx="60" cy="60" r="16" fill="#667eea"/><polygon points="60,30 70,55 97,55 75,71 83,97 60,81 37,97 45,71 23,55 50,55" fill="#f6e05e" opacity="0.9"/></svg>'
+    };
+
+    // Featured illustration icon per category
+    var CAT_ICONS = { banking: '&#127970;', ecommerce: '&#128722;', utilities: '&#9889;', general: '&#127919;' };
+
+    function escHtml(s) {
+        if (s == null) return '';
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // Progress indicator for a challenge based on current stats
+    function buildProgressBar(c, stats) {
+        if (c.completed) return '';
+        if (!c.condition || c.condition === 'manual') return '';
+        var val   = Number(c.conditionValue) || 0;
+        var cur   = 0;
+        var label = '';
+        switch (c.condition) {
+            case 'first_transfer':    cur = Math.min(1, stats.txCount);    val = 1; label = 'transfers';  break;
+            case 'first_purchase':    cur = Math.min(1, stats.purchCount); val = 1; label = 'purchases';  break;
+            case 'first_payment':     cur = Math.min(1, stats.payCount);   val = 1; label = 'payments';   break;
+            case 'transaction_count': cur = stats.txCount;    label = 'transfers';  break;
+            case 'payment_count':     cur = stats.payCount;   label = 'bills';      break;
+            case 'transfer_amount':   cur = stats.lastTxAmount || 0; label = '&#402; in one transfer'; break;
+            case 'total_transferred': cur = stats.totalTransferred || 0; label = '&#402; transferred'; break;
+            case 'total_spent_ecom':  cur = stats.totalSpentEcommerce || 0; label = '&#402; spent'; break;
+            case 'reach_level':       cur = stats.user ? stats.user.level : 0; label = 'level'; break;
+            default: return '';
+        }
+        var pct  = val > 0 ? Math.min(100, Math.round((cur / val) * 100)) : 0;
+        var text = Math.min(cur, val) + ' / ' + val + ' ' + label;
+        return '<div style="margin-top:8px">' +
+            '<div style="font-size:0.72em;color:#64748b;margin-bottom:3px">' + escHtml(text) + ' (' + pct + '%)</div>' +
+            '<div style="height:5px;background:#e2e8f0;border-radius:99px;overflow:hidden">' +
+            '<div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#6366f1,#14b8a6);border-radius:99px;transition:width 0.5s"></div>' +
+            '</div></div>';
+    }
+
+    function buildChallengeCard(c, stats) {
+        var svg       = CAT_SVG[c.category] || CAT_SVG.general;
+        var isDone    = c.completed === true;
+        var rewards   = '<span class="badge badge-points">+' + (c.points || 0) + ' XP</span>';
+        if (c.florins && c.florins > 0) rewards += ' <span class="badge badge-florins">-' + Number(c.florins).toFixed(0) + ' florins</span>';
+        var statusBadge = '';
+        if (isDone) {
+            var doneDate = c.completedAt ? ' on ' + new Date(c.completedAt).toLocaleDateString() : '';
+            statusBadge = '<span style="display:inline-block;background:#dcfce7;color:#16a34a;font-size:0.75em;font-weight:700;padding:2px 10px;border-radius:99px;margin-bottom:6px">&#9989; Completed' + escHtml(doneDate) + '</span>';
+            rewards = '<span style="background:#dcfce7;color:#16a34a;font-size:0.8em;padding:2px 10px;border-radius:99px;font-weight:600">+' + (c.points || 0) + ' XP earned</span>';
+        }
+        var progressBar = isDone ? '' : buildProgressBar(c, stats);
+        // Manual challenges get a user-visible "Mark Complete" button
+        var manualBtn = '';
+        if (!isDone && c.condition === 'manual') {
+            manualBtn = '<button onclick="markChallengeComplete(' + c.id + ',' + (c.points||0) + ')" ' +
+                'style="margin-top:8px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:0.8em;font-weight:600;cursor:pointer;transition:opacity 0.2s" ' +
+                'onmouseover="this.style.opacity=0.85" onmouseout="this.style.opacity=1">' +
+                '&#9989; Mark as Complete</button>';
+        }
+        return '<div class="challenge-card" style="' + (isDone ? 'opacity:0.75;' : '') + '">' +
+            '<div class="challenge-illustration-small">' + svg + '</div>' +
+            '<div class="challenge-info">' +
+            statusBadge +
+            '<h3>' + escHtml(c.title) + '</h3>' +
+            '<p>' + escHtml(c.description) + '</p>' +
+            progressBar +
+            '<div class="challenge-actions" style="margin-top:8px">' +
+            '<div class="challenge-rewards">' + rewards + '</div>' +
+            '</div>' +
+            manualBtn +
+            '</div></div>';
+    }
+
+    function markChallengeComplete(id, points) {
+        var now = Date.now();
+        DigifinwizDB.updateChallenge(id, { completed: true, completedAt: now }).then(function() {
+            return DigifinwizDB.getUserData();
+        }).then(function(userData) {
+            if (userData) {
+                userData.points            = (userData.points || 0) + points;
+                userData.pointsToNextLevel = (userData.pointsToNextLevel || 1000) - points;
+                userData.challenges        = (userData.challenges || 0) + 1;
+                if (userData.pointsToNextLevel <= 0) {
+                    if (userData.level === 1) {
+                        // Gate: check level 1 requirements before advancing
+                        return DigifinwizDB.getLevel1Requirements().then(function(req) {
+                            if (req.allMet) {
+                                userData.level++;
+                                userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
+                                showNotification('&#127881; Level Up! You are now level ' + userData.level + '!', 'success');
+                            } else {
+                                userData.pointsToNextLevel = 0;
+                            }
+                            return DigifinwizDB.setUserData(userData);
+                        });
+                    }
+                    userData.level++;
+                    userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
+                    showNotification('&#127881; Level Up! You are now level ' + userData.level + '!', 'success');
+                }
+                return DigifinwizDB.setUserData(userData);
+            }
+        }).then(function() {
+            showNotification('&#9989; Challenge complete! +' + points + ' XP earned!', 'success');
+            // Refresh the whole page section
+            setTimeout(function() { location.reload(); }, 1200);
+        }).catch(function(err) {
+            console.error('markChallengeComplete error:', err);
+            showNotification('Could not complete challenge. Try again.', 'error');
+        });
+    }
+
+    function toggleSection(btn) {
+        var content = btn.nextElementSibling;
+        var icon    = btn.querySelector('.toggle-icon');
+        if (content.classList.contains('active')) {
+            content.classList.remove('active');
+            if (icon) icon.textContent = '+';
+        } else {
+            content.classList.add('active');
+            if (icon) icon.textContent = '\u2212';
+        }
+    }
+
+    function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
+
+    // Extract data-loading into a named function so it can be called on load AND on tab return
+    function loadChallengesPage() {
+        return Promise.all([DigifinwizDB.getStats(), DigifinwizDB.getChallenges()]).then(function(results) {
+            var stats      = results[0];
+            var challenges = results[1];
+            var user       = stats.user;
+
+            // -- Progress header ------------------------------------------
+            if (user) {
+                set('progressHeaderText', user.pointsToNextLevel + ' Points to go before you level up to level ' + (user.level + 1) + ', good job!');
+                var pct = Math.max(0, Math.min(100, Math.round(((1000 - user.pointsToNextLevel) / 1000) * 100)));
+                var pb  = document.querySelector('.progress-bar-container .progress-bar');
+                if (pb) pb.style.width = pct + '%';
+            }
+
+            // -- Level 1 Requirements panel --------------------------------
+            var l1panel = document.getElementById('level1-requirements-panel');
+            if (l1panel) {
+                if (user && user.level === 1) {
+                    DigifinwizDB.getLevel1Requirements().then(function(req) {
+                        if (req.allMet) {
+                            l1panel.innerHTML = '<div style="background:linear-gradient(135deg,#dcfce7,#bbf7d0);border:1px solid #86efac;border-radius:12px;padding:1rem 1.25rem;margin-bottom:1.25rem;display:flex;align-items:center;gap:0.75rem">' +
+                                '<span style="font-size:1.5rem">&#127881;</span>' +
+                                '<div><strong style="color:#15803d">All Level 1 requirements complete!</strong>' +
+                                '<p style="margin:2px 0 0;font-size:0.85rem;color:#166534">Earn enough XP and you\'ll advance to Level 2.</p></div></div>';
+                        } else {
+                            var itemsHtml = req.items.map(function(item) {
+                                return '<div style="display:flex;align-items:center;gap:0.6rem;padding:0.4rem 0;border-bottom:1px solid #e2e8f0">' +
+                                    '<span style="font-size:1rem;flex-shrink:0">' + (item.met ? '&#9989;' : '&#9711;') + '</span>' +
+                                    '<span style="font-size:0.875rem;color:' + (item.met ? '#15803d' : '#1e293b') + ';' + (item.met ? 'text-decoration:line-through;opacity:0.7' : '') + '">' + item.title + '</span>' +
+                                    (!item.met ? '<a href="' + item.link + '" style="margin-left:auto;font-size:0.78rem;background:#6366f1;color:#fff;padding:2px 10px;border-radius:6px;text-decoration:none;white-space:nowrap">Go &#8594;</a>' : '') +
+                                    '</div>';
+                            }).join('');
+                            var doneCount = req.items.filter(function(i) { return i.met; }).length;
+                            l1panel.innerHTML = '<div style="background:#fff;border:2px solid #6366f1;border-radius:12px;padding:1rem 1.25rem;margin-bottom:1.25rem">' +
+                                '<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem">' +
+                                '<span style="font-size:1.25rem">&#127919;</span>' +
+                                '<strong style="color:#4338ca;font-size:0.95rem">Level 1 Requirements</strong>' +
+                                '<span style="margin-left:auto;font-size:0.78rem;background:#ede9fe;color:#7c3aed;padding:2px 10px;border-radius:99px;font-weight:600">' + doneCount + ' / 3 done</span>' +
+                                '</div>' +
+                                '<p style="font-size:0.8rem;color:#64748b;margin:0 0 0.75rem">Complete these 3 activities to unlock Level 2:</p>' +
+                                itemsHtml +
+                                '</div>';
+                        }
+                    }).catch(function(){});
+                } else {
+                    l1panel.innerHTML = '';
+                }
+            }
+
+            // -- Active challenges ----------------------------------------
+            var active = challenges.filter(function(c) { return c.active !== false; });
+            var completedAll = active.filter(function(c) { return c.completed; });
+
+            // -- Overall stats row -----------------------------------------
+            var totalXpEarned = completedAll.reduce(function(s, c) { return s + (c.points || 0); }, 0);
+            set('chalStatTotal', active.length);
+            set('chalStatDone',  completedAll.length + ' / ' + active.length);
+            set('chalStatXp',    '+' + totalXpEarned + ' XP');
+            set('chalStatLevel', user ? 'Level ' + user.level : '--');
+            set('progressSubtext', completedAll.length + ' of ' + active.length + ' challenges completed \u00b7 ' + totalXpEarned + ' XP earned total');
+
+            // -- Category breakdown cards ---------------------------------
+            var cats = ['banking', 'ecommerce', 'utilities'];
+            var catPrefix = { banking: 'bank', ecommerce: 'eco', utilities: 'util' };
+            cats.forEach(function(cat) {
+                var catChallenges = active.filter(function(c) { return c.category === cat; });
+                var catDone = catChallenges.filter(function(c) { return c.completed; });
+                var catXp = catDone.reduce(function(s, c) { return s + (c.points || 0); }, 0);
+                var pct = catChallenges.length > 0 ? Math.round((catDone.length / catChallenges.length) * 100) : 0;
+                var pfx = catPrefix[cat];
+                set(pfx + 'ChalCount', catDone.length + ' / ' + catChallenges.length + ' done');
+                set(pfx + 'ChalXp', catXp + ' XP earned');
+                set(pfx + 'ChalPct', pct + '%');
+                var barEl = document.getElementById(pfx + 'ChalBar');
+                if (barEl) setTimeout(function() { barEl.style.width = pct + '%'; }, 200);
+            });
+
+            // -- Bar chart ------------------------------------------------
+            var txPts    = stats.txPts    || 0;
+            var payPts   = stats.payPts   || 0;
+            var purchPts = stats.purchPts || 0;
+            var bonusPts = completedAll.reduce(function(s, c) { return s + (c.points || 0); }, 0);
+            var levelPts = user ? Math.max(0, (user.level - 1)) * 26 : 0;
+            var allPts   = [purchPts, payPts, txPts, bonusPts, txPts, levelPts];
+            var maxPts   = Math.max.apply(null, allPts) || 1;
+
+            var chartIds = ['chartValEcom','chartValUtil','chartValBank','chartValBonus','chartValTransfers','chartValLevel'];
+            var bars = document.querySelectorAll('.bar-wrapper');
+            allPts.forEach(function(pts, i) {
+                var heightPct = Math.max(5, Math.round((pts / maxPts) * 100));
+                if (bars[i]) {
+                    var barEl = bars[i].querySelector('.bar');
+                    if (barEl) setTimeout(function(el, h){ el.style.height = h + '%'; }(barEl, heightPct), 300 + i * 80);
+                }
+                if (chartIds[i]) set(chartIds[i], pts + ' PTS');
+            });
+
+            // -- XP Breakdown table ----------------------------------------
+            var grandTotal = txPts + payPts + purchPts;
+            var pctOf = function(v) { return grandTotal > 0 ? Math.round((v / grandTotal) * 100) + '%' : '--'; };
+            set('xpRowTransfers', txPts + ' XP');
+            set('xpRowTransfersPct', pctOf(txPts));
+            set('xpRowPayments', payPts + ' XP');
+            set('xpRowPaymentsPct', pctOf(payPts));
+            set('xpRowPurchases', purchPts + ' XP');
+            set('xpRowPurchasesPct', pctOf(purchPts));
+            set('xpRowTotal', grandTotal + ' XP');
+
+            // -- Featured challenge: prefer incomplete, biased by activity -
+            var featured = null;
+            var incomplete = active.filter(function(c) { return !c.completed; });
+            if (incomplete.length > 0) {
+                var needBanking = stats.txCount    === 0;
+                var needEcom    = stats.purchCount === 0;
+                var needUtils   = stats.payCount   === 0;
+                featured = incomplete.find(function(c) { return c.category === 'banking'   && needBanking; })
+                        || incomplete.find(function(c) { return c.category === 'ecommerce' && needEcom;    })
+                        || incomplete.find(function(c) { return c.category === 'utilities' && needUtils;   })
+                        || incomplete[0];
+            } else if (active.length > 0) {
+                featured = active[0];
+            }
+
+            // Update featured illustration icon based on category
+            var featIcon = document.getElementById('featuredIllustrationIcon');
+            if (featIcon && featured) {
+                featIcon.innerHTML = CAT_ICONS[featured.category] || CAT_ICONS.general;
+            }
+
+            var featTitle   = document.getElementById('featured-title');
+            var featDesc    = document.getElementById('featured-desc');
+            var featRewards = document.getElementById('featured-rewards');
+            var featProg    = document.getElementById('featured-progress');
+            if (featured && featTitle) {
+                var isDone = featured.completed === true;
+                featTitle.textContent = (isDone ? '\u2705 ' : '') + featured.title;
+                if (featDesc) featDesc.textContent = featured.description;
+                if (featRewards) {
+                    var rHTML = isDone
+                        ? '<span style="background:#dcfce7;color:#16a34a;font-size:0.85em;padding:3px 12px;border-radius:99px;font-weight:600">+' + (featured.points || 0) + ' XP earned!</span>'
+                        : '<span class="badge badge-points">+' + (featured.points || 0) + ' XP</span>';
+                    if (!isDone && featured.florins && featured.florins > 0) rHTML += ' <span class="badge badge-florins">-' + Number(featured.florins).toFixed(0) + ' florins</span>';
+                    featRewards.innerHTML = rHTML;
+                }
+                // Show progress bar in featured card
+                if (featProg && !isDone) {
+                    featProg.innerHTML = buildProgressBar(featured, stats);
+                }
+                // Add category action link
+                if (featProg && !isDone) {
+                    var catLink = { banking: 'banking.html', ecommerce: 'ecommerce.html', utilities: 'utilities.html' }[featured.category];
+                    if (catLink) {
+                        var catIconTxt = CAT_ICONS[featured.category] || '';
+                        var linkEl = document.createElement('a');
+                        linkEl.href = catLink;
+                        linkEl.style.cssText = 'display:inline-block;margin-top:0.75rem;background:#6366f1;color:#fff;padding:6px 16px;border-radius:8px;font-size:0.85rem;font-weight:600;text-decoration:none';
+                        linkEl.innerHTML = catIconTxt + ' Go to ' + featured.category.charAt(0).toUpperCase() + featured.category.slice(1);
+                        featProg.appendChild(linkEl);
+                    }
+                }
+            } else if (featTitle) {
+                featTitle.textContent = 'No active challenges yet!';
+                if (featDesc) featDesc.textContent = 'Check the Admin panel to create challenges.';
+            }
+
+            // -- Cache data and render via filter function -----------------
+            _chalStatsCache = stats;
+            _chalDataCache  = challenges;
+            _chalFeaturedId = featured ? featured.id : null;
+            renderFilteredChallenges();
+        });
+    }
+
+    // ── Tab switching ──────────────────────────────────────────────────────
+    function switchTab(name) {
+        var panels = ['challenges', 'badges'];
+        panels.forEach(function(p) {
+            var panel = document.getElementById('tab-panel-' + p);
+            var btn   = document.getElementById('tab-btn-' + p);
+            if (!panel || !btn) return;
+            var active = (p === name);
+            panel.style.display = active ? '' : 'none';
+            btn.style.background      = active ? '#6366f1' : '#f8fafc';
+            btn.style.color           = active ? '#fff'    : '#64748b';
+            btn.style.borderBottom    = active ? '2px solid #6366f1' : '2px solid transparent';
+        });
+        sessionStorage.setItem('challenges_tab', name);
+        if (name === 'badges') loadBadgesTab();
+    }
+
+    function loadBadgesTab() {
+        DigifinwizDB.getStats().then(function(stats) {
+            var user   = stats.user || { level: 1 };
+            var badges = document.querySelectorAll('#badges-dynamic-grid .badge-card');
+            var defs = [
+                { icon:'&#127942;', name:'First Purchase',  desc:'Made your first ecommerce purchase',   earned:stats.purchCount>=1,    cur:stats.purchCount,    max:1 },
+                { icon:'&#128176;', name:'Money Mover',     desc:'Transferred money 5 times',             earned:stats.txCount>=5,       cur:stats.txCount,       max:5 },
+                { icon:'&#9889;',   name:'Bill Payer',      desc:'Paid 3 utility bills',                  earned:stats.payCount>=3,      cur:stats.payCount,      max:3 },
+                { icon:'&#127881;', name:'Level 10',        desc:'Reached level 10',                      earned:user.level>=10,         cur:user.level,          max:10 },
+                { icon:'&#127970;', name:'Expert Banker',   desc:'Complete 20 banking transfers',         earned:stats.txCount>=20,      cur:stats.txCount,       max:20 },
+                { icon:'&#127775;', name:'Level 20',        desc:'Reach level 20',                        earned:user.level>=20,         cur:user.level,          max:20 },
+                { icon:'&#128722;', name:'Big Spender',     desc:'Spend over \u019210,000 in ecommerce',  earned:stats.totalSpentEcommerce>=10000, cur:Math.round(stats.totalSpentEcommerce), max:10000 },
+                { icon:'&#9889;',   name:'Power User',      desc:'Complete 30 total activities',          earned:(stats.txCount+stats.payCount+stats.purchCount)>=30, cur:(stats.txCount+stats.payCount+stats.purchCount), max:30 }
+            ];
+            defs.forEach(function(def, i) {
+                if (!badges[i]) return;
+                badges[i].className = 'badge-card ' + (def.earned ? 'earned' : 'locked');
+                var icon = badges[i].querySelector('.badge-icon'); if (icon) icon.innerHTML = def.icon;
+                var h4   = badges[i].querySelector('h4');          if (h4)   h4.textContent = def.name;
+                var p    = badges[i].querySelector('p');            if (p)    p.textContent  = def.desc;
+                var sub  = badges[i].querySelector('.badge-date, .badge-progress');
+                var progressText = def.earned ? 'Earned!' : Math.min(def.cur, def.max) + ' / ' + def.max;
+                if (sub) {
+                    sub.className   = def.earned ? 'badge-date' : 'badge-progress';
+                    sub.textContent = progressText;
+                }
+                // Add or update mini progress bar
+                var existingBar = badges[i].querySelector('.badge-mini-bar-wrap');
+                if (!existingBar) {
+                    var barDiv = document.createElement('div');
+                    barDiv.className = 'badge-mini-bar-wrap';
+                    barDiv.innerHTML = '<div class="badge-mini-bar" style="width:0%"></div>';
+                    badges[i].appendChild(barDiv);
+                    existingBar = barDiv;
+                }
+                var barPct = def.max > 0 ? Math.min(100, Math.round((def.cur / def.max) * 100)) : 0;
+                var fill   = existingBar.querySelector('.badge-mini-bar');
+                setTimeout(function(el, pct) { if (el) el.style.width = pct + '%'; }.bind(null, fill, barPct), 300 + i * 60);
+            });
+        }).catch(function(){});
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        DigifinwizDB.init().then(function() {
+            loadChallengesPage();
+            // Restore last active tab
+            var saved = sessionStorage.getItem('challenges_tab') || 'challenges';
+            switchTab(saved);
+        });
+    });
+
+    // Refresh data whenever the user returns to this tab
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') {
+            var active = sessionStorage.getItem('challenges_tab') || 'challenges';
+            if (active === 'challenges') loadChallengesPage();
+            else loadBadgesTab();
+        }
+    });
+    </script>
+</body>
+</html>

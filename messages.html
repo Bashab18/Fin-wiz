@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digifinwiz - Messages</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* ── Email layout ── */
+        body { display: flex; flex-direction: column; min-height: 100vh; background: #f1f5f9; }
+
+        .email-shell {
+            display: flex;
+            flex: 1;
+            height: calc(100vh - 60px);
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+            background: #fff;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            border-radius: 0;
+            overflow: hidden;
+        }
+
+        /* ── Left sidebar (folder/stats panel) ── */
+        .email-sidebar {
+            width: 200px;
+            min-width: 200px;
+            background: #f8fafc;
+            border-right: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            padding: 1.25rem 0.75rem;
+            gap: 0.25rem;
+        }
+        .email-sidebar-title {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #94a3b8;
+            padding: 0 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .email-folder {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.5rem 0.75rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #475569;
+            cursor: pointer;
+            transition: background 0.12s;
+        }
+        .email-folder.active {
+            background: #ede9fe;
+            color: #6d28d9;
+            font-weight: 600;
+        }
+        .email-folder:hover:not(.active) { background: #e2e8f0; }
+        .email-folder-icon { font-size: 1rem; width: 20px; text-align: center; }
+        .email-folder-badge {
+            margin-left: auto;
+            background: #6d28d9;
+            color: #fff;
+            font-size: 0.65rem;
+            font-weight: 700;
+            border-radius: 9999px;
+            padding: 1px 7px;
+            min-width: 20px;
+            text-align: center;
+        }
+
+        /* ── Message list panel ── */
+        .email-list-panel {
+            width: 320px;
+            min-width: 280px;
+            border-right: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .email-list-header {
+            padding: 1rem 1.1rem 0.75rem;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .email-list-header h2 {
+            font-size: 1rem;
+            font-weight: 700;
+            margin: 0;
+            color: #1e293b;
+        }
+        .email-count { font-size: 0.75rem; color: #94a3b8; }
+        .email-list { flex: 1; overflow-y: auto; }
+
+        .email-item {
+            padding: 0.85rem 1.1rem;
+            border-bottom: 1px solid #f1f5f9;
+            cursor: pointer;
+            transition: background 0.1s;
+            position: relative;
+        }
+        .email-item:hover { background: #f8fafc; }
+        .email-item.selected { background: #ede9fe; border-left: 3px solid #7c3aed; }
+        .email-item.unread { background: #fafbff; }
+        .email-item.selected.unread { background: #ede9fe; }
+
+        .email-item-top {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+        .email-unread-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #7c3aed;
+            flex-shrink: 0;
+        }
+        .email-item-sender {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #1e293b;
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .email-item.read .email-item-sender { font-weight: 500; color: #475569; }
+        .email-item-date { font-size: 0.7rem; color: #94a3b8; white-space: nowrap; }
+        .email-item-subject {
+            font-size: 0.8rem;
+            color: #334155;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 0.2rem;
+        }
+        .email-item.read .email-item-subject { font-weight: 400; color: #64748b; }
+        .email-item-preview {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* ── Reading pane ── */
+        .email-reading-pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-width: 0;
+        }
+        .email-reading-empty {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #94a3b8;
+            gap: 0.75rem;
+        }
+        .email-reading-empty .empty-icon { font-size: 3rem; }
+        .email-reading-empty p { font-size: 0.9rem; }
+
+        .email-reading-header {
+            padding: 1.25rem 1.5rem 0.75rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .email-reading-subject {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin: 0 0 0.6rem;
+        }
+        .email-reading-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+        .email-sender-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            font-size: 0.85rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .email-reading-from { flex: 1; min-width: 0; }
+        .email-reading-from-name { font-size: 0.875rem; font-weight: 600; color: #1e293b; }
+        .email-reading-from-date { font-size: 0.75rem; color: #94a3b8; }
+        .email-reading-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+        .email-reading-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+            font-size: 0.9rem;
+            color: #374151;
+            line-height: 1.7;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        /* ── Admin notice ── */
+        .admin-email-notice {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            text-align: center;
+            padding: 2rem;
+            color: #64748b;
+        }
+        .admin-email-notice .notice-icon { font-size: 2.5rem; }
+        .admin-email-notice p { font-size: 0.9rem; margin: 0 0 0.75rem; }
+
+        /* ── Responsive ── */
+        @media (max-width: 700px) {
+            .email-sidebar { display: none; }
+            .email-list-panel { width: 100%; min-width: 0; border-right: none; }
+            .email-reading-pane { display: none; }
+            .email-reading-pane.mobile-show { display: flex; position: fixed; inset: 60px 0 0; z-index: 50; background: #fff; }
+            .email-list-panel.mobile-hide { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">Digifinwiz</div>
+            <button class="nav-toggle" aria-label="Toggle navigation"><span></span><span></span><span></span></button>
+            <ul class="nav-menu">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="tutorials.html">Tutorials</a></li>
+                <li><a href="challenges.html">Challenges</a></li>
+                <li><a href="about.html">About Us</a></li>
+                <li><a href="admin.html">Admin</a></li>
+                <li><a href="messages.html" class="active">Messages</a></li>
+                <li><a href="profile.html">Profile</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="email-shell" id="emailShell">
+        <!-- Loading state -->
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;color:#94a3b8" id="loadingState">
+            Loading messages…
+        </div>
+    </div>
+
+    <script src="auth.js"></script>
+    <script src="db.js"></script>
+    <script src="script.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var shell = document.getElementById('emailShell');
+
+        function esc(s) {
+            return s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
+
+        function initials(name) {
+            if (!name) return '?';
+            return name.trim().split(/\s+/).map(function(w){ return w[0]; }).slice(0,2).join('').toUpperCase();
+        }
+
+        function formatDate(ts) {
+            var d = new Date(ts);
+            var now = new Date();
+            if (d.toDateString() === now.toDateString()) {
+                return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+            }
+            return d.toLocaleDateString([], {month:'short', day:'numeric'});
+        }
+
+        var TYPE_LABEL = { announcement: '📣 Announcement', warning: '⚠️ Warning', info: 'ℹ️ Info', email: '✉️ Email' };
+        var TYPE_CLASS = { announcement: 'msg-type-announcement', warning: 'msg-type-warning', info: 'msg-type-info', email: 'msg-type-email' };
+
+        DigifinwizDB.init().then(function() {
+            var session = typeof DigifinwizAuth !== 'undefined' ? DigifinwizAuth.getSession() : null;
+            if (!session || !session.loggedIn) {
+                window.location.replace('login.html');
+                return;
+            }
+
+            if (session.role === 'admin') {
+                shell.innerHTML =
+                    '<div class="admin-email-notice">' +
+                        '<div class="notice-icon">📨</div>' +
+                        '<p>Admin messaging is managed through the Admin panel.</p>' +
+                        '<a href="admin.html" class="btn btn-primary">Go to Admin Panel</a>' +
+                    '</div>';
+                return;
+            }
+
+            return DigifinwizDB.getMessagesForUser(session.userId).then(function(messages) {
+                messages = messages || [];
+                buildUI(messages, session);
+            });
+        }).catch(function(err) {
+            console.error('Messages load error:', err);
+            shell.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:#ef4444">Failed to load messages. Please refresh.</div>';
+        });
+
+        function buildUI(messages, session) {
+            var unreadCount = messages.filter(function(m){ return (m.readBy||[]).indexOf(session.userId) === -1; }).length;
+            var selectedId  = null;
+
+            shell.innerHTML =
+                // Sidebar
+                '<div class="email-sidebar">' +
+                    '<div class="email-sidebar-title">Mailbox</div>' +
+                    '<div class="email-folder active">' +
+                        '<span class="email-folder-icon">📥</span> Inbox' +
+                        (unreadCount > 0 ? '<span class="email-folder-badge" id="sidebarBadge">' + unreadCount + '</span>' : '<span id="sidebarBadge" style="display:none" class="email-folder-badge">0</span>') +
+                    '</div>' +
+                '</div>' +
+                // List panel
+                '<div class="email-list-panel" id="listPanel">' +
+                    '<div class="email-list-header">' +
+                        '<h2>Inbox</h2>' +
+                        '<span class="email-count" id="emailCount">' + messages.length + ' message' + (messages.length !== 1 ? 's' : '') + '</span>' +
+                    '</div>' +
+                    '<div class="email-list" id="emailList"></div>' +
+                '</div>' +
+                // Reading pane
+                '<div class="email-reading-pane" id="readingPane">' +
+                    '<div class="email-reading-empty" id="emptyPane">' +
+                        '<div class="empty-icon">✉️</div>' +
+                        (messages.length === 0
+                            ? '<p>No messages yet.<br>Messages from your admin will appear here.</p>'
+                            : '<p>Select a message to read it</p>') +
+                    '</div>' +
+                '</div>';
+
+            var listEl     = document.getElementById('emailList');
+            var paneEl     = document.getElementById('readingPane');
+            var sidebarBdg = document.getElementById('sidebarBadge');
+
+            function refreshUnreadBadge() {
+                var unread = messages.filter(function(m){ return (m.readBy||[]).indexOf(session.userId) === -1; }).length;
+                if (sidebarBdg) {
+                    sidebarBdg.textContent = unread;
+                    sidebarBdg.style.display = unread > 0 ? '' : 'none';
+                }
+            }
+
+            function renderList() {
+                listEl.innerHTML = '';
+                if (!messages.length) return;
+                messages.forEach(function(m) {
+                    var isRead = (m.readBy||[]).indexOf(session.userId) !== -1;
+                    var item = document.createElement('div');
+                    item.className = 'email-item ' + (isRead ? 'read' : 'unread') + (m.id === selectedId ? ' selected' : '');
+                    item.dataset.id = m.id;
+
+                    item.innerHTML =
+                        '<div class="email-item-top">' +
+                            (!isRead ? '<div class="email-unread-dot"></div>' : '<div style="width:8px;flex-shrink:0"></div>') +
+                            '<div class="email-item-sender">' + esc(m.senderName || 'Admin') + '</div>' +
+                            '<div class="email-item-date">' + esc(formatDate(m.sentAt)) + '</div>' +
+                        '</div>' +
+                        '<div class="email-item-subject">' + esc(m.subject) + '</div>' +
+                        '<div class="email-item-preview">' + esc((m.body||'').replace(/\n/g,' ').substring(0,80)) + '</div>';
+
+                    item.addEventListener('click', function() {
+                        selectedId = m.id;
+                        openMessage(m, session);
+                        renderList();
+                        // Mobile: hide list, show pane
+                        if (window.innerWidth <= 700) {
+                            document.getElementById('listPanel').classList.add('mobile-hide');
+                            paneEl.classList.add('mobile-show');
+                        }
+                    });
+
+                    listEl.appendChild(item);
+                });
+            }
+
+            function openMessage(m, session) {
+                var isRead = (m.readBy||[]).indexOf(session.userId) !== -1;
+                var typeClass = TYPE_CLASS[m.type] || 'msg-type-info';
+                var typeLabel = TYPE_LABEL[m.type] || m.type;
+
+                paneEl.innerHTML =
+                    '<div class="email-reading-header">' +
+                        '<h2 class="email-reading-subject">' + esc(m.subject) + '</h2>' +
+                        '<div class="email-reading-meta">' +
+                            '<div class="email-sender-avatar">' + esc(initials(m.senderName)) + '</div>' +
+                            '<div class="email-reading-from">' +
+                                '<div class="email-reading-from-name">' + esc(m.senderName || 'Admin') +
+                                    (m.senderEmail ? ' <span style="font-size:0.78rem;font-weight:400;color:#64748b">&lt;' + esc(m.senderEmail) + '&gt;</span>' : '') +
+                                '</div>' +
+                                '<div class="email-reading-from-date">' + new Date(m.sentAt).toLocaleString() + '</div>' +
+                            '</div>' +
+                            '<div class="email-reading-actions">' +
+                                '<span class="msg-type-badge ' + typeClass + '">' + typeLabel + '</span>' +
+                                (!isRead
+                                    ? '<button class="btn btn-primary btn-sm" id="markReadBtn">Mark as Read</button>'
+                                    : '<span style="font-size:0.75rem;color:#94a3b8">Read ✓</span>') +
+                                '<button class="btn btn-sm" id="backBtn" style="display:none">← Back</button>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="email-reading-body">' + esc(m.body) + '</div>';
+
+                // Back button (mobile)
+                var backBtn = document.getElementById('backBtn');
+                if (backBtn) {
+                    if (window.innerWidth <= 700) backBtn.style.display = '';
+                    backBtn.addEventListener('click', function() {
+                        document.getElementById('listPanel').classList.remove('mobile-hide');
+                        paneEl.classList.remove('mobile-show');
+                    });
+                }
+
+                // Mark as read
+                var markBtn = document.getElementById('markReadBtn');
+                if (markBtn) {
+                    markBtn.addEventListener('click', function() {
+                        markBtn.disabled = true;
+                        DigifinwizDB.markMessageRead(m.id, session.userId).then(function() {
+                            if (!m.readBy) m.readBy = [];
+                            m.readBy.push(session.userId);
+                            renderList();
+                            refreshUnreadBadge();
+                            openMessage(m, session);
+                        }).catch(console.error);
+                    });
+                }
+            }
+
+            renderList();
+        }
+    });
+    </script>
+</body>
+</html>

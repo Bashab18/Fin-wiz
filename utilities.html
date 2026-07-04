@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digifinwiz - Utilities</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="shopping-styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">Digifinwiz</div>
+            <button class="nav-toggle" aria-label="Toggle navigation"><span></span><span></span><span></span></button>
+            <ul class="nav-menu">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="tutorials.html">Tutorials</a></li>
+                <li><a href="challenges.html">Challenges</a></li>
+                <li><a href="about.html">About Us</a></li>
+                <li><a href="admin.html">Admin</a></li>
+                <li><a href="messages.html">Messages</a></li>
+                <li><a href="profile.html">Profile</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- DigiPay Sub-Header -->
+    <header class="shop-header">
+        <div class="shop-container">
+            <div class="shop-logo">DigiPay.</div>
+            <nav class="shop-nav">
+                <a href="#" onclick="switchUtilPageTab('bills');return false;" class="active">Bills</a>
+                <a href="#" onclick="switchUtilPageTab('history');return false;">History</a>
+                <a href="account-progress.html">My Account</a>
+            </nav>
+            <div class="shop-header-right">
+                <div class="shop-icons">
+                    <button class="shop-icon-btn home" onclick="window.location.href='account-progress.html'" title="My Progress">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+                    </button>
+                    <button class="shop-icon-btn bookmark" onclick="switchUtilPageTab('history')" title="Payment History">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+                    </button>
+                    <button class="shop-icon-btn cart" onclick="switchUtilPageTab('bills')" title="Pay Bills">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- DigiPay Game Progress Bar -->
+    <div class="game-progress-bar">
+        <div class="shop-container">
+            <div class="progress-content">
+                <div class="progress-left">
+                    <span class="progress-label">GAME PROGRESS</span>
+                    <span class="level-info">Level <strong id="utilProgressLevel">1/50</strong></span>
+                </div>
+                <div class="progress-bar-container"><div class="progress-bar" id="utilProgressFill" style="width: 0%"></div></div>
+                <span class="progress-text" id="utilProgressText">0% completed</span>
+                <div class="progress-stats">
+                    <div class="stat">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg>
+                        <span id="utilProgressXP">0 XP</span>
+                    </div>
+                    <div class="stat coins">
+                        <div class="coin-icon">&#402;</div>
+                        <span id="utilProgressCoins">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <aside class="sidebar">
+            <div class="user-profile">
+                <div class="avatar">
+                    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect fill='%23667eea' width='80' height='80'/%3E%3Ctext x='50%25' y='50%25' font-size='32' fill='white' text-anchor='middle' dy='.3em'%3EJD%3C/text%3E%3C/svg%3E" alt="User avatar" id="sidebarAvatar">
+                </div>
+                <h3 id="sidebarName">Loading…</h3>
+                <p class="username" id="sidebarUsername"></p>
+            </div>
+            <p class="sidebar-desc">Visit any of these pages to complete new tasks such as online shopping, paying bills or banking</p>
+            <nav class="sidebar-nav">
+                <a href="ecommerce.html" class="nav-item">
+                    <span>Ecommerce<sup class="nav-badge" id="sidebarBadgeEcommerce">5</sup></span>
+                    <span class="arrow">→</span>
+                </a>
+                <a href="banking.html" class="nav-item">
+                    <span>Banking<sup class="nav-badge" id="sidebarBadgeBanking" style="display:none">0</sup></span>
+                    <span class="arrow">→</span>
+                </a>
+                <a href="utilities.html" class="nav-item active">
+                    <span>Utilities<sup class="nav-badge" id="sidebarBadgeUtilities" style="display:none">0</sup></span>
+                    <span class="arrow">→</span>
+                </a>
+                <a href="account-balances.html" class="nav-item">
+                    <span>View account balances</span>
+                    <span class="arrow">∨</span>
+                </a>
+                <a href="account-progress.html" class="nav-item">
+                    <span>View account progress</span>
+                    <span class="arrow">∨</span>
+                </a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <div class="page-header">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.75rem">
+                    <div>
+                        <h1>Utilities &amp; Bill Payment</h1>
+                        <p>Pay your bills on time, build good financial habits, and earn XP</p>
+                    </div>
+                    <div style="background:linear-gradient(135deg,#6366f1,#4f46e5);border-radius:var(--radius-xl);padding:0.75rem 1.25rem;color:white;text-align:right">
+                        <div style="font-size:0.75rem;opacity:0.85">Total Balance</div>
+                        <div style="font-size:1.4rem;font-weight:700" id="utilHeaderBalance">ƒ0.00</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Stats Row (always visible) ───────────────────────── -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0.75rem;margin-bottom:1rem">
+                <div style="background:linear-gradient(135deg,#667eea,#764ba2);border-radius:var(--radius-xl);padding:1rem;color:white;text-align:center">
+                    <div style="font-size:1.4rem;font-weight:700" id="utilBillsPaid">—</div>
+                    <div style="font-size:0.72rem;opacity:0.85">Bills Paid</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:var(--radius-xl);padding:1rem;color:white;text-align:center">
+                    <div style="font-size:1.4rem;font-weight:700" id="utilTotalPaid">—</div>
+                    <div style="font-size:0.72rem;opacity:0.85">Total Paid</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#10b981,#059669);border-radius:var(--radius-xl);padding:1rem;color:white;text-align:center">
+                    <div style="font-size:1.4rem;font-weight:700" id="utilXpEarned">—</div>
+                    <div style="font-size:0.72rem;opacity:0.85">XP Earned</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#3b82f6,#2563eb);border-radius:var(--radius-xl);padding:1rem;color:white;text-align:center">
+                    <div style="font-size:1.4rem;font-weight:700" id="utilNextMilestone">—</div>
+                    <div style="font-size:0.72rem;opacity:0.85">Next Milestone</div>
+                </div>
+            </div>
+
+            <!-- Extended stats -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0.75rem;margin-bottom:1rem">
+                <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:0.875rem;text-align:center">
+                    <div style="font-size:1.2rem;font-weight:700;color:#8b5cf6" id="utilLargestPay">—</div>
+                    <div style="font-size:0.72rem;color:var(--color-gray-500)">Largest Payment</div>
+                </div>
+                <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:0.875rem;text-align:center">
+                    <div style="font-size:1.2rem;font-weight:700;color:#ec4899" id="utilAvgPay">—</div>
+                    <div style="font-size:0.72rem;color:var(--color-gray-500)">Avg Payment</div>
+                </div>
+                <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:0.875rem;text-align:center">
+                    <div style="font-size:1.2rem;font-weight:700;color:#f97316" id="utilMostPaidType">—</div>
+                    <div style="font-size:0.72rem;color:var(--color-gray-500)">Most Paid Bill</div>
+                </div>
+                <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:0.875rem;text-align:center">
+                    <div style="font-size:1.2rem;font-weight:700;color:#0ea5e9" id="utilBillTypes">—</div>
+                    <div style="font-size:0.72rem;color:var(--color-gray-500)">Bill Types Paid</div>
+                </div>
+            </div>
+
+            <!-- Most recent payment row -->
+            <div id="utilRecentPayRow" style="display:none;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:1rem;margin-bottom:1rem">
+                <div style="font-size:0.72rem;color:var(--color-gray-400);margin-bottom:0.5rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">Most Recent Payment</div>
+                <div style="display:flex;align-items:center;gap:0.875rem">
+                    <div style="width:44px;height:44px;border-radius:var(--radius-lg);display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0;background:var(--color-gray-100)" id="utilRecentIcon">🧾</div>
+                    <div style="flex:1;min-width:0">
+                        <div style="font-weight:700;font-size:0.9rem" id="utilRecentType">—</div>
+                        <div style="font-size:0.75rem;color:var(--color-gray-500)" id="utilRecentDate">—</div>
+                        <div style="font-size:0.72rem;color:var(--color-gray-400)" id="utilRecentAcct">—</div>
+                    </div>
+                    <div style="text-align:right;flex-shrink:0">
+                        <div style="font-size:1.1rem;font-weight:700;color:var(--color-gray-800)" id="utilRecentAmt">—</div>
+                        <div style="font-size:0.75rem;color:var(--color-success);font-weight:600" id="utilRecentXp">—</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Monthly budget bar -->
+            <div id="utilBudgetRow" style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:1rem;margin-bottom:1.25rem">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+                    <div style="font-size:0.8rem;font-weight:700;color:var(--color-gray-700)">📅 Monthly Bill Budget</div>
+                    <div style="font-size:0.75rem;color:var(--color-gray-500)">Paid <strong id="utilBudgetPaid">ƒ0</strong> of est. <strong id="utilBudgetTotal">ƒ585.24</strong></div>
+                </div>
+                <div class="budget-bar-wrap">
+                    <div class="budget-bar" id="utilBudgetBar" style="width:0%;background:linear-gradient(90deg,#10b981,#059669)"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--color-gray-400);margin-top:0.25rem">
+                    <span id="utilBudgetPct">0% of monthly bills paid this session</span>
+                    <span id="utilBudgetRemaining"></span>
+                </div>
+            </div>
+
+            <!-- ── Page Tab Navigation ─────────────────────────────── -->
+            <div class="page-tabs">
+                <button class="page-tab-btn active" id="tab-btn-bills"   onclick="switchUtilPageTab('bills')">⚡ Bills</button>
+                <button class="page-tab-btn"         id="tab-btn-history" onclick="switchUtilPageTab('history')">🧾 History</button>
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════════
+                 BILLS TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel active" id="panel-bills">
+
+                <!-- Challenge Tracker -->
+                <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:1.25rem;margin-bottom:1.5rem">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+                        <h2 style="font-size:1rem;font-weight:700;margin:0">⚡ Utility Challenges</h2>
+                        <a href="challenges.html" style="font-size:0.8rem;color:var(--color-primary-500);text-decoration:none;font-weight:600">View all →</a>
+                    </div>
+                    <div class="challenge-summary-grid">
+                        <div class="csg-item"><div class="csg-val" style="color:#10b981" id="utilChalDoneCount">—</div><div class="csg-lbl">Completed</div></div>
+                        <div class="csg-item"><div class="csg-val" style="color:#6366f1" id="utilChalPendingCount">—</div><div class="csg-lbl">In Progress</div></div>
+                        <div class="csg-item"><div class="csg-val" style="color:#f59e0b" id="utilChalTotalXp">—</div><div class="csg-lbl">Total XP</div></div>
+                        <div class="csg-item"><div class="csg-val" style="color:#8b5cf6" id="utilChalEarnedXp">—</div><div class="csg-lbl">XP Earned</div></div>
+                    </div>
+                    <div id="utilitiesChallengesList" style="display:flex;flex-direction:column;gap:0.6rem">
+                        <p style="color:var(--color-gray-500);font-size:0.875rem">Loading challenges…</p>
+                    </div>
+                </div>
+
+                <!-- Pay All button (shown when unpaid bills exist) -->
+                <div id="payAllWrap" style="display:none;margin-bottom:1rem">
+                    <button class="btn btn-primary btn-block" id="payAllBtn" onclick="payAllBills()" style="background:linear-gradient(135deg,#6366f1,#4f46e5);font-size:0.9rem;padding:0.75rem">
+                        ⚡ Pay All Unpaid Bills <span id="payAllCount" style="background:rgba(255,255,255,0.25);border-radius:99px;padding:0.1rem 0.6rem;font-size:0.8rem;margin-left:0.4rem"></span>
+                    </button>
+                </div>
+
+                <!-- Bill Cards (rendered dynamically from /api/bills) -->
+                <div class="bills-grid" id="billsGrid">
+                    <div style="grid-column:1/-1;text-align:center;color:var(--color-gray-500);padding:2rem">Loading bills…</div>
+                </div>
+
+                <!-- Hardcoded fallback (hidden) -->
+                <div style="display:none" id="billsFallback">
+                    <!-- legacy static cards kept as fallback, not rendered -->
+                </div>
+
+            </div><!-- /panel-bills -->
+
+            <!-- ═══════════════════════════════════════════════════════
+                 HISTORY TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel" id="panel-history">
+
+                <!-- Spending breakdown by bill type -->
+                <div class="bill-breakdown-section" id="billBreakdownSection" style="display:none">
+                    <div style="font-size:0.9rem;font-weight:700;color:var(--color-gray-800);margin-bottom:0.75rem">📊 Spending by Bill Type</div>
+                    <div id="billBreakdownChart"></div>
+                </div>
+
+                <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:1.25rem">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+                        <h2 style="font-size:1rem;font-weight:700;margin:0">🧾 Payment History</h2>
+                        <span id="payHistoryCount" style="font-size:0.8rem;color:var(--color-gray-500)"></span>
+                    </div>
+                    <!-- Payment history search -->
+                    <div class="pay-hist-search-wrap">
+                        <span class="pay-hist-search-icon">🔍</span>
+                        <input type="text" class="pay-hist-search" id="payHistSearch" placeholder="Search by bill type…" oninput="filterPayHistory()" autocomplete="off">
+                    </div>
+                    <!-- Bill type filter pills -->
+                    <div class="pay-hist-type-pills" id="payHistTypePills"></div>
+                    <div id="paymentHistory">
+                        <p style="color:var(--color-gray-500);font-size:0.875rem;text-align:center;padding:1rem">No payments yet. Pay your first bill above!</p>
+                    </div>
+                    <p id="payHistNoResults" style="display:none;font-size:0.82rem;color:var(--color-gray-400);text-align:center;padding:0.75rem">No payments match your search.</p>
+                </div>
+            </div><!-- /panel-history -->
+
+        </main>
+    </div>
+
+    <script src="auth.js"></script>
+    <script src="db.js"></script>
+    <script src="script.js"></script>
+    <script src="utilities.js"></script>
+    <script>
+    /* ── Tab switching ──────────────────────────────────────────────── */
+    function switchUtilPageTab(name) {
+        ['bills','history'].forEach(function(t) {
+            var panel = document.getElementById('panel-' + t);
+            var btn   = document.getElementById('tab-btn-' + t);
+            if (!panel || !btn) return;
+            var active = (t === name);
+            panel.classList.toggle('active', active);
+            btn.classList.toggle('active', active);
+        });
+        sessionStorage.setItem('util_page_tab', name);
+    }
+
+    // Legacy alias used by older inline onclick on history tab button (no-op, kept for safety)
+    function switchUtilTab(name) { switchUtilPageTab(name === 'bills' ? 'bills' : name === 'history' ? 'history' : name); }
+
+    function escHU(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }
+
+    var BILL_TYPES      = ['Electricity','Water','Internet','Property Tax','Phone','Gas'];
+    var BILL_ICONS_PAGE = { Electricity:'⚡', Water:'💧', Internet:'🌐', 'Property Tax':'🏠', Phone:'📱', Gas:'🔥' };
+    var LOADED_BILLS    = []; // store bills for urgency badge lookup
+
+    var BILL_TIPS = {
+        'Electricity':   '💡 Switching to LED bulbs can cut this bill by up to 20%.',
+        'Water':         '💧 Fixing dripping taps saves thousands of litres — and money — every year.',
+        'Internet':      '📶 Compare providers annually — you could save ƒ10–30/month by switching.',
+        'Property Tax':  '🏠 Check for any exemptions or relief programmes you may qualify for.',
+        'Phone':         '📱 Review your data usage — you may be paying for more than you need.',
+        'Gas':           '🔥 Lowering your thermostat 1–2°C can reduce heating costs by around 10%.'
+    };
+
+    /* ── Due-date urgency badge ────────────────────────────────────── */
+    function getDueBadge(dueDate, paid) {
+        if (paid) return '<span class="due-badge due-badge-paid">✓ Paid</span>';
+        if (!dueDate || dueDate === '—') return '<span class="due-badge due-badge-normal">Due</span>';
+        var today    = new Date(); today.setHours(0,0,0,0);
+        var due      = new Date(dueDate); due.setHours(0,0,0,0);
+        var daysLeft = Math.round((due - today) / 86400000);
+        if (isNaN(daysLeft)) return '<span class="due-badge due-badge-normal">Due</span>';
+        if (daysLeft < 0)    return '<span class="due-badge" style="background:#fca5a5;color:#7f1d1d;animation:urgentPulse 1.5s infinite">⚠ Overdue</span>';
+        if (daysLeft === 0)  return '<span class="due-badge" style="background:#fca5a5;color:#7f1d1d;animation:urgentPulse 1.5s infinite">Due Today!</span>';
+        if (daysLeft <= 3)   return '<span class="due-badge" style="background:#fed7aa;color:#92400e">Due in ' + daysLeft + 'd</span>';
+        if (daysLeft <= 7)   return '<span class="due-badge" style="background:#fef08a;color:#713f12">Due in ' + daysLeft + 'd</span>';
+        return '<span class="due-badge due-badge-normal">' + daysLeft + 'd left</span>';
+    }
+
+    /* ── Budget bar ────────────────────────────────────────────────── */
+    var ESTIMATED_MONTHLY = 585.24; // sum of all default bills
+    function updateBudgetBar(payments) {
+        var totalPaid = payments.reduce(function(s,p){ return s+(p.amount||0); }, 0);
+        var pct       = Math.min(100, Math.round((totalPaid / ESTIMATED_MONTHLY) * 100));
+        var bar       = document.getElementById('utilBudgetBar');
+        var paidEl    = document.getElementById('utilBudgetPaid');
+        var pctEl     = document.getElementById('utilBudgetPct');
+        var remEl     = document.getElementById('utilBudgetRemaining');
+        if (bar)    bar.style.width = pct + '%';
+        if (bar)    bar.style.background = pct >= 100 ? 'linear-gradient(90deg,#10b981,#10b981)' : pct > 70 ? 'linear-gradient(90deg,#f59e0b,#d97706)' : 'linear-gradient(90deg,#6366f1,#4f46e5)';
+        if (paidEl) paidEl.textContent = 'ƒ' + totalPaid.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+        if (pctEl)  pctEl.textContent  = pct + '% of monthly bills paid this session';
+        var remaining = Math.max(0, ESTIMATED_MONTHLY - totalPaid);
+        if (remEl)  remEl.textContent  = pct < 100 ? 'ƒ' + remaining.toFixed(2) + ' remaining' : '✓ All bills covered!';
+    }
+
+    /* ── Bill cards ────────────────────────────────────────────────── */
+    function loadBills(payments) {
+        fetch('/api/bills')
+            .then(function(r){ return r.json(); })
+            .then(function(bills) {
+                LOADED_BILLS     = bills;
+                ESTIMATED_MONTHLY = bills.reduce(function(s,b){ return s+(b.amount||0); }, 0);
+                var totalEl = document.getElementById('utilBudgetTotal');
+                if (totalEl) totalEl.textContent = 'ƒ' + ESTIMATED_MONTHLY.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+                BILL_TYPES = bills.map(function(b){ return b.name; });
+                bills.forEach(function(b){ BILL_ICONS_PAGE[b.name] = b.icon || '🧾'; });
+                var paidTypes = {};
+                (payments||[]).forEach(function(p){ paidTypes[p.type] = true; });
+                var grid = document.getElementById('billsGrid');
+                if (!grid) return;
+                var autopayState = JSON.parse(localStorage.getItem('digifinwiz_autopay') || '{}');
+                grid.innerHTML = bills.map(function(b) {
+                    var safeId       = b.name;
+                    var isPaid       = !!paidTypes[b.name];
+                    var urgencyBadge = getDueBadge(b.dueDate, isPaid);
+                    var tip          = BILL_TIPS[b.name] ? '<div class="bill-tip">' + BILL_TIPS[b.name] + '</div>' : '';
+                    var isAutopay    = !!autopayState[b.name];
+                    var autopayRow   =
+                        '<div class="autopay-row">' +
+                            '<span class="autopay-label">🔄 Auto-pay</span>' +
+                            '<label class="autopay-switch">' +
+                                '<input type="checkbox" id="autopay-' + escHU(safeId) + '" ' + (isAutopay ? 'checked' : '') +
+                                    ' onchange="toggleAutopay(' + JSON.stringify(b.name) + ')">' +
+                                '<span class="autopay-slider"></span>' +
+                            '</label>' +
+                        '</div>';
+                    // Bill notes
+                    var notes       = JSON.parse(localStorage.getItem('digifinwiz_bill_notes') || '{}');
+                    var savedNote   = notes[b.name] || '';
+                    var noteHtml    =
+                        '<div class="bill-note-wrap">' +
+                            '<button id="billNote-btn-' + escHU(safeId) + '" class="bill-note-btn" onclick="toggleBillNote(' + JSON.stringify(b.name) + ')">📝 ' + (savedNote ? 'Edit note' : 'Add note') + '</button>' +
+                            '<textarea id="billNote-area-' + escHU(safeId) + '" class="bill-note-area" rows="2" placeholder="Personal reminder…" ' +
+                                'onblur="saveBillNote(' + JSON.stringify(b.name) + ')">' + '</textarea>' +
+                            '<div id="billNote-disp-' + escHU(safeId) + '" class="bill-note-display" style="' + (savedNote ? '' : 'display:none') + '">' + escHU(savedNote) + '</div>' +
+                        '</div>';
+                    // Savings estimator (auto-pay saves ~4%)
+                    var annualSave  = (Number(b.amount) * 12 * 0.04).toFixed(2);
+                    var savingsChip = !isAutopay
+                        ? '<div class="bill-savings-chip">💰 Enable auto-pay · save ≈ ƒ' + annualSave + '/yr</div>'
+                        : '<div class="bill-savings-chip" style="background:#ede9fe;color:#6d28d9;border-color:#c4b5fd">✅ Auto-pay on · saving ≈ ƒ' + annualSave + '/yr</div>';
+                    return '<div class="bill-card" id="bill-' + escHU(safeId) + '" style="' + (isPaid ? 'opacity:0.85' : '') + '">' +
+                        '<div class="bill-header" style="background:' + escHU(b.gradient||'#6366f1') + '">' +
+                            '<div class="bill-icon">' + escHU(b.icon||'🧾') + '</div>' +
+                            '<div>' +
+                                '<h3>' + escHU(b.name) + ' Bill</h3>' +
+                                '<p style="font-size:0.75rem;opacity:0.85">' + escHU(b.dueDate||'—') + '</p>' +
+                            '</div>' +
+                            '<div style="margin-left:auto" id="billStatus-' + escHU(safeId) + '">' + urgencyBadge + '</div>' +
+                        '</div>' +
+                        '<div class="bill-body">' +
+                            '<div class="bill-info"><span class="label">Account Number:</span><span class="value">' + escHU(b.accountNumber||'—') + '</span></div>' +
+                            '<div class="bill-amount"><span>Amount Due:</span><strong>ƒ' + Number(b.amount).toFixed(2) + '</strong></div>' +
+                            '<div style="font-size:0.75rem;color:var(--color-success);margin-bottom:0.5rem">Earns +45 XP when paid</div>' +
+                            '<div style="font-size:0.72rem;color:var(--color-gray-400);margin-bottom:0.5rem">📅 ƒ' + (Number(b.amount)/30).toFixed(2) + '/day equivalent</div>' +
+                            savingsChip +
+                            tip +
+                            '<button class="btn btn-primary btn-block" id="payBtn-' + escHU(safeId) + '" ' +
+                                (isPaid ? 'disabled style="opacity:0.6"' : '') + ' ' +
+                                'onclick="payBill(' + JSON.stringify(b.name) + ',' + Number(b.amount) + ',' + JSON.stringify(b.accountNumber||'') + ')">' +
+                                (isPaid ? 'Paid This Month ✓' : 'Pay Now') +
+                            '</button>' +
+                            autopayRow +
+                            noteHtml +
+                        '</div>' +
+                    '</div>';
+                }).join('');
+                // Show/hide pay-all button
+                var unpaidCount = bills.filter(function(b){ return !paidTypes[b.name]; }).length;
+                var payAllWrap = document.getElementById('payAllWrap');
+                var payAllCount = document.getElementById('payAllCount');
+                if (payAllWrap) payAllWrap.style.display = unpaidCount > 0 ? '' : 'none';
+                if (payAllCount) payAllCount.textContent = unpaidCount + ' bill' + (unpaidCount!==1?'s':'') + ' unpaid';
+                // Inject streak badges
+                DigifinwizDB.getPayments(1000).then(function(allPays) {
+                    var streaks = computeStreaks(allPays);
+                    bills.forEach(function(b) {
+                        var count = streaks[b.name] || 0;
+                        if (count >= 2) {
+                            var billEl = document.getElementById('bill-' + b.name);
+                            if (!billEl) return;
+                            var bodyEl = billEl.querySelector('.bill-body');
+                            if (!bodyEl) return;
+                            var old = bodyEl.querySelector('.streak-badge');
+                            if (old) old.remove();
+                            var badge = document.createElement('div');
+                            badge.className = 'streak-badge';
+                            badge.style.cssText = 'display:inline-flex;align-items:center;gap:0.3rem;background:linear-gradient(135deg,#fef3c7,#fde68a);border:1.5px solid #f59e0b;border-radius:99px;padding:0.25rem 0.75rem;font-size:0.74rem;font-weight:700;color:#92400e;margin-bottom:0.5rem';
+                            badge.textContent = '🔥 ' + count + 'x paid';
+                            bodyEl.insertBefore(badge, bodyEl.firstChild);
+                        }
+                    });
+                }).catch(function(){});
+                updateBudgetBar(payments || []);
+            })
+            .catch(function(){ /* keep loading placeholder */ });
+    }
+
+    /* ── Auto-pay toggle ───────────────────────────────────────────────── */
+    function toggleAutopay(billName) {
+        var autopay = JSON.parse(localStorage.getItem('digifinwiz_autopay') || '{}');
+        autopay[billName] = !autopay[billName];
+        localStorage.setItem('digifinwiz_autopay', JSON.stringify(autopay));
+        var toggle = document.getElementById('autopay-' + billName);
+        if (toggle) toggle.checked = !!autopay[billName];
+        if (autopay[billName]) {
+            showNotification('🔄 Auto-pay enabled for ' + billName, 'success');
+        } else {
+            showNotification('Auto-pay disabled for ' + billName, 'info');
+        }
+    }
+
+    /* ── Bill type breakdown chart ─────────────────────────────────────── */
+    var BREAKDOWN_COLORS = ['#6366f1','#10b981','#f59e0b','#3b82f6','#ec4899','#f97316'];
+
+    function renderBillBreakdown(payments) {
+        var section = document.getElementById('billBreakdownSection');
+        var chart   = document.getElementById('billBreakdownChart');
+        if (!section || !chart) return;
+        if (!payments || payments.length === 0) { section.style.display = 'none'; return; }
+        var byType = {};
+        payments.forEach(function(p) {
+            if (!byType[p.type]) byType[p.type] = 0;
+            byType[p.type] += p.amount || 0;
+        });
+        var types = Object.keys(byType);
+        if (types.length === 0) { section.style.display = 'none'; return; }
+        section.style.display = '';
+        var maxVal = Math.max.apply(null, types.map(function(t){ return byType[t]; }));
+        chart.innerHTML = types.sort(function(a,b){ return byType[b]-byType[a]; }).map(function(t, i) {
+            var pct   = maxVal > 0 ? Math.round((byType[t] / maxVal) * 100) : 0;
+            var icon  = BILL_ICONS_PAGE[t] || '🧾';
+            var color = BREAKDOWN_COLORS[i % BREAKDOWN_COLORS.length];
+            return '<div class="bill-breakdown-item">' +
+                '<div class="bill-breakdown-label">' + icon + ' ' + escHU(t) + '</div>' +
+                '<div class="bill-breakdown-bar-track"><div class="bill-breakdown-bar-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
+                '<div class="bill-breakdown-amount">ƒ' + Number(byType[t]).toFixed(0) + '</div>' +
+                '</div>';
+        }).join('');
+    }
+
+    function markBillsPaid(payments) {
+        var paidTypes = {};
+        payments.forEach(function(p){ paidTypes[p.type] = true; });
+        BILL_TYPES.forEach(function(type) {
+            var statusEl = document.getElementById('billStatus-' + type);
+            var btnEl    = document.getElementById('payBtn-' + type);
+            var cardEl   = document.getElementById('bill-' + type);
+            var bill     = LOADED_BILLS.find(function(b){ return b.name === type; });
+            if (paidTypes[type]) {
+                if (statusEl) statusEl.innerHTML = getDueBadge(null, true);
+                if (btnEl)    { btnEl.textContent = 'Paid This Month ✓'; btnEl.disabled = true; btnEl.style.opacity = '0.6'; }
+                if (cardEl)   cardEl.style.opacity = '0.8';
+            } else {
+                if (statusEl) statusEl.innerHTML = getDueBadge(bill ? bill.dueDate : null, false);
+                if (btnEl)    { btnEl.textContent = 'Pay Now'; btnEl.disabled = false; btnEl.style.opacity = '1'; }
+                if (cardEl)   cardEl.style.opacity = '1';
+            }
+        });
+        // Recalculate unpaid count for pay-all button
+        var stillUnpaid = BILL_TYPES.filter(function(t){
+            var btn2 = document.getElementById('payBtn-' + t);
+            return btn2 && !btn2.disabled;
+        }).length;
+        var payAllWrap2 = document.getElementById('payAllWrap');
+        var payAllCount2 = document.getElementById('payAllCount');
+        if (payAllWrap2) payAllWrap2.style.display = stillUnpaid > 0 ? '' : 'none';
+        if (payAllCount2) payAllCount2.textContent = stillUnpaid + ' bill' + (stillUnpaid!==1?'s':'') + ' unpaid';
+    }
+
+    /* ── Challenges ────────────────────────────────────────────────── */
+    function loadUtilityChallenges() {
+        if (typeof DigifinwizDB === 'undefined') return;
+        Promise.all([DigifinwizDB.getChallenges(), DigifinwizDB.getPayments(1000)]).then(function(res) {
+            var challenges = res[0];
+            var payments   = res[1];
+            var util = challenges.filter(function(c){ return c.active && c.category === 'utilities'; });
+            var container = document.getElementById('utilitiesChallengesList');
+            if (!container) return;
+            var totalXpAvail = util.reduce(function(s,c){ return s+(c.points||0); }, 0);
+            var doneList     = util.filter(function(c){ return c.completed; });
+            var earnedXp     = doneList.reduce(function(s,c){ return s+(c.points||0); }, 0);
+            var pending      = util.filter(function(c){ return !c.completed; });
+            var set = function(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; };
+            set('utilChalDoneCount',    doneList.length + '/' + util.length);
+            set('utilChalPendingCount', pending.length);
+            set('utilChalTotalXp',      '+' + totalXpAvail + ' XP');
+            set('utilChalEarnedXp',     '+' + earnedXp     + ' XP');
+            if (!util.length) { container.innerHTML = '<p style="color:var(--color-gray-500);font-size:0.875rem">No utility challenges yet.</p>'; return; }
+            container.innerHTML = util.map(function(c) {
+                var pct=0, progressLabel='';
+                if (c.completed) { pct=100; }
+                else if (c.condition==='first_payment')    { pct=payments.length>0?100:0; progressLabel=payments.length>0?'First bill paid!':'Pay your first bill'; }
+                else if (c.condition==='payment_count')    { pct=Math.min(100,Math.round((payments.length/(c.conditionValue||1))*100)); progressLabel=payments.length+' / '+(c.conditionValue||0)+' bills paid'; }
+                else if (c.condition==='transaction_count'){ pct=Math.min(100,Math.round((payments.length/(c.conditionValue||1))*100)); progressLabel=payments.length+' / '+(c.conditionValue||0)+' payments'; }
+                else if (c.condition==='manual')           { pct=0; progressLabel='Complete manually'; }
+                var done         = c.completed;
+                var barColor     = done?'#10b981':(pct>=75?'#10b981':(pct>=40?'#f59e0b':'#6366f1'));
+                var completedDate= done&&c.completedAt?new Date(c.completedAt).toLocaleDateString():null;
+                return '<div style="background:'+(done?'#f0fdf4':'#f8fafc')+';border:1px solid '+(done?'#bbf7d0':'#e2e8f0')+';border-radius:10px;padding:0.875rem">'+
+                    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.5rem">'+
+                    '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.875rem">'+(done?'✅ ':'⏳ ')+escHU(c.title)+'</div>'+
+                    '<div style="font-size:0.75rem;color:#64748b;margin-top:0.15rem">'+escHU(c.description||'')+'</div></div>'+
+                    '<span style="background:'+(done?'#dcfce7':'#fef3c7')+';color:'+(done?'#16a34a':'#d97706')+';padding:2px 8px;border-radius:12px;font-size:0.72rem;font-weight:700;margin-left:0.5rem;white-space:nowrap">+'+(c.points||0)+' XP</span>'+
+                    '</div>'+
+                    '<div style="background:#e2e8f0;border-radius:4px;height:7px;overflow:hidden">'+
+                    '<div style="background:'+barColor+';width:'+pct+'%;height:100%;transition:width 0.6s ease;border-radius:4px"></div></div>'+
+                    '<div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#94a3b8;margin-top:0.25rem">'+
+                    '<span>'+(done&&completedDate?'Completed '+completedDate:done?'Completed!':pct+'% complete')+'</span>'+
+                    (progressLabel&&!done?'<span style="color:#6366f1;font-weight:600">'+escHU(progressLabel)+'</span>':'')+'</div></div>';
+            }).join('');
+        }).catch(function(){});
+    }
+
+    /* ── Payment history search / filter ──────────────────────────────── */
+    var currentPayFilter = 'all';
+
+    function buildPayHistTypePills(payments) {
+        var types = ['all'];
+        payments.forEach(function(p) {
+            if (p.type && types.indexOf(p.type) === -1) types.push(p.type);
+        });
+        var wrap = document.getElementById('payHistTypePills');
+        if (!wrap) return;
+        wrap.innerHTML = types.map(function(t) {
+            var icon = t === 'all' ? '📋' : (BILL_ICONS_PAGE[t] || '🧾');
+            var cls  = t === currentPayFilter ? 'pay-hist-pill active' : 'pay-hist-pill';
+            return '<button class="' + cls + '" onclick="setPayHistFilter(' + JSON.stringify(t) + ')">' + icon + ' ' + (t === 'all' ? 'All' : escHU(t)) + '</button>';
+        }).join('');
+    }
+
+    function setPayHistFilter(type) {
+        currentPayFilter = type;
+        var pills = document.querySelectorAll('.pay-hist-pill');
+        pills.forEach(function(p) {
+            var isActive = (p.textContent.trim().replace(/^[^\s]+\s/, '') === (type === 'all' ? 'All' : type)) ||
+                           (type === 'all' && p.textContent.indexOf('All') > -1) ||
+                           (type !== 'all' && p.textContent.indexOf(type) > -1);
+            p.classList.toggle('active', isActive);
+        });
+        filterPayHistory();
+    }
+
+    function filterPayHistory() {
+        var q    = ((document.getElementById('payHistSearch')||{}).value||'').trim().toLowerCase();
+        var rows = document.querySelectorAll('#paymentHistory .pay-hist-item');
+        var noEl = document.getElementById('payHistNoResults');
+        var shown = 0;
+        rows.forEach(function(row) {
+            var typeMatch = currentPayFilter === 'all' || (row.dataset.type || '').toLowerCase() === currentPayFilter.toLowerCase();
+            var textMatch = !q || row.textContent.toLowerCase().indexOf(q) > -1;
+            var vis = typeMatch && textMatch;
+            row.style.display = vis ? '' : 'none';
+            if (vis) shown++;
+        });
+        if (noEl) noEl.style.display = (shown === 0 && rows.length > 0) ? '' : 'none';
+    }
+
+    /* ── Bill personal notes ──────────────────────────────────────────── */
+    function toggleBillNote(billName) {
+        var area = document.getElementById('billNote-area-' + billName);
+        var disp = document.getElementById('billNote-disp-' + billName);
+        var btn  = document.getElementById('billNote-btn-' + billName);
+        if (!area) return;
+        var notes    = JSON.parse(localStorage.getItem('digifinwiz_bill_notes') || '{}');
+        var existing = notes[billName] || '';
+        if (area.style.display === 'none' || !area.style.display) {
+            area.value       = existing;
+            area.style.display = '';
+            area.focus();
+            if (btn) btn.textContent = '✕ Cancel note';
+        } else {
+            area.style.display = 'none';
+            if (btn) btn.textContent = '📝 ' + (existing ? 'Edit note' : 'Add note');
+        }
+    }
+
+    function saveBillNote(billName) {
+        var area = document.getElementById('billNote-area-' + billName);
+        var disp = document.getElementById('billNote-disp-' + billName);
+        var btn  = document.getElementById('billNote-btn-' + billName);
+        if (!area) return;
+        var notes = JSON.parse(localStorage.getItem('digifinwiz_bill_notes') || '{}');
+        var val   = area.value.trim();
+        if (val) { notes[billName] = val; } else { delete notes[billName]; }
+        localStorage.setItem('digifinwiz_bill_notes', JSON.stringify(notes));
+        area.style.display = 'none';
+        if (disp) {
+            disp.textContent = val;
+            disp.style.display = val ? '' : 'none';
+        }
+        if (btn) btn.textContent = '📝 ' + (val ? 'Edit note' : 'Add note');
+        showNotification(val ? 'Note saved for ' + billName : 'Note removed for ' + billName, 'info');
+    }
+
+    /* ── Stats ─────────────────────────────────────────────────────── */
+    function loadUtilStats() {
+        DigifinwizDB.getPayments(1000).then(function(payments) {
+            var totalPaid = payments.reduce(function(s,p){ return s+(p.amount||0); }, 0);
+            var totalXp   = payments.reduce(function(s,p){ return s+(p.pointsEarned||0); }, 0);
+            var set = function(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; };
+            set('utilBillsPaid', payments.length);
+            set('utilTotalPaid','ƒ'+totalPaid.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}));
+            set('utilXpEarned', '+'+totalXp+' XP');
+            var milestones=[1,3,5,10,20];
+            var next=milestones.find(function(m){ return payments.length<m; });
+            set('utilNextMilestone', next ? payments.length+'/'+next+' bills' : 'Max reached!');
+            var largest = payments.reduce(function(mx,p){ return Math.max(mx,p.amount||0); }, 0);
+            var avg     = payments.length>0 ? totalPaid/payments.length : 0;
+            set('utilLargestPay', payments.length>0?'ƒ'+largest.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—');
+            set('utilAvgPay',     payments.length>0?'ƒ'+avg.toFixed(2):'—');
+            var typeCounts={};
+            payments.forEach(function(p){ typeCounts[p.type]=(typeCounts[p.type]||0)+1; });
+            var mostType=null; var mostCount=0;
+            Object.keys(typeCounts).forEach(function(t){ if(typeCounts[t]>mostCount){ mostCount=typeCounts[t]; mostType=t; } });
+            var billIcon = mostType?(BILL_ICONS_PAGE[mostType]||'🧾'):'';
+            set('utilMostPaidType', mostType?(billIcon+' '+mostType):'—');
+            set('utilBillTypes',    Object.keys(typeCounts).length+' / '+BILL_TYPES.length);
+            var countEl=document.getElementById('payHistoryCount');
+            if (countEl) countEl.textContent=payments.length+' payment'+(payments.length!==1?'s':'');
+            markBillsPaid(payments);
+            updateBudgetBar(payments);
+            renderBillBreakdown(payments);
+            buildPayHistTypePills(payments);
+            if (payments.length>0) {
+                var last=payments[0];
+                var rowEl=document.getElementById('utilRecentPayRow');
+                if (rowEl) rowEl.style.display='';
+                var lastIcon=BILL_ICONS_PAGE[last.type]||'🧾';
+                var iconEl=document.getElementById('utilRecentIcon');
+                if (iconEl) iconEl.textContent=lastIcon;
+                set('utilRecentType',(last.type||'—')+' Bill');
+                set('utilRecentDate',last.date||'—');
+                set('utilRecentAcct',last.fromAccount?'From: '+last.fromAccount.charAt(0).toUpperCase()+last.fromAccount.slice(1)+' Account':'');
+                set('utilRecentAmt', 'ƒ'+Number(last.amount||0).toFixed(2));
+                set('utilRecentXp',  '+'+(last.pointsEarned||0)+' XP earned');
+            }
+            // Keep header balance in sync
+            DigifinwizDB.getAllBalances().then(function(bals) {
+                var chk = (bals.find(function(b){ return b.account==='checking'; }) || {}).amount || 0;
+                var sav = (bals.find(function(b){ return b.account==='savings';  }) || {}).amount || 0;
+                var hdrEl = document.getElementById('utilHeaderBalance');
+                if (hdrEl) hdrEl.textContent = 'ƒ' + (chk+sav).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+            }).catch(function(){});
+        }).catch(function(){});
+    }
+
+    function refreshUtilPage() {
+        loadUtilityChallenges();
+        loadUtilStats();
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        DigifinwizDB.init().then(function() {
+            DigifinwizDB.getPayments(1000).then(function(payments) {
+                loadBills(payments);
+            }).catch(function(){ loadBills([]); });
+            refreshUtilPage();
+            // Restore last active tab (default: bills)
+            switchUtilPageTab(sessionStorage.getItem('util_page_tab') || 'bills');
+        });
+        // Populate DigiPay game progress bar
+        DigifinwizDB.getUserData().then(function(userData) {
+            if (!userData) return;
+            var level  = userData.level || 1;
+            var points = userData.points || 0;
+            var pToNext = userData.pointsToNextLevel || 1000;
+            var coins  = userData.coins || 0;
+            var earned = Math.max(0, 1000 - pToNext);
+            var pct    = Math.min(100, Math.round((earned / 1000) * 100));
+            var set = function(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
+            set('utilProgressLevel', level + '/50');
+            set('utilProgressText',  pct + '% completed');
+            set('utilProgressXP',    points.toLocaleString() + ' XP');
+            set('utilProgressCoins', coins.toLocaleString());
+            var fillEl = document.getElementById('utilProgressFill');
+            if (fillEl) fillEl.style.width = pct + '%';
+        }).catch(function(){});
+    });
+
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') refreshUtilPage();
+    });
+
+    /* ── Compute payment streaks ────────────────────────────────────────── */
+    function computeStreaks(payments) {
+        var byType = {};
+        payments.forEach(function(p) {
+            if (!byType[p.type]) byType[p.type] = 0;
+            byType[p.type]++;
+        });
+        return byType;
+    }
+
+    /* ── Pay All Bills ──────────────────────────────────────────────────── */
+    function payAllBills() {
+        var unpaid = LOADED_BILLS.filter(function(b) {
+            var btn = document.getElementById('payBtn-' + b.name);
+            return btn && !btn.disabled;
+        });
+        if (!unpaid.length) { showNotification('All bills are already paid!', 'info'); return; }
+        var btn = document.getElementById('payAllBtn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Processing…'; }
+        var idx = 0;
+        function payNext() {
+            if (idx >= unpaid.length) {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '⚡ Pay All Unpaid Bills <span id="payAllCount" style="background:rgba(255,255,255,0.25);border-radius:99px;padding:0.1rem 0.6rem;font-size:0.8rem;margin-left:0.4rem">0 bills unpaid</span>';
+                }
+                showNotification('All bills paid! 🎉', 'success');
+                return;
+            }
+            var b = unpaid[idx++];
+            payBill(b.name, b.amount, b.accountNumber || '');
+            setTimeout(payNext, 1800);
+        }
+        payNext();
+    }
+    </script>
+</body>
+</html>

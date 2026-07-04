@@ -1,0 +1,883 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digifinwiz - Profile</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .profile-tabs {
+            display: flex;
+            gap: 0.25rem;
+            border-bottom: 2px solid #e2e8f0;
+            margin-bottom: 1.75rem;
+            flex-wrap: wrap;
+        }
+        .profile-tab-btn {
+            padding: 0.6rem 1.2rem;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #64748b;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            border-radius: 6px 6px 0 0;
+            transition: color 0.15s, border-color 0.15s;
+        }
+        .profile-tab-btn:hover { color: #334155; }
+        .profile-tab-btn.active { color: #667eea; border-bottom-color: #667eea; }
+        .profile-tab-panel { display: none; }
+        .profile-tab-panel.active { display: block; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">Digifinwiz</div>
+            <button class="nav-toggle" aria-label="Toggle navigation"><span></span><span></span><span></span></button>
+            <ul class="nav-menu">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="tutorials.html">Tutorials</a></li>
+                <li><a href="challenges.html">Challenges</a></li>
+                <li><a href="about.html">About Us</a></li>
+                <li><a href="admin.html">Admin</a></li>
+                <li><a href="messages.html">Messages</a></li>
+                <li><a href="profile.html" class="active">Profile</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <aside class="sidebar">
+            <div class="user-profile">
+                <div class="avatar">
+                    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect fill='%23667eea' width='80' height='80'/%3E%3Ctext x='50%25' y='50%25' font-size='32' fill='white' text-anchor='middle' dy='.3em'%3EJD%3C/text%3E%3C/svg%3E" alt="Jane Doe">
+                </div>
+                <h3>Jane Doe</h3>
+                <p class="username">@janeDoee123</p>
+            </div>
+            <p class="sidebar-desc">Visit any of these pages to complete new tasks such as online shopping, paying bills or banking</p>
+            <nav class="sidebar-nav">
+                <a href="ecommerce.html" class="nav-item">
+                    <span>Ecommerce<sup class="nav-badge" id="sidebarBadgeEcommerce">5</sup></span>
+                    <span class="arrow">&#8594;</span>
+                </a>
+                <a href="banking.html" class="nav-item">
+                    <span>Banking<sup class="nav-badge" id="sidebarBadgeBanking" style="display:none">0</sup></span>
+                    <span class="arrow">&#8594;</span>
+                </a>
+                <a href="utilities.html" class="nav-item">
+                    <span>Utilities<sup class="nav-badge" id="sidebarBadgeUtilities" style="display:none">0</sup></span>
+                    <span class="arrow">&#8594;</span>
+                </a>
+                <a href="account-balances.html" class="nav-item">
+                    <span>View account balances</span>
+                    <span class="arrow">&#8594;</span>
+                </a>
+                <a href="account-progress.html" class="nav-item">
+                    <span>View account progress</span>
+                    <span class="arrow">&#8594;</span>
+                </a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <div class="page-header">
+                <h1>Profile</h1>
+                <p>Manage your account, view balances, and track your progress</p>
+            </div>
+
+            <!-- Tab navigation -->
+            <div class="profile-tabs">
+                <button class="profile-tab-btn active" data-tab="settings">&#9881; Settings</button>
+                <button class="profile-tab-btn" data-tab="information">&#128203; Information</button>
+                <button class="profile-tab-btn" data-tab="balances">&#127974; Account Balances</button>
+                <button class="profile-tab-btn" data-tab="progress">&#127919; Progress</button>
+            </div>
+
+            <!-- ── Tab: Settings ── -->
+            <div class="profile-tab-panel active" id="tab-settings">
+                <div class="settings-section">
+                    <h2>Personal Information</h2>
+                    <form class="settings-form" id="personalForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Full Name</label>
+                                <input type="text" class="form-input" id="prof-fullname" value="Jane Doe">
+                            </div>
+                            <div class="form-group">
+                                <label>Username</label>
+                                <input type="text" class="form-input" id="prof-username" value="janeDoee123">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Email Address</label>
+                                <input type="email" class="form-input" id="prof-email" value="jane.doe@email.com">
+                            </div>
+                            <div class="form-group">
+                                <label>Phone Number</label>
+                                <input type="tel" class="form-input" id="prof-phone" value="(217) 555-0123">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Address</label>
+                            <input type="text" class="form-input" id="prof-address" value="357 Peony Drive, Champaign IL, 23567, USA">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </form>
+                </div>
+
+                <div class="settings-section">
+                    <h2>Account Security</h2>
+                    <form class="settings-form" id="securityForm">
+                        <div class="form-group">
+                            <label>Current Password</label>
+                            <input type="password" class="form-input" id="pass-current" placeholder="Enter current password">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>New Password</label>
+                                <input type="password" class="form-input" id="pass-new" placeholder="Enter new password">
+                            </div>
+                            <div class="form-group">
+                                <label>Confirm Password</label>
+                                <input type="password" class="form-input" id="pass-confirm" placeholder="Confirm new password">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Update Password</button>
+                    </form>
+                </div>
+
+                <div class="settings-section">
+                    <h2>Notification Preferences</h2>
+                    <div class="settings-toggles">
+                        <div class="toggle-item">
+                            <div><strong>Email Notifications</strong><p>Receive updates about challenges and achievements via email</p></div>
+                            <label class="toggle-switch"><input type="checkbox" id="notif-email" checked><span class="toggle-slider"></span></label>
+                        </div>
+                        <div class="toggle-item">
+                            <div><strong>Challenge Reminders</strong><p>Get reminded about pending challenges</p></div>
+                            <label class="toggle-switch"><input type="checkbox" id="notif-challenge" checked><span class="toggle-slider"></span></label>
+                        </div>
+                        <div class="toggle-item">
+                            <div><strong>Bill Payment Alerts</strong><p>Receive alerts for upcoming bill payments</p></div>
+                            <label class="toggle-switch"><input type="checkbox" id="notif-bills" checked><span class="toggle-slider"></span></label>
+                        </div>
+                        <div class="toggle-item">
+                            <div><strong>Achievement Notifications</strong><p>Get notified when you earn badges or level up</p></div>
+                            <label class="toggle-switch"><input type="checkbox" id="notif-achieve" checked><span class="toggle-slider"></span></label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h2>Privacy Settings</h2>
+                    <div class="settings-toggles">
+                        <div class="toggle-item">
+                            <div><strong>Show Profile on Leaderboard</strong><p>Display your profile and progress on the public leaderboard</p></div>
+                            <label class="toggle-switch"><input type="checkbox" id="priv-leaderboard" checked><span class="toggle-slider"></span></label>
+                        </div>
+                        <div class="toggle-item">
+                            <div><strong>Share Achievements</strong><p>Allow others to see your badges and achievements</p></div>
+                            <label class="toggle-switch"><input type="checkbox" id="priv-share"><span class="toggle-slider"></span></label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section danger-zone">
+                    <h2>Danger Zone</h2>
+                    <div class="danger-actions">
+                        <button class="btn btn-danger" onclick="resetProgress()">Reset All Progress</button>
+                        <button class="btn" style="background:#f59e0b;color:#fff;border:none" onclick="resetChallengesOnly()">Reset Challenges Only</button>
+                        <button class="btn btn-danger" onclick="if(confirm('Are you sure you want to delete your account?')) { alert('Account deletion is not available in this prototype.'); }">Delete Account</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Tab: Information ── -->
+            <div class="profile-tab-panel" id="tab-information">
+                <div class="info-header">
+                    <h1>Use this page for any information you might need</h1>
+                    <p>During some challenges and on other websites you will need to input fields like address, account number, and more. On this page you can find all that information and your past achievements and inventory.</p>
+                </div>
+
+                <section class="info-section">
+                    <h2>Your permanent address &#128205;</h2>
+                    <p class="info-desc">Here is your address, you will use this address for any input field that requires you to type a residential address</p>
+                    <div class="address-box">
+                        <span class="location-icon">&#128205;</span>
+                        <strong>357 Peony Drive, Champaign IL, 23567, USA</strong>
+                    </div>
+                </section>
+
+                <section class="info-section">
+                    <h2>Your accounts &#128179;</h2>
+                    <p class="info-desc">These are your virtual bank cards. Use these card details when completing challenges that require account information.</p>
+                    <div class="cards-container">
+                        <div class="credit-card card-gold">
+                            <div class="card-header">
+                                <span class="card-type">Debit Card</span>
+                                <span class="card-bank">Mastercard</span>
+                            </div>
+                            <div class="card-number">
+                                <span>4862</span><span>4862</span><span>4862</span><span>4739</span>
+                            </div>
+                            <div class="card-chart">
+                                <svg viewBox="0 0 100 30" preserveAspectRatio="none">
+                                    <polyline points="0,25 10,20 20,22 30,15 40,18 50,12 60,10 70,15 80,8 90,12 100,5" stroke="rgba(255,255,255,0.5)" fill="none" stroke-width="2"/>
+                                </svg>
+                            </div>
+                            <div class="card-balance" id="infoCheckingBal">&#402;&#8212;</div>
+                        </div>
+                        <div class="credit-card card-navy">
+                            <div class="card-header">
+                                <span class="card-type">Savings Card</span>
+                                <span class="card-bank">Mastercard</span>
+                            </div>
+                            <div class="card-number">
+                                <span>4862</span><span>4862</span><span>4862</span><span>4739</span>
+                            </div>
+                            <div class="card-chart">
+                                <svg viewBox="0 0 100 30" preserveAspectRatio="none">
+                                    <polyline points="0,20 10,22 20,18 30,20 40,15 50,17 60,12 70,14 80,10 90,8 100,12" stroke="rgba(255,255,255,0.5)" fill="none" stroke-width="2"/>
+                                </svg>
+                            </div>
+                            <div class="card-balance" id="infoSavingsBal">&#402;&#8212;</div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="info-section">
+                    <h2>Electricity bill</h2>
+                    <p class="info-desc">This is the information you need to pay your electricity bills</p>
+                    <table class="info-table">
+                        <thead><tr><th>Account Number</th><th>Account Name</th><th>Service/Address</th></tr></thead>
+                        <tbody><tr><td>1234560</td><td id="infoAccountName">&#8212;</td><td>357 Peony Drive, Champaign, IL</td></tr></tbody>
+                    </table>
+                </section>
+
+                <section class="info-section">
+                    <h2>Property tax</h2>
+                    <p class="info-desc">This is the information you need to pay your property taxes</p>
+                    <table class="info-table">
+                        <thead><tr><th>Account Number</th><th>Account Name</th><th>Service/Address</th></tr></thead>
+                        <tbody><tr><td>1234560</td><td id="infoAccountName2">&#8212;</td><td>357 Peony Drive, Champaign, IL</td></tr></tbody>
+                    </table>
+                </section>
+
+                <section class="info-section">
+                    <h2>Past inventory &#128717;</h2>
+                    <p class="info-desc">Items you have purchased through the Ecommerce store.</p>
+                    <div id="infoPastInventory"><p style="color:#64748b;font-size:0.875rem">Loading purchases...</p></div>
+                </section>
+
+                <section class="info-section">
+                    <h2>Past achievements &#11088;</h2>
+                    <p class="info-desc">Your recent activity and completed challenges.</p>
+                    <div id="infoAchievements"><p style="color:#64748b;font-size:0.875rem">Loading activity...</p></div>
+                </section>
+            </div>
+
+            <!-- ── Tab: Account Balances ── -->
+            <div class="profile-tab-panel" id="tab-balances">
+                <div class="balance-overview">
+                    <div class="balance-card total">
+                        <h3>Total Balance</h3>
+                        <div class="balance-amount-large" id="balTotalAmount">&#402;&#8212;</div>
+                        <p class="balance-change positive" id="balTotalNote">Loading...</p>
+                    </div>
+                </div>
+
+                <div class="accounts-grid">
+                    <div class="account-detail-card">
+                        <div class="account-header">
+                            <h3>Checking Account</h3>
+                            <span class="account-type-badge">Primary</span>
+                        </div>
+                        <div class="account-balance" id="balChecking">&#402;&#8212;</div>
+                        <div class="account-info-row"><span>Account Number:</span><span>****4739</span></div>
+                        <div class="account-info-row"><span>Type:</span><span>Debit Card</span></div>
+                        <div class="account-info-row"><span>Status:</span><span class="status-active">Active</span></div>
+                        <div class="account-chart"><canvas id="checkingChart"></canvas></div>
+                    </div>
+                    <div class="account-detail-card">
+                        <div class="account-header">
+                            <h3>Savings Account</h3>
+                            <span class="account-type-badge secondary">Secondary</span>
+                        </div>
+                        <div class="account-balance" id="balSavings">&#402;&#8212;</div>
+                        <div class="account-info-row"><span>Account Number:</span><span>****4739</span></div>
+                        <div class="account-info-row"><span>Type:</span><span>Credit Card</span></div>
+                        <div class="account-info-row"><span>Status:</span><span class="status-active">Active</span></div>
+                        <div class="account-chart"><canvas id="savingsChart"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="financial-summary">
+                    <h2>Financial Summary</h2>
+                    <div class="summary-grid">
+                        <div class="summary-card">
+                            <div class="summary-icon" style="background:#dcfce7">&#128176;</div>
+                            <div class="summary-content">
+                                <h4>Income This Month</h4>
+                                <div class="summary-amount">&#402;3,500.00</div>
+                                <p class="summary-note">Salary deposited</p>
+                            </div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-icon" style="background:#fee2e2">&#128652;</div>
+                            <div class="summary-content">
+                                <h4>Expenses This Month</h4>
+                                <div class="summary-amount" id="balExpenses">&#402;&#8212;</div>
+                                <p class="summary-note">Bills and purchases</p>
+                            </div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-icon" style="background:#dbeafe">&#128200;</div>
+                            <div class="summary-content">
+                                <h4>Savings Rate</h4>
+                                <div class="summary-amount">67%</div>
+                                <p class="summary-note">Above average</p>
+                            </div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-icon" style="background:#fef3c7">&#128204;</div>
+                            <div class="summary-content">
+                                <h4>Net Worth Growth</h4>
+                                <div class="summary-amount" id="balNetWorth">+&#402;&#8212;</div>
+                                <p class="summary-note">This month</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Tab: Progress ── -->
+            <div class="profile-tab-panel" id="tab-progress">
+
+                <!-- Financial Health Score -->
+                <div class="health-score-card" id="healthScoreCard">
+                    <div class="health-score-ring">
+                        <div class="health-score-number" id="healthScoreNum">—</div>
+                        <div class="health-score-label">/ 100</div>
+                    </div>
+                    <div style="flex:1;min-width:160px">
+                        <div style="font-size:1rem;font-weight:700;margin-bottom:0.25rem">Financial Health Score</div>
+                        <div style="font-size:0.82rem;opacity:0.85;margin-bottom:0.75rem" id="healthScoreDesc">Loading your score...</div>
+                        <div class="health-score-metrics" id="healthScoreMetrics"></div>
+                    </div>
+                </div>
+
+                <div class="progress-overview">
+                    <div class="level-card">
+                        <h2>Current Level</h2>
+                        <div class="level-display">
+                            <div class="level-number">1</div>
+                            <div class="level-info">
+                                <p><strong id="userPoints">0</strong> Total Points</p>
+                                <p><strong id="pointsToNext">1000</strong> points to level <span id="nextLevel">2</span></p>
+                            </div>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" id="levelProgress" style="width:0%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="skills-progress">
+                    <h2>Skills Progress</h2>
+                    <div class="skill-bars">
+                        <div class="skill-item">
+                            <div class="skill-header"><span>Banking &amp; Transfers</span><span>0%</span></div>
+                            <div class="skill-bar-bg"><div class="skill-bar-fill" style="width:0%;background:linear-gradient(90deg,#667eea,#764ba2)"></div></div>
+                        </div>
+                        <div class="skill-item">
+                            <div class="skill-header"><span>Ecommerce Shopping</span><span>0%</span></div>
+                            <div class="skill-bar-bg"><div class="skill-bar-fill" style="width:0%;background:linear-gradient(90deg,#f093fb,#f5576c)"></div></div>
+                        </div>
+                        <div class="skill-item">
+                            <div class="skill-header"><span>Bill Payment</span><span>0%</span></div>
+                            <div class="skill-bar-bg"><div class="skill-bar-fill" style="width:0%;background:linear-gradient(90deg,#4facfe,#00f2fe)"></div></div>
+                        </div>
+                        <div class="skill-item">
+                            <div class="skill-header"><span>Financial Planning</span><span>0%</span></div>
+                            <div class="skill-bar-bg"><div class="skill-bar-fill" style="width:0%;background:linear-gradient(90deg,#fa709a,#fee140)"></div></div>
+                        </div>
+                        <div class="skill-item">
+                            <div class="skill-header"><span>Account Management</span><span>0%</span></div>
+                            <div class="skill-bar-bg"><div class="skill-bar-fill" style="width:0%;background:linear-gradient(90deg,#30cfd0,#330867)"></div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="achievements-section">
+                    <h2>Badges &amp; Achievements</h2>
+                    <div class="badges-grid">
+                        <div class="badge-card locked"><div class="badge-icon">&#127942;</div><h4>First Purchase</h4><p>Made your first ecommerce purchase</p><span class="badge-progress">0/1</span></div>
+                        <div class="badge-card locked"><div class="badge-icon">&#128176;</div><h4>Money Mover</h4><p>Transferred money 5 times</p><span class="badge-progress">0/5</span></div>
+                        <div class="badge-card locked"><div class="badge-icon">&#9889;</div><h4>Bill Payer</h4><p>Paid 3 utility bills</p><span class="badge-progress">0/3</span></div>
+                        <div class="badge-card locked"><div class="badge-icon">&#127881;</div><h4>Level 10</h4><p>Reached level 10</p><span class="badge-progress">Level 1/10</span></div>
+                        <div class="badge-card locked"><div class="badge-icon">&#127970;</div><h4>Expert Banker</h4><p>Complete 20 banking transfers</p><span class="badge-progress">0/20</span></div>
+                        <div class="badge-card locked"><div class="badge-icon">&#127775;</div><h4>Level 20</h4><p>Reach level 20</p><span class="badge-progress">Level 1/20</span></div>
+                        <div class="badge-card locked"><div class="badge-icon">&#128722;</div><h4>Big Spender</h4><p>Spend over &#402;10,000 in ecommerce</p><span class="badge-progress">&#402;0/&#402;10,000</span></div>
+                        <div class="badge-card locked"><div class="badge-icon">&#9889;</div><h4>Power User</h4><p>Complete 30 total activities</p><span class="badge-progress">0/30</span></div>
+                    </div>
+                </div>
+
+                <div class="challenges-section" style="margin-bottom:2rem">
+                    <h2>Completed Challenges</h2>
+                    <div id="completedChallengesList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem;margin-top:1rem">
+                        <p style="color:#64748b">Loading challenges...</p>
+                    </div>
+                    <div style="margin-top:1rem">
+                        <a href="challenges.html" class="btn btn-primary" style="display:inline-block">View All Challenges</a>
+                    </div>
+                </div>
+
+                <div class="activity-timeline">
+                    <h2>Recent Activity</h2>
+                    <div class="timeline" id="progressTimeline">
+                        <p style="color:#64748b;font-size:0.875rem">Loading activity...</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="auth.js"></script>
+    <script src="db.js"></script>
+    <script src="script.js"></script>
+    <script>
+    // ── Tab switching ──────────────────────────────────────────────────────
+    document.querySelectorAll('.profile-tab-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.profile-tab-btn').forEach(function(b) { b.classList.remove('active'); });
+            document.querySelectorAll('.profile-tab-panel').forEach(function(p) { p.classList.remove('active'); });
+            btn.classList.add('active');
+            document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+            // Re-animate skill bars whenever Progress tab becomes visible
+            if (btn.dataset.tab === 'progress') {
+                var items = document.querySelectorAll('#tab-progress .skill-item');
+                // Reset bars to 0 first so the transition plays again
+                items.forEach(function(item) {
+                    var fill = item.querySelector('.skill-bar-fill');
+                    if (fill) { var oldWidth = fill.style.width; fill.style.width = '0%'; fill._savedWidth = oldWidth; }
+                });
+                items.forEach(function(item, i) {
+                    setTimeout(function() {
+                        var fill = item.querySelector('.skill-bar-fill');
+                        if (fill && fill._savedWidth) fill.style.width = fill._savedWidth;
+                    }, 80 + i * 140);
+                });
+            }
+        });
+    });
+
+    // Open tab from hash (e.g. profile.html#balances)
+    (function() {
+        var hash = window.location.hash.replace('#','');
+        if (hash) {
+            var btn = document.querySelector('.profile-tab-btn[data-tab="' + hash + '"]');
+            if (btn) btn.click();
+        }
+    })();
+
+    function escP(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var session = DigifinwizAuth.getSession();
+
+        DigifinwizDB.init().then(function() {
+            // ── Settings tab ─────────────────────────────────────────────
+            if (session && session.userId) {
+                return DigifinwizDB.getUserById(session.userId).then(function(user) {
+                    if (!user) return;
+                    function fv(id,val){ var el=document.getElementById(id); if(el&&val!=null) el.value=val; }
+                    fv('prof-fullname', user.fullName);
+                    fv('prof-username', user.username);
+                    fv('prof-email',    user.email);
+                    var unEl = document.getElementById('prof-username');
+                    if (unEl) { unEl.readOnly=true; unEl.style.background='#f1f5f9'; unEl.title='Username cannot be changed'; }
+                });
+            } else {
+                return DigifinwizDB.getProfileData().then(function(prof) {
+                    if (!prof) return;
+                    function fv(id,val){ var el=document.getElementById(id); if(el&&val!=null) el.value=val; }
+                    function ft(id,v)  { var el=document.getElementById(id); if(el) el.checked=v; }
+                    fv('prof-fullname',prof.fullName); fv('prof-username',prof.username);
+                    fv('prof-email',prof.email); fv('prof-phone',prof.phone); fv('prof-address',prof.address);
+                    ft('notif-email',      prof.notifEmail     !==false);
+                    ft('notif-challenge',  prof.notifChallenge !==false);
+                    ft('notif-bills',      prof.notifBills     !==false);
+                    ft('notif-achieve',    prof.notifAchieve   !==false);
+                    ft('priv-leaderboard', prof.privLeaderboard!==false);
+                    ft('priv-share',       prof.privShare===true);
+                });
+            }
+        });
+
+        // ── Personal info form ────────────────────────────────────────────
+        var pf = document.getElementById('personalForm');
+        if (pf) pf.addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (session && session.userId) {
+                var fullName = document.getElementById('prof-fullname').value.trim();
+                var email    = document.getElementById('prof-email').value.trim();
+                if (!fullName) { showNotification('Full name is required.', 'error'); return; }
+                DigifinwizDB.updateUser(session.userId, { fullName: fullName, email: email }).then(function() {
+                    showNotification('Personal information saved!', 'success');
+                    var ne = document.querySelector('.sidebar .user-profile h3');
+                    if (ne) ne.textContent = fullName;
+                    var nameEl = document.querySelector('.user-profile h3');
+                    if (nameEl) nameEl.textContent = fullName;
+                }).catch(function() { showNotification('Save failed. Please try again.', 'error'); });
+            } else {
+                var data = {
+                    fullName: document.getElementById('prof-fullname').value.trim(),
+                    username: document.getElementById('prof-username').value.trim(),
+                    email:    document.getElementById('prof-email').value.trim(),
+                    phone:    document.getElementById('prof-phone') ? document.getElementById('prof-phone').value.trim() : '',
+                    address:  document.getElementById('prof-address') ? document.getElementById('prof-address').value.trim() : ''
+                };
+                DigifinwizDB.getProfileData().then(function(ex) {
+                    return DigifinwizDB.setProfileData(Object.assign({}, ex||{}, data));
+                }).then(function() { showNotification('Personal information saved!', 'success'); })
+                  .catch(function() { showNotification('Save failed.', 'error'); });
+            }
+        });
+
+        // ── Security form ─────────────────────────────────────────────────
+        var sf = document.getElementById('securityForm');
+        if (sf) sf.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var cur = document.getElementById('pass-current').value;
+            var np  = document.getElementById('pass-new').value;
+            var cf  = document.getElementById('pass-confirm').value;
+            if (!cur)          { showNotification('Enter your current password.', 'error'); return; }
+            if (np.length < 6) { showNotification('New password needs at least 6 characters.', 'error'); return; }
+            if (np !== cf)     { showNotification('Passwords do not match.', 'error'); return; }
+            if (session && session.userId) {
+                DigifinwizDB.getUserById(session.userId).then(function(user) {
+                    if (!user) { showNotification('User not found.', 'error'); return; }
+                    if (user.passwordHash !== DigifinwizDB.simpleHash(cur)) { showNotification('Current password is incorrect.', 'error'); return; }
+                    return DigifinwizDB.updateUser(session.userId, { passwordHash: DigifinwizDB.simpleHash(np) }).then(function() {
+                        showNotification('Password updated!', 'success'); sf.reset();
+                    });
+                }).catch(function() { showNotification('Update failed.', 'error'); });
+            } else {
+                DigifinwizDB.getProfileData().then(function(prof) {
+                    var stored = prof && prof.password;
+                    if (stored && stored !== cur) { showNotification('Current password is incorrect.', 'error'); return; }
+                    return DigifinwizDB.setProfileData(Object.assign({}, prof||{}, { password: np })).then(function() {
+                        showNotification('Password updated!', 'success'); sf.reset();
+                    });
+                }).catch(function() { showNotification('Update failed.', 'error'); });
+            }
+        });
+
+        // ── Preferences toggles ───────────────────────────────────────────
+        function savePrefs() {
+            if (session && session.userId) return;
+            function gt(id){ var el=document.getElementById(id); return el?el.checked:false; }
+            DigifinwizDB.getProfileData().then(function(ex){
+                return DigifinwizDB.setProfileData(Object.assign({},ex||{},{
+                    notifEmail:gt('notif-email'), notifChallenge:gt('notif-challenge'),
+                    notifBills:gt('notif-bills'), notifAchieve:gt('notif-achieve'),
+                    privLeaderboard:gt('priv-leaderboard'), privShare:gt('priv-share')
+                }));
+            }).then(function(){ showNotification('Preferences saved!','success'); });
+        }
+        ['notif-email','notif-challenge','notif-bills','notif-achieve','priv-leaderboard','priv-share'].forEach(function(id){
+            var el=document.getElementById(id); if(el) el.addEventListener('change',savePrefs);
+        });
+
+        // ── Information tab ───────────────────────────────────────────────
+        var displayName = session ? (session.fullName || session.username || 'Jane Doe') : 'Jane Doe';
+        var nameEl  = document.getElementById('infoAccountName');
+        var nameEl2 = document.getElementById('infoAccountName2');
+        if (nameEl)  nameEl.textContent  = displayName;
+        if (nameEl2) nameEl2.textContent = displayName;
+
+        DigifinwizDB.init().then(function() {
+            return Promise.all([
+                DigifinwizDB.getBalance('checking'),
+                DigifinwizDB.getBalance('savings'),
+                DigifinwizDB.getPurchases(8),
+                DigifinwizDB.getRecentActivity ? DigifinwizDB.getRecentActivity(8) : Promise.resolve([]),
+                DigifinwizDB.getTransactions ? DigifinwizDB.getTransactions(100) : Promise.resolve([]),
+                DigifinwizDB.getPayments ? DigifinwizDB.getPayments(100) : Promise.resolve([])
+            ]);
+        }).then(function(r) {
+            var checking  = r[0], savings = r[1], purchases = r[2]||[], activity = r[3]||[];
+            var txns = r[4]||[], payments = r[5]||[];
+            var fmt = function(n){ return '\u0192' + Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+
+            // Information tab – cards
+            var ce = document.getElementById('infoCheckingBal'), se = document.getElementById('infoSavingsBal');
+            if (ce) ce.textContent = fmt(checking);
+            if (se) se.textContent = fmt(savings);
+
+            // Balances tab
+            var total = Number(checking||0) + Number(savings||0);
+            var balTotal = document.getElementById('balTotalAmount');
+            if (balTotal) balTotal.textContent = '\u0192' + Math.round(total).toLocaleString();
+            var balNote = document.getElementById('balTotalNote');
+            if (balNote) balNote.textContent = 'Across all accounts';
+            var bc = document.getElementById('balChecking'), bs = document.getElementById('balSavings');
+            if (bc) bc.textContent = fmt(checking);
+            if (bs) bs.textContent = fmt(savings);
+
+            // Expenses / net worth
+            var totalSpent = 0;
+            payments.forEach(function(p){ totalSpent += Number(p.amount||0); });
+            purchases.forEach(function(p){ if(p.items) p.items.forEach(function(it){ totalSpent += Number(it.price||0)*Number(it.quantity||1); }); });
+            var expEl = document.getElementById('balExpenses');
+            if (expEl) expEl.textContent = fmt(totalSpent);
+            var nwEl = document.getElementById('balNetWorth');
+            if (nwEl) nwEl.textContent = '+\u0192' + Math.round(Math.max(0, 3500 - totalSpent)).toLocaleString();
+
+            // Past inventory
+            var invContainer = document.getElementById('infoPastInventory');
+            if (invContainer) {
+                var allItems = [];
+                purchases.forEach(function(p){ if(p.items&&Array.isArray(p.items)) p.items.forEach(function(it){ allItems.push(it); }); });
+                if (allItems.length === 0) {
+                    invContainer.innerHTML = '<p style="color:#64748b;font-size:0.875rem">No purchases yet. Visit the <a href="ecommerce.html">Ecommerce store</a> to start shopping!</p>';
+                } else {
+                    var ICONS=['\uD83D\uDC55','\uD83D\uDC54','\uD83C\uDF92','\uD83D\uDC5F','\uD83C\uDFA7','\uD83D\uDCF1','\uD83D\uDC56','\uD83D\uDC5C','\u231A','\uD83E\uDDE5','\uD83D\uDD76','\uD83C\uDFAE'];
+                    var GRADS=['linear-gradient(135deg,#d4e4bc,#c8ddb0)','linear-gradient(135deg,#f4d4d4,#f0c8c8)','linear-gradient(135deg,#c4dcd4,#b8d4c8)','linear-gradient(135deg,#ffd4a3,#ffcb8e)','linear-gradient(135deg,#e0e7ff,#c7d2fe)','linear-gradient(135deg,#fce7f3,#fbcfe8)'];
+                    invContainer.innerHTML = '<div class="inventory-grid">' + allItems.slice(0,8).map(function(it,i){
+                        return '<div class="inventory-item"><div class="inventory-image" style="background:'+GRADS[i%GRADS.length]+'"><div class="placeholder-product" style="font-size:2rem">'+ICONS[i%ICONS.length]+'</div></div><h4>'+escP(it.name||it.title||'Item')+'</h4><p class="price">\u0192'+Number(it.price||0).toFixed(2)+'</p></div>';
+                    }).join('') + '</div>';
+                }
+            }
+
+            // Past achievements
+            var achContainer = document.getElementById('infoAchievements');
+            if (achContainer) {
+                var activityItems = activity;
+                if (activityItems.length === 0 && purchases.length > 0) {
+                    activityItems = purchases.slice(0,6).map(function(p){
+                        var total=0; if(p.items) p.items.forEach(function(it){ total+=Number(it.price||0)*Number(it.quantity||1); });
+                        return { type:'purchase', description:'Purchased '+(p.items?p.items.length:0)+' item(s) from the ecommerce store', amount:total, xp:p.xp||0, date:p.date||(p.timestamp?new Date(p.timestamp).toLocaleDateString():'') };
+                    });
+                }
+                if (activityItems.length === 0) {
+                    achContainer.innerHTML = '<p style="color:#64748b;font-size:0.875rem">No activity yet. Complete some challenges to see your achievements here!</p>';
+                } else {
+                    achContainer.innerHTML = '<div class="achievement-list">' + activityItems.slice(0,6).map(function(a){
+                        var icon = a.type==='purchase'?'\uD83D\uDED2':a.type==='payment'?'\u26A1':a.type==='transfer'?'\uD83C\uDFE6':'\u2B50';
+                        var xpB = a.xp?'<span class="badge badge-points">+'+a.xp+' XP</span>':'';
+                        var flB = a.amount?'<span class="badge badge-florins">\u0192'+Number(a.amount).toFixed(2)+'</span>':'';
+                        var ds  = a.date||(a.timestamp?new Date(a.timestamp).toLocaleDateString():'');
+                        return '<div class="achievement-card"><div class="achievement-content"><p class="achievement-text">'+icon+' '+escP(a.description||a.label||'Activity')+'</p><div class="achievement-badges">'+xpB+flB+'</div></div><div class="achievement-date">'+escP(ds)+'</div></div>';
+                    }).join('') + '</div>';
+                }
+            }
+        }).catch(function(err){ console.error('profile info/balances load error:', err); });
+
+        // ── Progress tab ──────────────────────────────────────────────────
+        DigifinwizDB.init().then(function(){ return DigifinwizDB.getStats(); }).then(function(stats) {
+            var user = stats.user;
+            if (!user) return;
+            var lvlEl = document.querySelector('#tab-progress .level-number');
+            if (lvlEl) lvlEl.textContent = user.level;
+            var upEl = document.getElementById('userPoints');    if (upEl) upEl.textContent = user.points.toLocaleString();
+            var pnEl = document.getElementById('pointsToNext');  if (pnEl) pnEl.textContent = user.pointsToNextLevel;
+            var nlEl = document.getElementById('nextLevel');     if (nlEl) nlEl.textContent = user.level + 1;
+            var pct = Math.max(0, Math.min(100, Math.round(((1000-user.pointsToNextLevel)/1000)*100)));
+            var lpEl = document.getElementById('levelProgress'); if (lpEl) lpEl.style.width = pct + '%';
+
+            // Animate skill bars with stagger (delay so transition is visible)
+            setTimeout(function() {
+                setSkill(0, stats.bankingSkill,   'Banking: '+stats.txCount+' transfers');
+            }, 100);
+            setTimeout(function() {
+                setSkill(1, stats.ecommerceSkill, 'Ecommerce: '+stats.purchCount+' purchases');
+            }, 220);
+            setTimeout(function() {
+                setSkill(2, stats.billSkill,      'Bills: '+stats.payCount+' paid');
+            }, 340);
+            setTimeout(function() {
+                setSkill(3, stats.planningSkill,  'Total activities: '+(stats.txCount+stats.payCount+stats.purchCount));
+            }, 460);
+            setTimeout(function() {
+                setSkill(4, stats.mgmtSkill,      'Level '+user.level+' / 20');
+            }, 580);
+
+            updateBadges(user, stats);
+
+            // ── Financial Health Score ─────────────────────────────────────
+            computeHealthScore(user, stats);
+        });
+
+        DigifinwizDB.getRecentActivity(8).then(function(events){ buildTimeline(events); });
+
+        DigifinwizDB.getChallenges().then(function(challenges) {
+            var CAT_ICONS = { banking:'&#127970;', ecommerce:'&#128722;', utilities:'&#9889;', general:'&#11088;' };
+            var active = challenges.filter(function(c){ return c.active; });
+            var done   = active.filter(function(c){ return c.completed; });
+            var listEl = document.getElementById('completedChallengesList');
+            if (!listEl) return;
+            if (done.length === 0) {
+                listEl.innerHTML = '<p style="color:#64748b;grid-column:1/-1">No challenges completed yet.</p>';
+                return;
+            }
+            listEl.innerHTML = done.map(function(c) {
+                var icon = CAT_ICONS[c.category] || '&#11088;';
+                var dateStr = c.completedAt ? new Date(c.completedAt).toLocaleDateString() : '';
+                return '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:1rem">'+
+                    '<div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem">'+
+                    '<div style="width:40px;height:40px;background:linear-gradient(135deg,#10b981,#059669);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0">'+icon+'</div>'+
+                    '<div><strong style="font-size:0.9rem">'+escP(c.title)+'</strong><div style="font-size:0.75rem;color:#64748b">'+escP(c.category)+'</div></div>'+
+                    '<div style="margin-left:auto;text-align:right"><div style="color:#10b981;font-weight:700;font-size:0.875rem">+'+(c.points||0)+' XP</div>'+
+                    '<div style="font-size:0.7rem;color:#16a34a">&#10003; Done</div></div></div>'+
+                    (c.description?'<p style="font-size:0.8rem;color:#475569;margin:0">'+escP(c.description)+'</p>':'')+
+                    (dateStr?'<div style="font-size:0.7rem;color:#94a3b8;margin-top:0.25rem">Completed '+dateStr+'</div>':'')+
+                    '</div>';
+            }).join('');
+            var section = listEl.closest('.challenges-section');
+            if (section) { var h2=section.querySelector('h2'); if(h2) h2.textContent='Completed Challenges ('+done.length+'/'+active.length+')'; }
+        }).catch(function(err){ console.error('loadChallenges progress:', err); });
+
+        function computeHealthScore(user, stats) {
+            // Score components (each out of stated max, then normalised to 100):
+            // 1. Activity variety (0-25): made at least 1 transfer + 1 payment + 1 purchase = 25
+            // 2. Engagement depth (0-25): total activities (capped at 10) → 2.5 pts each
+            // 3. Challenges (0-25): completed challenges (capped at 5) → 5 pts each
+            // 4. Level (0-25): level (capped at 5) → 5 pts each
+            var hasTransfer  = stats.txCount    > 0 ? 1 : 0;
+            var hasPayment   = stats.payCount   > 0 ? 1 : 0;
+            var hasPurchase  = stats.purchCount > 0 ? 1 : 0;
+            var varietyScore = Math.round((hasTransfer + hasPayment + hasPurchase) / 3 * 25);
+
+            var totalActs    = Math.min(stats.txCount + stats.payCount + stats.purchCount, 10);
+            var engageScore  = Math.round((totalActs / 10) * 25);
+
+            var chalScore    = Math.round(Math.min(stats.completedChallenges || 0, 5) / 5 * 25);
+
+            var levelScore   = Math.round(Math.min(user.level, 5) / 5 * 25);
+
+            var total = varietyScore + engageScore + chalScore + levelScore;
+
+            var label = total >= 80 ? 'Excellent ✨'
+                      : total >= 60 ? 'Good 👍'
+                      : total >= 40 ? 'Developing 📈'
+                      : 'Getting Started 🌱';
+
+            var numEl  = document.getElementById('healthScoreNum');
+            var descEl = document.getElementById('healthScoreDesc');
+            var metsEl = document.getElementById('healthScoreMetrics');
+
+            if (numEl)  numEl.textContent  = total;
+            if (descEl) descEl.textContent = label + ' — keep completing activities to improve your score';
+            if (metsEl) metsEl.innerHTML   =
+                '<span class="health-score-metric">🏦 Variety: ' + varietyScore + '/25</span>' +
+                '<span class="health-score-metric">⚡ Activity: ' + engageScore + '/25</span>' +
+                '<span class="health-score-metric">🎯 Challenges: ' + chalScore + '/25</span>' +
+                '<span class="health-score-metric">⭐ Level: ' + levelScore + '/25</span>';
+        }
+
+        function setSkill(idx, pct, title) {
+            var items = document.querySelectorAll('#tab-progress .skill-item');
+            if (!items[idx]) return;
+            var span = items[idx].querySelector('.skill-header span:last-child');
+            var fill = items[idx].querySelector('.skill-bar-fill');
+            if (span) span.textContent = pct + '%';
+            if (fill) fill.style.width = pct + '%';
+            if (title) items[idx].title = title;
+        }
+
+        function updateBadges(user, stats) {
+            var badges = document.querySelectorAll('#tab-progress .badge-card');
+            var defs = [
+                { icon:'&#127942;', name:'First Purchase',  desc:'Made your first ecommerce purchase',   earned:stats.purchCount>=1,   cur:stats.purchCount, max:1 },
+                { icon:'&#128176;', name:'Money Mover',     desc:'Transferred money 5 times',             earned:stats.txCount>=5,      cur:stats.txCount,    max:5 },
+                { icon:'&#9889;',   name:'Bill Payer',       desc:'Paid 3 utility bills',                  earned:stats.payCount>=3,     cur:stats.payCount,   max:3 },
+                { icon:'&#127881;', name:'Level 10',         desc:'Reached level 10',                      earned:user.level>=10,        cur:user.level,       max:10 },
+                { icon:'&#127970;', name:'Expert Banker',   desc:'Complete 20 banking transfers',          earned:stats.txCount>=20,     cur:stats.txCount,    max:20 },
+                { icon:'&#127775;', name:'Level 20',         desc:'Reach level 20',                        earned:user.level>=20,        cur:user.level,       max:20 },
+                { icon:'&#128722;', name:'Big Spender',     desc:'Spend over \u019210,000 in ecommerce',  earned:stats.totalSpentEcommerce>=10000, cur:Math.round(stats.totalSpentEcommerce), max:10000 },
+                { icon:'&#9889;',   name:'Power User',      desc:'Complete 30 total activities',           earned:(stats.txCount+stats.payCount+stats.purchCount)>=30, cur:(stats.txCount+stats.payCount+stats.purchCount), max:30 }
+            ];
+            defs.forEach(function(def,i) {
+                if (!badges[i]) return;
+                badges[i].className = 'badge-card ' + (def.earned ? 'earned' : 'locked');
+                var icon = badges[i].querySelector('.badge-icon'); if (icon) icon.innerHTML = def.icon;
+                var h4   = badges[i].querySelector('h4');          if (h4)   h4.textContent = def.name;
+                var p    = badges[i].querySelector('p');            if (p)    p.textContent  = def.desc;
+                var sub  = badges[i].querySelector('.badge-date,.badge-progress');
+                var progressText = def.earned ? 'Earned!' : Math.min(def.cur, def.max) + ' / ' + def.max;
+                if (sub) { sub.className = def.earned?'badge-date':'badge-progress'; sub.textContent = progressText; }
+                // Add mini progress bar if not already present
+                if (!badges[i].querySelector('.badge-mini-bar-wrap')) {
+                    var barPct = def.max > 0 ? Math.min(100, Math.round((def.cur / def.max) * 100)) : 0;
+                    var barDiv = document.createElement('div');
+                    barDiv.className = 'badge-mini-bar-wrap';
+                    barDiv.innerHTML = '<div class="badge-mini-bar" style="width:0%"></div>';
+                    badges[i].appendChild(barDiv);
+                    setTimeout(function(el, pct) {
+                        var fill = el.querySelector('.badge-mini-bar');
+                        if (fill) fill.style.width = pct + '%';
+                    }.bind(null, barDiv, barPct), 400 + i * 60);
+                }
+            });
+        }
+
+        function buildTimeline(events) {
+            var tl = document.getElementById('progressTimeline');
+            if (!tl) return;
+            if (events.length === 0) { tl.innerHTML = '<p style="color:#64748b;font-size:0.875rem">No activity yet.</p>'; return; }
+            var dotColors = { transfer:'#667eea', payment:'#f59e0b', purchase:'#10b981' };
+            tl.innerHTML = events.map(function(e) {
+                var col = dotColors[e.type] || '#667eea';
+                return '<div class="timeline-item"><div class="timeline-dot" style="background:'+col+'"></div>'+
+                    '<div class="timeline-content"><strong>'+e.icon+' '+escP(e.label)+'</strong>'+
+                    '<p>'+escP(e.detail)+' &nbsp; <span style="color:#10b981;font-weight:600">+'+e.pointsEarned+' pts</span></p>'+
+                    '<span class="timeline-date">'+escP(e.date||'')+'</span></div></div>';
+            }).join('');
+        }
+    });
+
+    function resetProgress() {
+        if (!confirm('Reset ALL progress? This clears transactions, bills, challenges, and resets balances.')) return;
+        DigifinwizDB.init().then(function() {
+            return DigifinwizDB.setUserData({level:1,points:0,pointsToNextLevel:1000,challenges:0,completedTasks:0});
+        }).then(function() {
+            return Promise.all([
+                DigifinwizDB.clearStore('transactions'), DigifinwizDB.clearStore('payments'),
+                DigifinwizDB.clearStore('purchaseHistory'), DigifinwizDB.clearStore('cart'),
+                DigifinwizDB.setBalance('checking', DigifinwizDB.DEFAULT_BALANCES.checking),
+                DigifinwizDB.setBalance('savings',  DigifinwizDB.DEFAULT_BALANCES.savings)
+            ]);
+        }).then(function() {
+            var session = DigifinwizAuth.getSession();
+            if (session && session.userId) {
+                return DigifinwizDB.clearStore('challenges').then(function() { return DigifinwizDB.seedChallengesForUser(session.userId); });
+            } else {
+                return DigifinwizDB.clearStore('challenges').then(function() { return DigifinwizDB.seedDefaultChallenges(); });
+            }
+        }).then(function() {
+            showNotification('Progress reset! Challenges have been refreshed.', 'success');
+            setTimeout(function(){ window.location.href='index.html'; }, 1500);
+        }).catch(function() { showNotification('Reset failed.', 'error'); });
+    }
+
+    function resetChallengesOnly() {
+        if (!confirm('Reset all challenges back to incomplete? Your transactions and XP will be kept.')) return;
+        var session = DigifinwizAuth.getSession();
+        DigifinwizDB.init().then(function() {
+            return DigifinwizDB.clearStore('challenges');
+        }).then(function() {
+            if (session && session.userId) { return DigifinwizDB.seedChallengesForUser(session.userId); }
+            else { return DigifinwizDB.seedDefaultChallenges(); }
+        }).then(function() {
+            showNotification('Challenges reset! All challenges are now active again.', 'success');
+        }).catch(function() { showNotification('Challenge reset failed.', 'error'); });
+    }
+    </script>
+</body>
+</html>

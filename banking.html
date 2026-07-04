@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digifinwiz - Banking</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="shopping-styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">Digifinwiz</div>
+            <button class="nav-toggle" aria-label="Toggle navigation"><span></span><span></span><span></span></button>
+            <ul class="nav-menu">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="tutorials.html">Tutorials</a></li>
+                <li><a href="challenges.html">Challenges</a></li>
+                <li><a href="about.html">About Us</a></li>
+                <li><a href="admin.html">Admin</a></li>
+                <li><a href="messages.html">Messages</a></li>
+                <li><a href="profile.html">Profile</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- DigiBank Sub-Header -->
+    <header class="shop-header">
+        <div class="shop-container">
+            <div class="shop-logo">DigiBank.</div>
+            <nav class="shop-nav">
+                <a href="#" onclick="switchPageTab('banking');return false;" class="active">Banking</a>
+                <a href="account-balances.html">My Accounts</a>
+                <a href="account-progress.html">Progress</a>
+            </nav>
+            <div class="shop-header-right">
+                <div class="shop-icons">
+                    <button class="shop-icon-btn home" onclick="window.location.href='account-progress.html'" title="My Progress">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+                    </button>
+                    <button class="shop-icon-btn bookmark" onclick="window.location.href='account-balances.html'" title="Account Balances">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
+                    </button>
+                    <button class="shop-icon-btn cart" onclick="document.getElementById('transferForm').scrollIntoView({behavior:'smooth'})" title="Quick Transfer">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- DigiBank Game Progress Bar -->
+    <div class="game-progress-bar">
+        <div class="shop-container">
+            <div class="progress-content">
+                <div class="progress-left">
+                    <span class="progress-label">GAME PROGRESS</span>
+                    <span class="level-info">Level <strong id="bankProgressLevel">1/50</strong></span>
+                </div>
+                <div class="progress-bar-container"><div class="progress-bar" id="bankProgressFill" style="width: 0%"></div></div>
+                <span class="progress-text" id="bankProgressText">0% completed</span>
+                <div class="progress-stats">
+                    <div class="stat">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg>
+                        <span id="bankProgressXP">0 XP</span>
+                    </div>
+                    <div class="stat coins">
+                        <div class="coin-icon">&#402;</div>
+                        <span id="bankProgressCoins">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <aside class="sidebar">
+            <div class="user-profile">
+                <div class="avatar">
+                    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect fill='%23667eea' width='80' height='80'/%3E%3Ctext x='50%25' y='50%25' font-size='32' fill='white' text-anchor='middle' dy='.3em'%3EJD%3C/text%3E%3C/svg%3E" alt="User avatar" id="sidebarAvatar">
+                </div>
+                <h3 id="sidebarName">Loading…</h3>
+                <p class="username" id="sidebarUsername"></p>
+            </div>
+            <p class="sidebar-desc">Visit any of these pages to complete new tasks such as online shopping, paying bills or banking</p>
+            <nav class="sidebar-nav">
+                <a href="ecommerce.html" class="nav-item">
+                    <span>Ecommerce<sup class="nav-badge" id="sidebarBadgeEcommerce">5</sup></span>
+                    <span class="arrow">→</span>
+                </a>
+                <a href="banking.html" class="nav-item active">
+                    <span>Banking<sup class="nav-badge" id="sidebarBadgeBanking" style="display:none">0</sup></span>
+                    <span class="arrow">→</span>
+                </a>
+                <a href="utilities.html" class="nav-item">
+                    <span>Utilities<sup class="nav-badge" id="sidebarBadgeUtilities" style="display:none">0</sup></span>
+                    <span class="arrow">→</span>
+                </a>
+                <a href="account-balances.html" class="nav-item">
+                    <span>View account balances</span>
+                    <span class="arrow">∨</span>
+                </a>
+                <a href="account-progress.html" class="nav-item">
+                    <span>View account progress</span>
+                    <span class="arrow">∨</span>
+                </a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <div class="page-header">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.75rem">
+                    <div>
+                        <h1>Banking &amp; Money Transfer</h1>
+                        <p>Transfer money, manage your accounts, and earn XP with every transaction</p>
+                    </div>
+                    <div style="background:linear-gradient(135deg,#667eea,#764ba2);border-radius:var(--radius-xl);padding:0.75rem 1.25rem;color:white;text-align:right">
+                        <div style="font-size:0.75rem;opacity:0.85">Total Balance</div>
+                        <div style="font-size:1.4rem;font-weight:700" id="bankHeaderBalance">ƒ0.00</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Account Balance Cards (always visible) ──────────── -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:1.5rem">
+                <div style="background:linear-gradient(135deg,#667eea,#764ba2);border-radius:var(--radius-xl);padding:1.25rem;color:white">
+                    <div style="font-size:0.72rem;opacity:0.85;margin-bottom:0.25rem;text-transform:uppercase;letter-spacing:0.05em">Checking Account</div>
+                    <div style="font-size:1.6rem;font-weight:700" id="balanceChecking">ƒ—</div>
+                    <div style="font-size:0.7rem;opacity:0.7;margin-top:0.3rem">Available balance</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#10b981,#059669);border-radius:var(--radius-xl);padding:1.25rem;color:white">
+                    <div style="font-size:0.72rem;opacity:0.85;margin-bottom:0.25rem;text-transform:uppercase;letter-spacing:0.05em">Savings Account</div>
+                    <div style="font-size:1.6rem;font-weight:700" id="balanceSavings">ƒ—</div>
+                    <div style="font-size:0.7rem;opacity:0.7;margin-top:0.3rem">Available balance</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:var(--radius-xl);padding:1.25rem;color:white">
+                    <div style="font-size:0.72rem;opacity:0.85;margin-bottom:0.25rem;text-transform:uppercase;letter-spacing:0.05em">Total Transferred</div>
+                    <div style="font-size:1.6rem;font-weight:700" id="totalTransferred">ƒ—</div>
+                    <div style="font-size:0.7rem;opacity:0.7;margin-top:0.3rem">All-time outgoing</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#3b82f6,#2563eb);border-radius:var(--radius-xl);padding:1.25rem;color:white">
+                    <div style="font-size:0.72rem;opacity:0.85;margin-bottom:0.25rem;text-transform:uppercase;letter-spacing:0.05em">Transfers Made</div>
+                    <div style="font-size:1.6rem;font-weight:700" id="transferCount">—</div>
+                    <div style="font-size:0.7rem;opacity:0.7;margin-top:0.3rem">Total transactions</div>
+                </div>
+            </div>
+
+            <!-- Balance split bar -->
+            <div id="balanceSplitRow" style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:0.875rem 1.25rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:1rem">
+                <div style="flex:1">
+                    <div style="display:flex;justify-content:space-between;font-size:0.75rem;font-weight:600;margin-bottom:0.4rem">
+                        <span style="color:#667eea">🏦 Checking <span id="splitCheckingPct">—%</span></span>
+                        <span style="color:#10b981">Savings <span id="splitSavingsPct">—%</span> 💰</span>
+                    </div>
+                    <div style="height:10px;border-radius:99px;overflow:hidden;background:#e2e8f0;display:flex">
+                        <div id="splitCheckingBar" style="height:100%;background:linear-gradient(90deg,#667eea,#764ba2);transition:width 0.6s ease;border-radius:99px 0 0 99px"></div>
+                        <div id="splitSavingsBar"  style="height:100%;background:linear-gradient(90deg,#10b981,#059669);transition:width 0.6s ease;border-radius:0 99px 99px 0;flex:1"></div>
+                    </div>
+                    <div style="font-size:0.7rem;color:var(--color-gray-400);margin-top:0.3rem;text-align:center" id="splitTotalLabel">Total across accounts: ƒ—</div>
+                </div>
+            </div>
+
+            <!-- ── Page Tab Navigation ─────────────────────────────── -->
+            <div class="page-tabs">
+                <button class="page-tab-btn active" id="tab-btn-banking" onclick="switchPageTab('banking')">
+                    🏦 Banking
+                </button>
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════════
+                 BANKING TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel active" id="panel-banking">
+
+                <!-- Challenge Tracker -->
+                <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:1.25rem;margin-bottom:1.5rem">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+                        <h2 style="font-size:1rem;font-weight:700;margin:0">🏦 Banking Challenges</h2>
+                        <a href="challenges.html" style="font-size:0.8rem;color:var(--color-primary-500);text-decoration:none;font-weight:600">View all →</a>
+                    </div>
+                    <div class="challenge-summary-grid">
+                        <div class="csg-item"><div class="csg-val" style="color:#10b981" id="chalDoneCount">—</div><div class="csg-lbl">Completed</div></div>
+                        <div class="csg-item"><div class="csg-val" style="color:#6366f1" id="chalPendingCount">—</div><div class="csg-lbl">In Progress</div></div>
+                        <div class="csg-item"><div class="csg-val" style="color:#f59e0b" id="chalTotalXp">—</div><div class="csg-lbl">Total XP</div></div>
+                        <div class="csg-item"><div class="csg-val" style="color:#8b5cf6" id="chalEarnedXp">—</div><div class="csg-lbl">XP Earned</div></div>
+                    </div>
+                    <div id="bankingChallengesList" style="display:flex;flex-direction:column;gap:0.6rem">
+                        <p style="color:var(--color-gray-500);font-size:0.875rem">Loading challenges…</p>
+                    </div>
+                </div>
+
+                <!-- Transfer Form + Transactions -->
+                <div class="banking-grid">
+                    <div class="banking-section">
+                        <h2>Quick Transfer</h2>
+                        <form id="transferForm" class="transfer-form">
+                            <div class="form-group">
+                                <label>From Account</label>
+                                <!-- Hidden select keeps banking.js logic intact -->
+                                <select id="fromAccount" style="display:none">
+                                    <option value="checking">Checking Account — ƒ88,674</option>
+                                    <option value="savings">Savings Account — ƒ18,074</option>
+                                </select>
+                                <!-- Visual account selector cards -->
+                                <div class="acct-sel-cards">
+                                    <button type="button" class="acct-sel-card active" id="acctCard-checking" onclick="selectFromAccount('checking')">
+                                        <div class="acct-sel-card-label">Checking</div>
+                                        <div class="acct-sel-card-balance" id="acctBal-checking">ƒ—</div>
+                                        <div class="acct-sel-card-type">🏦 Day-to-day account</div>
+                                    </button>
+                                    <button type="button" class="acct-sel-card" id="acctCard-savings" onclick="selectFromAccount('savings')">
+                                        <div class="acct-sel-card-label">Savings</div>
+                                        <div class="acct-sel-card-balance" id="acctBal-savings">ƒ—</div>
+                                        <div class="acct-sel-card-type">💰 Savings account</div>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Recipient Name</label>
+                                <input type="text" class="form-input" id="recipientName" placeholder="Enter recipient name" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Recipient Account Number</label>
+                                <input type="text" class="form-input" id="recipientAccount" placeholder="Enter account number" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Amount (ƒ)</label>
+                                <input type="number" class="form-input" id="amount" placeholder="0.00" min="0.01" step="0.01" required>
+                                <div class="amount-presets">
+                                    <button type="button" class="preset-btn" onclick="setAmount(10)">ƒ10</button>
+                                    <button type="button" class="preset-btn" onclick="setAmount(25)">ƒ25</button>
+                                    <button type="button" class="preset-btn" onclick="setAmount(50)">ƒ50</button>
+                                    <button type="button" class="preset-btn" onclick="setAmount(100)">ƒ100</button>
+                                    <button type="button" class="preset-btn" onclick="setAmount(500)">ƒ500</button>
+                                </div>
+                                <!-- Amount range slider -->
+                                <div class="amount-slider-wrap">
+                                    <span class="amount-slider-min">ƒ1</span>
+                                    <input type="range" id="amountSlider" min="1" max="1000" step="1" value="50" oninput="syncAmountFromSlider(this.value)">
+                                    <span class="amount-slider-val" id="amountSliderVal">ƒ50</span>
+                                </div>
+                            </div>
+                            <div id="amountFeedback" style="display:none;margin-top:-0.5rem;margin-bottom:0.75rem;font-size:0.8rem;padding:0.5rem 0.75rem;border-radius:var(--radius-md)"></div>
+                            <div class="form-group">
+                                <label>Description <span style="color:var(--color-gray-400);font-weight:400">(Optional)</span></label>
+                                <textarea class="form-input" id="description" rows="2" placeholder="What's this transfer for?"></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-block">Transfer Money</button>
+                        </form>
+                        <!-- Saved Recipients -->
+                        <div style="margin-top:1.5rem">
+                            <div class="section-label">Quick Select Recipient</div>
+                            <div class="recipients-grid">
+                                <div class="recipient-card" onclick="selectRecipient('Bruce Lee','1234567890')">
+                                    <div class="recipient-avatar" style="background:linear-gradient(135deg,#667eea,#764ba2)">BL</div>
+                                    <div class="recipient-info"><strong>Bruce Lee</strong><span>****7890</span></div>
+                                </div>
+                                <div class="recipient-card" onclick="selectRecipient('Alice Johnson','9876543210')">
+                                    <div class="recipient-avatar" style="background:linear-gradient(135deg,#f093fb,#f5576c)">AJ</div>
+                                    <div class="recipient-info"><strong>Alice Johnson</strong><span>****3210</span></div>
+                                </div>
+                                <div class="recipient-card" onclick="selectRecipient('Mike Smith','5555555555')">
+                                    <div class="recipient-avatar" style="background:linear-gradient(135deg,#4facfe,#00f2fe)">MS</div>
+                                    <div class="recipient-info"><strong>Mike Smith</strong><span>****5555</span></div>
+                                </div>
+                                <div class="recipient-card" onclick="selectRecipient('Sarah Williams','1111222233')">
+                                    <div class="recipient-avatar" style="background:linear-gradient(135deg,#fa709a,#fee140)">SW</div>
+                                    <div class="recipient-info"><strong>Sarah Williams</strong><span>****2233</span></div>
+                                </div>
+                            </div>
+
+                            <!-- Saved custom recipients (from localStorage) -->
+                            <div id="customRecipientsWrap"></div>
+
+                            <!-- Add custom recipient toggle + form -->
+                            <button type="button" class="custom-recip-toggle" onclick="toggleCustomRecipForm()">＋ Add New Recipient</button>
+                            <div class="custom-recip-form" id="customRecipForm">
+                                <div class="form-group" style="margin-bottom:0.5rem">
+                                    <label style="font-size:0.8rem;font-weight:600;margin-bottom:0.3rem;display:block">Name</label>
+                                    <input type="text" class="form-input" id="newRecipName" placeholder="Recipient full name" style="padding:0.45rem 0.75rem;font-size:0.85rem">
+                                </div>
+                                <div class="form-group" style="margin-bottom:0.75rem">
+                                    <label style="font-size:0.8rem;font-weight:600;margin-bottom:0.3rem;display:block">Account Number</label>
+                                    <input type="text" class="form-input" id="newRecipAcct" placeholder="e.g. 9988776655" style="padding:0.45rem 0.75rem;font-size:0.85rem">
+                                </div>
+                                <button type="button" class="btn btn-primary" style="width:100%;font-size:0.85rem;padding:0.5rem" onclick="saveCustomRecipient()">Save Recipient</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="banking-section">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+                            <h2 style="margin:0">Recent Transactions</h2>
+                            <span id="txCountBadge" style="background:#ede9fe;color:#7c3aed;padding:2px 10px;border-radius:12px;font-size:0.8rem;font-weight:600"></span>
+                        </div>
+                        <!-- Today's activity bar -->
+                        <div class="tx-today-bar" id="txTodayBar" style="display:none">
+                            Today: <span class="tx-today-chip" id="todayTxCount">0 transfers</span>
+                            <span class="tx-today-chip green" id="todayTxTotal">ƒ0.00 sent</span>
+                        </div>
+                        <!-- Transaction Search -->
+                        <div class="tx-search-wrap">
+                            <span class="tx-search-icon">🔍</span>
+                            <input type="text" class="tx-search-input" id="txSearch"
+                                placeholder="Search by name or description…"
+                                oninput="filterTxBySearch()" autocomplete="off">
+                            <button class="tx-search-clear" id="txSearchClear" onclick="clearTxSearch()" style="display:none" aria-label="Clear">×</button>
+                        </div>
+                        <div class="tx-filter-tabs">
+                            <button class="tx-filter-btn active" id="txFilter-all"      onclick="setTxFilter('all')">All</button>
+                            <button class="tx-filter-btn"        id="txFilter-checking" onclick="setTxFilter('checking')">Checking</button>
+                            <button class="tx-filter-btn"        id="txFilter-savings"  onclick="setTxFilter('savings')">Savings</button>
+                        </div>
+                        <div id="transactionsList" class="transactions-list">
+                            <p style="color:var(--color-gray-500);padding:1rem;text-align:center">Loading transactions…</p>
+                        </div>
+                        <p id="txNoSearchResults" style="display:none;color:var(--color-gray-500);font-size:0.82rem;text-align:center;padding:0.75rem">No transactions match your search.</p>
+                    </div>
+                </div>
+
+                <!-- Transfer Activity Summary -->
+                <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:1.25rem;margin-top:1.5rem">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+                        <h2 style="font-size:1rem;font-weight:700;margin:0">📊 Transfer Activity Summary</h2>
+                        <span id="txCountBadge2" style="background:#ede9fe;color:#7c3aed;padding:2px 10px;border-radius:12px;font-size:0.8rem;font-weight:600"></span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0.75rem;margin-bottom:0.75rem">
+                        <div style="text-align:center;background:#f5f3ff;border-radius:10px;padding:0.875rem;border:1px solid #e0e7ff">
+                            <div style="font-size:1.4rem;font-weight:700;color:#6366f1" id="statTxCount">—</div>
+                            <div style="font-size:0.75rem;color:var(--color-gray-500);margin-top:0.2rem">Total Transfers</div>
+                        </div>
+                        <div style="text-align:center;background:#fffbeb;border-radius:10px;padding:0.875rem;border:1px solid #fde68a">
+                            <div style="font-size:1.4rem;font-weight:700;color:#d97706" id="statTxTotal">—</div>
+                            <div style="font-size:0.75rem;color:var(--color-gray-500);margin-top:0.2rem">Total Sent</div>
+                        </div>
+                        <div style="text-align:center;background:#f0fdf4;border-radius:10px;padding:0.875rem;border:1px solid #bbf7d0">
+                            <div style="font-size:1.4rem;font-weight:700;color:#10b981" id="statTxPts">—</div>
+                            <div style="font-size:0.75rem;color:var(--color-gray-500);margin-top:0.2rem">XP Earned</div>
+                        </div>
+                        <div style="text-align:center;background:#eff6ff;border-radius:10px;padding:0.875rem;border:1px solid #bfdbfe">
+                            <div style="font-size:1.4rem;font-weight:700;color:#3b82f6" id="statNextMilestone">—</div>
+                            <div style="font-size:0.75rem;color:var(--color-gray-500);margin-top:0.2rem">Next Milestone</div>
+                        </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0.75rem;margin-bottom:0.75rem">
+                        <div style="text-align:center;background:#fdf4ff;border-radius:10px;padding:0.875rem;border:1px solid #e9d5ff">
+                            <div style="font-size:1.4rem;font-weight:700;color:#a855f7" id="statTxLargest">—</div>
+                            <div style="font-size:0.75rem;color:var(--color-gray-500);margin-top:0.2rem">Largest Transfer</div>
+                        </div>
+                        <div style="text-align:center;background:#fff7ed;border-radius:10px;padding:0.875rem;border:1px solid #fed7aa">
+                            <div style="font-size:1.4rem;font-weight:700;color:#f97316" id="statTxAvg">—</div>
+                            <div style="font-size:0.75rem;color:var(--color-gray-500);margin-top:0.2rem">Average Transfer</div>
+                        </div>
+                        <div style="text-align:center;background:#f0fdf4;border-radius:10px;padding:0.875rem;border:1px solid #bbf7d0">
+                            <div style="font-size:1.4rem;font-weight:700;color:#059669" id="statTxChecking">—</div>
+                            <div style="font-size:0.75rem;color:var(--color-gray-500);margin-top:0.2rem">From Checking</div>
+                        </div>
+                        <div style="text-align:center;background:#ecfdf5;border-radius:10px;padding:0.875rem;border:1px solid #a7f3d0">
+                            <div style="font-size:1.4rem;font-weight:700;color:#047857" id="statTxSavings">—</div>
+                            <div style="font-size:0.75rem;color:var(--color-gray-500);margin-top:0.2rem">From Savings</div>
+                        </div>
+                    </div>
+                    <div style="background:var(--color-gray-50);border-radius:10px;padding:0.75rem;border:1px solid var(--color-border);display:flex;align-items:center;gap:0.75rem">
+                        <div style="width:36px;height:36px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.85rem;font-weight:700;flex-shrink:0" id="statLastAvatar">?</div>
+                        <div style="flex:1;min-width:0">
+                            <div style="font-size:0.8rem;font-weight:600;color:var(--color-gray-800)" id="statLastRecipient">No transfers yet</div>
+                            <div style="font-size:0.72rem;color:var(--color-gray-400)" id="statLastDate"></div>
+                        </div>
+                        <div style="text-align:right;flex-shrink:0">
+                            <div style="font-size:0.85rem;font-weight:700;color:#6366f1" id="statLastAmount"></div>
+                            <div style="font-size:0.7rem;color:var(--color-success)" id="statLastXp"></div>
+                        </div>
+                    </div>
+                    <!-- 7-day transfer mini-chart -->
+                    <div class="tx-chart-wrap" id="sevenDayChartWrap" style="display:none">
+                        <div class="tx-chart-title">📈 Last 7 Days — Transfer Volume</div>
+                        <div class="tx-chart-bars"  id="sevenDayBars"></div>
+                        <div class="tx-chart-labels" id="sevenDayLabels"></div>
+                    </div>
+                </div>
+
+            </div><!-- /panel-banking -->
+
+        </main>
+    </div>
+
+    <script src="auth.js"></script>
+    <script src="db.js"></script>
+    <script src="script.js"></script>
+    <script src="banking.js"></script>
+    <script>
+    /* ── Tab switching ──────────────────────────────────────────────── */
+    function switchPageTab(name) {
+        ['banking'].forEach(function(t) {
+            var panel = document.getElementById('panel-' + t);
+            var btn   = document.getElementById('tab-btn-' + t);
+            if (!panel || !btn) return;
+            var active = (t === name);
+            panel.classList.toggle('active', active);
+            btn.classList.toggle('active', active);
+        });
+        sessionStorage.setItem('banking_tab', name);
+    }
+
+    /* ── HTML escape ────────────────────────────────────────────────── */
+    function escHB(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }
+
+    /* ── Quick-amount presets ───────────────────────────────────────── */
+    function setAmount(val) {
+        var inp = document.getElementById('amount');
+        if (!inp) return;
+        inp.value = val;
+        inp.dispatchEvent(new Event('input'));
+        document.querySelectorAll('.preset-btn').forEach(function(b) {
+            b.classList.toggle('active', parseFloat(b.textContent.replace('ƒ','')) === val);
+        });
+    }
+
+    /* ── Transaction filter tabs ────────────────────────────────────── */
+    var currentTxFilter = 'all';
+    function setTxFilter(filter) {
+        currentTxFilter = filter;
+        ['all','checking','savings'].forEach(function(f) {
+            var btn = document.getElementById('txFilter-' + f);
+            if (btn) btn.classList.toggle('active', f === filter);
+        });
+        updateTransactionsList(filter);
+    }
+
+    /* ── Account selector cards ─────────────────────────────────────── */
+    function selectFromAccount(acct) {
+        var sel = document.getElementById('fromAccount');
+        if (sel) {
+            sel.value = acct;
+            sel.dispatchEvent(new Event('change'));
+        }
+        ['checking','savings'].forEach(function(a) {
+            var card = document.getElementById('acctCard-' + a);
+            if (card) card.classList.toggle('active', a === acct);
+        });
+    }
+
+    /* ── Transaction search ──────────────────────────────────────────── */
+    function filterTxBySearch() {
+        var q = ((document.getElementById('txSearch') || {}).value || '').trim().toLowerCase();
+        var clearBtn = document.getElementById('txSearchClear');
+        if (clearBtn) clearBtn.style.display = q ? '' : 'none';
+        var items = document.querySelectorAll('#transactionsList .transaction-item');
+        var shown = 0;
+        items.forEach(function(item) {
+            var vis = !q || item.textContent.toLowerCase().indexOf(q) > -1;
+            item.style.display = vis ? '' : 'none';
+            if (vis) shown++;
+        });
+        var noEl = document.getElementById('txNoSearchResults');
+        if (noEl) noEl.style.display = (q && items.length > 0 && shown === 0) ? '' : 'none';
+    }
+
+    function clearTxSearch() {
+        var inp = document.getElementById('txSearch');
+        if (inp) inp.value = '';
+        filterTxBySearch();
+    }
+
+    /* ── Custom recipients ───────────────────────────────────────────── */
+    function toggleCustomRecipForm() {
+        var form = document.getElementById('customRecipForm');
+        if (form) form.classList.toggle('open');
+    }
+
+    function saveCustomRecipient() {
+        var name = ((document.getElementById('newRecipName') || {}).value || '').trim();
+        var acct = ((document.getElementById('newRecipAcct') || {}).value || '').trim();
+        if (!name || !acct) { showNotification('Please enter both name and account number.', 'error'); return; }
+        var saved = JSON.parse(localStorage.getItem('digifinwiz_custom_recipients') || '[]');
+        saved.push({ name: name, account: acct });
+        localStorage.setItem('digifinwiz_custom_recipients', JSON.stringify(saved));
+        document.getElementById('newRecipName').value = '';
+        document.getElementById('newRecipAcct').value = '';
+        document.getElementById('customRecipForm').classList.remove('open');
+        renderCustomRecipients();
+        showNotification(name + ' saved as recipient!', 'success');
+    }
+
+    var CUST_RECIP_GRADS = [
+        'linear-gradient(135deg,#a18cd1,#fbc2eb)',
+        'linear-gradient(135deg,#30cfd0,#330867)',
+        'linear-gradient(135deg,#fccb90,#d57eeb)',
+        'linear-gradient(135deg,#43e97b,#38f9d7)',
+        'linear-gradient(135deg,#fa709a,#fee140)',
+        'linear-gradient(135deg,#4facfe,#00f2fe)'
+    ];
+
+    function renderCustomRecipients() {
+        var saved = JSON.parse(localStorage.getItem('digifinwiz_custom_recipients') || '[]');
+        var wrap  = document.getElementById('customRecipientsWrap');
+        if (!wrap) return;
+        if (saved.length === 0) { wrap.innerHTML = ''; return; }
+        wrap.innerHTML = '<div class="section-label" style="margin-top:0.75rem;margin-bottom:0.4rem">Saved Recipients</div>' +
+            saved.map(function(r, i) {
+                var initials = r.name.trim().split(/\s+/).slice(0,2).map(function(w){ return (w[0]||'').toUpperCase(); }).join('') || '?';
+                var grad     = CUST_RECIP_GRADS[i % CUST_RECIP_GRADS.length];
+                var masked   = '****' + String(r.account).slice(-4);
+                var safeName = r.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+                var safeAcct = r.account.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+                return '<div class="saved-recip-card" onclick="selectRecipient(\'' + safeName + '\',\'' + safeAcct + '\')">' +
+                    '<div style="width:30px;height:30px;border-radius:50%;background:' + grad + ';display:flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:700;color:#fff;flex-shrink:0">' + initials + '</div>' +
+                    '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.82rem">' + escHB(r.name) + '</div>' +
+                    '<div style="font-size:0.72rem;color:#94a3b8">' + masked + '</div></div>' +
+                    '<button type="button" style="background:none;border:none;color:#f87171;font-size:1rem;cursor:pointer;padding:0.15rem 0.3rem;line-height:1" ' +
+                    'onclick="event.stopPropagation();removeCustomRecipient(' + i + ')" title="Remove">×</button></div>';
+            }).join('');
+    }
+
+    function removeCustomRecipient(index) {
+        var saved = JSON.parse(localStorage.getItem('digifinwiz_custom_recipients') || '[]');
+        saved.splice(index, 1);
+        localStorage.setItem('digifinwiz_custom_recipients', JSON.stringify(saved));
+        renderCustomRecipients();
+        showNotification('Recipient removed.', 'info');
+    }
+
+    /* ── Amount range slider sync ───────────────────────────────────── */
+    function syncAmountFromSlider(val) {
+        var inp = document.getElementById('amount');
+        var valEl = document.getElementById('amountSliderVal');
+        if (inp) { inp.value = val; inp.dispatchEvent(new Event('input')); }
+        if (valEl) valEl.textContent = 'ƒ' + Number(val).toLocaleString('en-US');
+        document.querySelectorAll('.preset-btn').forEach(function(b) {
+            b.classList.toggle('active', parseFloat(b.textContent.replace('ƒ','')) === parseFloat(val));
+        });
+    }
+
+    /* ── Today's transfer stats ─────────────────────────────────────── */
+    function loadTodayStats(txs) {
+        var todayStr  = new Date().toLocaleDateString();
+        var todayTxs  = txs.filter(function(t){ return t.date === todayStr; });
+        var todayAmt  = todayTxs.reduce(function(s,t){ return s+(t.amount||0); }, 0);
+        var barEl     = document.getElementById('txTodayBar');
+        var countEl   = document.getElementById('todayTxCount');
+        var totalEl   = document.getElementById('todayTxTotal');
+        if (!barEl) return;
+        if (todayTxs.length > 0) {
+            barEl.style.display = '';
+            if (countEl) countEl.textContent = todayTxs.length + ' transfer' + (todayTxs.length!==1?'s':'') + ' today';
+            if (totalEl) totalEl.textContent = 'ƒ' + todayAmt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' sent';
+        } else {
+            barEl.style.display = 'none';
+        }
+    }
+
+    /* ── 7-day transfer chart ────────────────────────────────────────── */
+    function renderSevenDayChart(txs) {
+        var wrap   = document.getElementById('sevenDayChartWrap');
+        var barsEl = document.getElementById('sevenDayBars');
+        var lblsEl = document.getElementById('sevenDayLabels');
+        if (!wrap || !barsEl || !lblsEl) return;
+        if (!txs || txs.length === 0) { wrap.style.display = 'none'; return; }
+        var days  = [];
+        var today = new Date(); today.setHours(0,0,0,0);
+        for (var d = 6; d >= 0; d--) {
+            var dt = new Date(today); dt.setDate(today.getDate() - d);
+            days.push({ label: d === 0 ? 'Today' : dt.toLocaleDateString('en-US',{weekday:'short'}), dateStr: dt.toLocaleDateString(), total: 0, isToday: d === 0 });
+        }
+        txs.forEach(function(t) {
+            var match = days.find(function(dd){ return dd.dateStr === t.date; });
+            if (match) match.total += (t.amount || 0);
+        });
+        var maxAmt = Math.max.apply(null, days.map(function(d){ return d.total; }));
+        if (maxAmt === 0) { wrap.style.display = 'none'; return; }
+        wrap.style.display = '';
+        barsEl.innerHTML = days.map(function(d) {
+            var pct = maxAmt > 0 ? Math.round((d.total / maxAmt) * 100) : 0;
+            var cls = 'tx-chart-bar' + (pct === 0 ? ' zero' : '') + (d.isToday ? ' today' : '');
+            return '<div class="' + cls + '" style="height:' + Math.max(4, pct * 0.56) + 'px" title="' + d.label + ': ƒ' + d.total.toFixed(2) + '"></div>';
+        }).join('');
+        lblsEl.innerHTML = days.map(function(d) {
+            return '<div class="tx-chart-label' + (d.isToday ? ' today' : '') + '">' + d.label + '</div>';
+        }).join('');
+    }
+
+    /* ── Amount feedback ────────────────────────────────────────────── */
+    document.getElementById('amount').addEventListener('input', function() {
+        // Sync preset highlight when user types manually
+        var val = parseFloat(this.value);
+        document.querySelectorAll('.preset-btn').forEach(function(b) {
+            b.classList.toggle('active', parseFloat(b.textContent.replace('ƒ','')) === val);
+        });
+        // Sync slider
+        var slider = document.getElementById('amountSlider');
+        var sliderVal = document.getElementById('amountSliderVal');
+        if (slider && val >= 1 && val <= 1000) { slider.value = val; }
+        if (sliderVal && val > 0) sliderVal.textContent = 'ƒ' + val.toLocaleString('en-US');
+        var amt = parseFloat(this.value);
+        var fb  = document.getElementById('amountFeedback');
+        if (!amt || amt <= 0) { fb.style.display = 'none'; return; }
+        var acct = document.getElementById('fromAccount').value;
+        DigifinwizDB.getBalance(acct).then(function(bal) {
+            fb.style.display = '';
+            if (amt > bal) {
+                fb.style.background = '#fee2e2';
+                fb.style.color = '#991b1b';
+                fb.textContent = '⚠ Insufficient funds — available: ƒ' + bal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+            } else {
+                fb.style.background = '#f0fdf4';
+                fb.style.color = '#166534';
+                fb.textContent = '✓ Remaining after transfer: ƒ' + (bal - amt).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+            }
+        }).catch(function(){ fb.style.display = 'none'; });
+    });
+    document.getElementById('fromAccount').addEventListener('change', function() {
+        document.getElementById('amount').dispatchEvent(new Event('input'));
+    });
+
+    /* ── Challenge tracker ──────────────────────────────────────────── */
+    function loadBankingChallenges() {
+        if (typeof DigifinwizDB === 'undefined') return;
+        Promise.all([DigifinwizDB.getChallenges(), DigifinwizDB.getTransactions(1000)]).then(function(res) {
+            var challenges = res[0];
+            var txs = res[1];
+            var banking = challenges.filter(function(c){ return c.active && c.category === 'banking'; });
+            var container = document.getElementById('bankingChallengesList');
+            if (!container) return;
+            var done    = banking.filter(function(c){ return c.completed; });
+            var pending = banking.filter(function(c){ return !c.completed; });
+            var totalXp = banking.reduce(function(s,c){ return s+(c.points||0); }, 0);
+            var earnXp  = done.reduce(function(s,c){ return s+(c.points||0); }, 0);
+            var set = function(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; };
+            set('chalDoneCount',    done.length + '/' + banking.length);
+            set('chalPendingCount', pending.length);
+            set('chalTotalXp',      '+' + totalXp + ' XP');
+            set('chalEarnedXp',     '+' + earnXp  + ' XP');
+            if (!banking.length) {
+                container.innerHTML = '<p style="color:var(--color-gray-500);font-size:0.875rem">No banking challenges yet.</p>';
+                return;
+            }
+            var maxAmt  = txs.reduce(function(mx,t){ return Math.max(mx, t.amount||0); }, 0);
+            var totTx   = txs.reduce(function(s,t) { return s+(t.amount||0); }, 0);
+            container.innerHTML = banking.map(function(c) {
+                var pct=0, progressLabel='';
+                if (c.completed) { pct=100; progressLabel='Completed!'; }
+                else if (c.condition==='first_transfer') { pct=txs.length?100:0; progressLabel=txs.length?'1/1 done':'0/1 done'; }
+                else if (c.condition==='transfer_amount') { pct=Math.min(100,Math.round((maxAmt/(c.conditionValue||1))*100)); progressLabel='Best: ƒ'+maxAmt.toLocaleString('en-US',{minimumFractionDigits:2})+' / ƒ'+Number(c.conditionValue).toLocaleString(); }
+                else if (c.condition==='total_transferred') { pct=Math.min(100,Math.round((totTx/(c.conditionValue||1))*100)); progressLabel='ƒ'+totTx.toLocaleString('en-US',{maximumFractionDigits:0})+' / ƒ'+Number(c.conditionValue).toLocaleString(); }
+                else if (c.condition==='transaction_count') { pct=Math.min(100,Math.round((txs.length/(c.conditionValue||1))*100)); progressLabel=txs.length+' / '+c.conditionValue+' transfers'; }
+                else progressLabel=pct+'% complete';
+                var isDone    = c.completed;
+                var barColor  = isDone?'#10b981':(pct>=75?'#f59e0b':pct>=40?'#6366f1':'#94a3b8');
+                var completedOn = isDone&&c.completedAt?' · '+new Date(c.completedAt).toLocaleDateString():'';
+                return '<div style="background:'+(isDone?'#f0fdf4':'#f8fafc')+';border:1px solid '+(isDone?'#bbf7d0':'#e2e8f0')+';border-radius:10px;padding:0.875rem">'+
+                    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.5rem">'+
+                    '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.875rem">'+(isDone?'✅ ':'⏳ ')+escHB(c.title)+'</div>'+
+                    '<div style="font-size:0.75rem;color:#64748b;margin-top:0.15rem">'+escHB(c.description||'')+'</div></div>'+
+                    '<span style="background:'+(isDone?'#dcfce7':'#fef3c7')+';color:'+(isDone?'#16a34a':'#d97706')+';padding:2px 8px;border-radius:12px;font-size:0.72rem;font-weight:700;margin-left:0.5rem;white-space:nowrap">'+(isDone?'':'+')+(c.points||0)+' XP'+(isDone?' ✓':'')+'</span>'+
+                    '</div>'+
+                    '<div style="background:#e2e8f0;border-radius:4px;height:7px;overflow:hidden;margin-bottom:0.3rem">'+
+                    '<div style="background:'+barColor+';width:'+pct+'%;height:100%;transition:width 0.7s ease;border-radius:4px"></div></div>'+
+                    '<div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#94a3b8">'+
+                    '<span>'+escHB(progressLabel)+escHB(completedOn)+'</span><span>'+pct+'%</span></div></div>';
+            }).join('');
+        }).catch(function(){});
+    }
+
+    /* ── Transfer stats ─────────────────────────────────────────────── */
+    function loadTransferStats() {
+        DigifinwizDB.getTransactions(1000).then(function(txs) {
+            loadTodayStats(txs);
+            renderSevenDayChart(txs);
+            var total   = txs.reduce(function(s,t){ return s+(t.amount||0); }, 0);
+            var pts     = txs.reduce(function(s,t){ return s+(t.pointsEarned||0); }, 0);
+            var largest = txs.reduce(function(mx,t){ return Math.max(mx, t.amount||0); }, 0);
+            var avg     = txs.length>0 ? total/txs.length : 0;
+            var fromChk = txs.filter(function(t){ return t.fromAccount==='checking'; }).length;
+            var fromSav = txs.filter(function(t){ return t.fromAccount==='savings'; }).length;
+            // Update filter tab labels with counts
+            var updateTabLabel = function(id, label, count) {
+                var el = document.getElementById(id);
+                if (el) el.textContent = count > 0 ? label + ' (' + count + ')' : label;
+            };
+            updateTabLabel('txFilter-all',      'All',      txs.length);
+            updateTabLabel('txFilter-checking', 'Checking', fromChk);
+            updateTabLabel('txFilter-savings',  'Savings',  fromSav);
+            var fmt      = function(n){ return 'ƒ'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+            var fmtShort = function(n){ return 'ƒ'+n.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}); };
+            var set = function(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; };
+            set('statTxCount',    txs.length);
+            set('statTxTotal',    fmtShort(total));
+            set('statTxPts',      '+'+pts+' XP');
+            var milestones=[1,5,10,25,50,100];
+            var next=milestones.find(function(m){ return txs.length<m; });
+            set('statNextMilestone', next ? txs.length+'/'+next : 'Max! 🎉');
+            set('statTxLargest', txs.length>0?fmt(largest):'—');
+            set('statTxAvg',     txs.length>0?fmt(avg):'—');
+            set('statTxChecking',fromChk+(fromChk===1?' tx':' txs'));
+            set('statTxSavings', fromSav+(fromSav===1?' tx':' txs'));
+            set('totalTransferred', fmtShort(total));
+            set('transferCount',    txs.length);
+            var badge=document.getElementById('txCountBadge');
+            if(badge) badge.textContent=txs.length+' transfer'+(txs.length!==1?'s':'');
+            var badge2=document.getElementById('txCountBadge2');
+            if(badge2) badge2.textContent=txs.length>0?txs.length+' transfer'+(txs.length!==1?'s':'')+' recorded':'No transfers yet';
+            if (txs.length>0) {
+                var latest=txs[0];
+                var initials=(latest.recipient||'?').trim().split(' ').map(function(w){ return w[0]||''; }).slice(0,2).join('').toUpperCase()||'?';
+                set('statLastRecipient','Last transfer → '+escHB(latest.recipient||'—'));
+                set('statLastDate',(latest.date||'')+(latest.fromAccount?' · from '+latest.fromAccount:'')+(latest.description?' · '+latest.description:''));
+                set('statLastAmount','-'+fmt(latest.amount));
+                set('statLastXp','+'+(latest.pointsEarned||0)+' XP earned');
+                var avatarEl=document.getElementById('statLastAvatar');
+                if(avatarEl) avatarEl.textContent=initials;
+            }
+        }).catch(function(){});
+    }
+
+    /* ── Balance cards ──────────────────────────────────────────────── */
+    function loadBalanceCards() {
+        DigifinwizDB.getAllBalances().then(function(bals) {
+            bals.forEach(function(b) {
+                var key = b.account.charAt(0).toUpperCase()+b.account.slice(1);
+                var el  = document.getElementById('balance'+key);
+                if(el) el.textContent='ƒ'+b.amount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+            });
+            // Update balance split bar
+            var chk = (bals.find(function(b){ return b.account==='checking'; }) || {}).amount || 0;
+            var sav = (bals.find(function(b){ return b.account==='savings';  }) || {}).amount || 0;
+            var tot = chk + sav;
+            var chkPct = tot > 0 ? Math.round((chk/tot)*100) : 50;
+            var savPct = 100 - chkPct;
+            var setEl = function(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; };
+            var setStyle = function(id,prop,v){ var e=document.getElementById(id); if(e) e.style[prop]=v; };
+            setEl('splitCheckingPct', chkPct + '%');
+            setEl('splitSavingsPct',  savPct + '%');
+            setStyle('splitCheckingBar','width', chkPct + '%');
+            setEl('splitTotalLabel', 'Total across accounts: ƒ' + tot.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
+            // Keep header balance in sync
+            var hdrEl = document.getElementById('bankHeaderBalance');
+            if (hdrEl) hdrEl.textContent = 'ƒ' + tot.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+        }).catch(function(){});
+    }
+
+    /* ── Full refresh ───────────────────────────────────────────────── */
+    function refreshBankingPage() {
+        loadBankingChallenges();
+        loadTransferStats();
+        loadBalanceCards();
+        updateTransactionsList(currentTxFilter);
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Restore last active tab
+        switchPageTab(sessionStorage.getItem('banking_tab') || 'banking');
+        DigifinwizDB.init().then(function() { refreshBankingPage(); });
+        // Populate DigiBank game progress bar
+        DigifinwizDB.getUserData().then(function(userData) {
+            if (!userData) return;
+            var level  = userData.level || 1;
+            var points = userData.points || 0;
+            var pToNext = userData.pointsToNextLevel || 1000;
+            var coins  = userData.coins || 0;
+            var earned = Math.max(0, 1000 - pToNext);
+            var pct    = Math.min(100, Math.round((earned / 1000) * 100));
+            var set = function(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
+            set('bankProgressLevel', level + '/50');
+            set('bankProgressText',  pct + '% completed');
+            set('bankProgressXP',    points.toLocaleString() + ' XP');
+            set('bankProgressCoins', coins.toLocaleString());
+            var fillEl = document.getElementById('bankProgressFill');
+            if (fillEl) fillEl.style.width = pct + '%';
+        }).catch(function(){});
+        document.getElementById('transferForm').addEventListener('submit', function() {
+            setTimeout(refreshBankingPage, 1400);
+        }, true);
+        // Load saved custom recipients
+        renderCustomRecipients();
+        // MutationObserver: reapply search filter when transaction list refreshes
+        var txListEl = document.getElementById('transactionsList');
+        if (txListEl) {
+            new MutationObserver(function() {
+                var q = ((document.getElementById('txSearch') || {}).value || '').trim();
+                if (q) filterTxBySearch();
+            }).observe(txListEl, { childList: true });
+        }
+    });
+
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') refreshBankingPage();
+    });
+    </script>
+</body>
+</html>

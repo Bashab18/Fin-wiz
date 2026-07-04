@@ -1,0 +1,856 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digifinwiz - Tutorials</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">Digifinwiz</div>
+            <button class="nav-toggle" aria-label="Toggle navigation"><span></span><span></span><span></span></button>
+            <ul class="nav-menu">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="tutorials.html" class="active">Tutorials</a></li>
+                <li><a href="challenges.html">Challenges</a></li>
+                <li><a href="about.html">About Us</a></li>
+                <li><a href="admin.html">Admin</a></li>
+                <li><a href="messages.html">Messages</a></li>
+                <li><a href="profile.html">Profile</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <aside class="sidebar">
+            <div class="user-profile">
+                <div class="avatar">
+                    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect fill='%23667eea' width='80' height='80'/%3E%3Ctext x='50%25' y='50%25' font-size='32' fill='white' text-anchor='middle' dy='.3em'%3EJD%3C/text%3E%3C/svg%3E" alt="Jane Doe">
+                </div>
+                <h3>Jane Doe</h3>
+                <p class="username">@janeDoee123</p>
+            </div>
+            <p class="sidebar-desc">Visit any of these pages to complete new tasks such as online shopping, paying bills or banking</p>
+            <nav class="sidebar-nav">
+                <a href="ecommerce.html" class="nav-item">
+                    <span>Ecommerce<sup class="nav-badge" id="sidebarBadgeEcommerce">5</sup></span>
+                    <span class="arrow">&#8594;</span>
+                </a>
+                <a href="banking.html" class="nav-item">
+                    <span>Banking<sup class="nav-badge" id="sidebarBadgeBanking" style="display:none">0</sup></span>
+                    <span class="arrow">&#8594;</span>
+                </a>
+                <a href="utilities.html" class="nav-item">
+                    <span>Utilities<sup class="nav-badge" id="sidebarBadgeUtilities" style="display:none">0</sup></span>
+                    <span class="arrow">&#8594;</span>
+                </a>
+                <a href="account-balances.html" class="nav-item">
+                    <span>View account balances</span>
+                    <span class="arrow">&#8594;</span>
+                </a>
+                <a href="account-progress.html" class="nav-item">
+                    <span>View account progress</span>
+                    <span class="arrow">&#8594;</span>
+                </a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <section class="first-challenge">
+                <div class="section-header">
+                    <h2>Check out your first challenge &#127919;</h2>
+                    <button class="btn btn-priority">First priority</button>
+                </div>
+                <p class="section-desc">Completing challenges allow you to earn points in the game which help you increase in levels. Some challenges will require you to use your florins.</p>
+
+                <div class="challenge-featured" id="featuredChallengeCard">
+                    <div class="challenge-illustration">
+                        <div style="width:140px;height:140px;background:linear-gradient(135deg,#667eea,#764ba2);
+                                    border-radius:24px;display:flex;align-items:center;justify-content:center;
+                                    font-size:3.5rem;box-shadow:0 8px 24px rgba(102,102,234,0.3)">&#127919;</div>
+                    </div>
+                    <div class="challenge-details">
+                        <h3 id="featuredChallengeTitle">Loading...</h3>
+                        <p id="featuredChallengeDesc">Completing challenges allow you to earn points and level up. Some challenges require florins.</p>
+                        <div class="challenge-actions">
+                            <a href="challenges.html" class="btn btn-navy">View all challenges</a>
+                            <div class="challenge-rewards" id="featuredChallengeRewards"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="video-tutorials">
+                <div class="section-header">
+                    <h2>Video tutorials &#127909;</h2>
+                </div>
+                <p class="section-desc">Completing challenges allow you to earn points in the game which help you increase in levels. Some challenges will require you to use your florins.</p>
+
+                <!-- Tutorial progress tracker -->
+                <div class="tut-progress-wrap" id="tutProgressWrap">
+                    <span style="font-size:1.25rem">&#127909;</span>
+                    <div style="flex:1">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:0.35rem">
+                            <span style="font-size:0.82rem;font-weight:600;color:#334155">Watch all tutorials to boost your skills</span>
+                            <span id="tutWatchedCount" style="font-size:0.8rem;font-weight:700;color:#6366f1">0 / 4</span>
+                        </div>
+                        <div style="background:#e2e8f0;border-radius:4px;height:7px;overflow:hidden">
+                            <div id="tutProgressFill" style="height:100%;width:0%;background:linear-gradient(90deg,#6366f1,#14b8a6);border-radius:4px;transition:width 0.5s ease"></div>
+                        </div>
+                    </div>
+                    <button onclick="resetTutorialsWatched()" title="Reset watched progress"
+                        style="font-size:0.7rem;color:#94a3b8;background:none;border:1px solid #e2e8f0;cursor:pointer;padding:3px 8px;border-radius:6px;font-family:inherit"
+                        onmouseover="this.style.color='#64748b'" onmouseout="this.style.color='#94a3b8'">Reset</button>
+                </div>
+
+                <div class="video-grid">
+                    <a href="tutorial-detail.html" class="video-card" data-tut="0" style="text-decoration:none;color:inherit;display:block" onclick="markTutorialWatched(0)">
+                        <div class="video-thumbnail" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                            <div class="watched-check-overlay">&#10003; Watched</div>
+                            <div class="video-icon" id="tutIcon0">&#9654;&#65039;</div>
+                            <div class="video-overlay">
+                                <span class="tutorial-number">&#128250; Tutorial 1</span>
+                                <span class="video-duration">3 min 45 sec</span>
+                            </div>
+                        </div>
+                        <div class="video-info">
+                            <h4>Getting started with Digifinwiz</h4>
+                            <p>Learn how to navigate the Digifinwiz platform and get started with your first challenge.</p>
+                        </div>
+                    </a>
+
+                    <a href="tutorial-detail.html" class="video-card" data-tut="1" style="text-decoration:none;color:inherit;display:block" onclick="markTutorialWatched(1)">
+                        <div class="video-thumbnail" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                            <div class="watched-check-overlay">&#10003; Watched</div>
+                            <div class="video-icon" id="tutIcon1">&#9654;&#65039;</div>
+                            <div class="video-overlay">
+                                <span class="tutorial-number">&#128250; Tutorial 2</span>
+                                <span class="video-duration">4 min 20 sec</span>
+                            </div>
+                        </div>
+                        <div class="video-info">
+                            <h4>Making your first bank transfer</h4>
+                            <p>Step-by-step guide to transferring money using the Banking page and completing banking challenges.</p>
+                        </div>
+                    </a>
+
+                    <a href="tutorial-detail.html" class="video-card" data-tut="2" style="text-decoration:none;color:inherit;display:block" onclick="markTutorialWatched(2)">
+                        <div class="video-thumbnail" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                            <div class="watched-check-overlay">&#10003; Watched</div>
+                            <div class="video-icon" id="tutIcon2">&#9654;&#65039;</div>
+                            <div class="video-overlay">
+                                <span class="tutorial-number">&#128250; Tutorial 3</span>
+                                <span class="video-duration">3 min 10 sec</span>
+                            </div>
+                        </div>
+                        <div class="video-info">
+                            <h4>Shopping in the ecommerce store</h4>
+                            <p>Browse products, add items to your cart, and complete purchases to earn ecommerce challenge rewards.</p>
+                        </div>
+                    </a>
+
+                    <a href="tutorial-detail.html" class="video-card" data-tut="3" style="text-decoration:none;color:inherit;display:block" onclick="markTutorialWatched(3)">
+                        <div class="video-thumbnail" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+                            <div class="watched-check-overlay">&#10003; Watched</div>
+                            <div class="video-icon" id="tutIcon3">&#9654;&#65039;</div>
+                            <div class="video-overlay">
+                                <span class="tutorial-number">&#128250; Tutorial 4</span>
+                                <span class="video-duration">2 min 55 sec</span>
+                            </div>
+                        </div>
+                        <div class="video-info">
+                            <h4>Paying utility bills</h4>
+                            <p>Learn how to navigate the utilities page, pay bills, and unlock utility-based challenges.</p>
+                        </div>
+                    </a>
+                </div>
+            </section>
+
+            <section class="challenge-list">
+                <div class="section-header">
+                    <h2>Here are some other challenges next on your list &#128203;</h2>
+                </div>
+                <p class="section-desc">Completing challenges allow you to earn points and level up. Visit Banking, Ecommerce and Utilities pages to complete them.</p>
+
+                <div id="challengeListContainer">
+                    <p style="color:#64748b;padding:1rem">Loading challenges...</p>
+                </div>
+            </section>
+
+            <!-- Financial Tips section -->
+            <section style="margin-top:1.5rem">
+                <div class="section-header">
+                    <h2>&#128161; Financial Tips</h2>
+                </div>
+                <p class="section-desc">Key financial literacy concepts to help you make smarter money decisions.</p>
+                <div class="fin-tips-card" id="finTipsCard">
+                    <h3>&#127775; Did you know?</h3>
+                    <div id="finTipDisplay"></div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem">
+                        <div style="display:flex;gap:0.35rem" id="finTipDots"></div>
+                        <button onclick="nextFinTip()" style="background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:8px;padding:5px 14px;font-size:0.8rem;font-weight:600;cursor:pointer;font-family:inherit" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">Next Tip &#8594;</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ── Financial Literacy section ──────────────────────── -->
+            <section style="margin-top:2rem">
+                <div class="section-header">
+                    <h2>📚 Financial Literacy</h2>
+                </div>
+                <p class="section-desc">Master key financial concepts across banking, ecommerce, and utilities — all in one place.</p>
+
+                <div class="page-tabs">
+                    <button class="page-tab-btn active" id="lit-btn-banking"   onclick="switchLitTab('banking')">🏦 Banking</button>
+                    <button class="page-tab-btn"         id="lit-btn-ecommerce" onclick="switchLitTab('ecommerce')">🛒 Ecommerce</button>
+                    <button class="page-tab-btn"         id="lit-btn-utilities" onclick="switchLitTab('utilities')">⚡ Utilities</button>
+                </div>
+
+                <!-- ── Banking Learn ──────────────────────────────── -->
+                <div class="page-tab-panel active" id="lit-panel-banking">
+
+                    <div class="did-you-know">
+                        <div class="dyk-icon">💡</div>
+                        <div>
+                            <h3>Did You Know?</h3>
+                            <p>The average person makes over <strong>200 banking transactions</strong> per year. Understanding how they work — and how to stay safe — is one of the most important financial skills you can develop.</p>
+                        </div>
+                    </div>
+
+                    <p class="section-label">Core Concepts</p>
+
+                    <div class="learn-grid">
+                        <div class="learn-card">
+                            <div class="learn-card-header">
+                                <div class="learn-card-icon" style="background:#ede9fe">🏦</div>
+                                <div><h3>What Is a Bank Account?</h3><p>The foundation of your financial life</p></div>
+                            </div>
+                            <div class="learn-card-body">
+                                <p>A bank account is a secure place to store money at a financial institution. The bank keeps your money safe, allows you to deposit and withdraw funds, and in many cases pays you <strong>interest</strong> for keeping money there.</p>
+                                <p>Unlike keeping cash at home, a bank account is protected up to a certain limit by government deposit insurance — meaning even if the bank has problems, your money is safe.</p>
+                                <div class="learn-tip">💡 <strong>Key benefit:</strong> A bank account creates a transaction history that proves financial responsibility — important when applying for loans or renting a home.</div>
+                            </div>
+                        </div>
+                        <div class="learn-card">
+                            <div class="learn-card-header">
+                                <div class="learn-card-icon" style="background:#dcfce7">⚖️</div>
+                                <div><h3>Checking vs. Savings</h3><p>Two accounts, two purposes</p></div>
+                            </div>
+                            <div class="learn-card-body">
+                                <table class="compare-table">
+                                    <thead><tr><th></th><th>Checking</th><th>Savings</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>Purpose</td><td>Day-to-day spending</td><td>Building reserves</td></tr>
+                                        <tr><td>Withdrawals</td><td>Unlimited</td><td>Usually limited</td></tr>
+                                        <tr><td>Interest</td><td>Little or none</td><td>Higher rate</td></tr>
+                                        <tr><td>Best for</td><td>Bills &amp; transfers</td><td>Emergency fund</td></tr>
+                                    </tbody>
+                                </table>
+                                <div class="learn-tip learn-tip-green">✅ <strong>Smart move:</strong> Keep 3–6 months of expenses in savings as an emergency fund before spending on wants.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="learn-grid">
+                        <div class="learn-card">
+                            <div class="learn-card-header">
+                                <div class="learn-card-icon" style="background:#dbeafe">💸</div>
+                                <div><h3>How Bank Transfers Work</h3><p>Moving money safely and quickly</p></div>
+                            </div>
+                            <div class="learn-card-body">
+                                <p>A bank transfer moves money from your account to someone else's. Here's what happens behind the scenes:</p>
+                                <ol class="steps-list">
+                                    <li>You enter the recipient's account number and amount</li>
+                                    <li>Your bank verifies you have sufficient funds</li>
+                                    <li>Your bank sends an instruction to the banking network</li>
+                                    <li>The recipient's bank receives and credits the funds</li>
+                                    <li>Both parties receive transaction records</li>
+                                </ol>
+                                <div class="learn-tip learn-tip-amber">⚠️ <strong>Always verify:</strong> Double-check account numbers before sending. Most banks cannot reverse a completed transfer.</div>
+                            </div>
+                        </div>
+                        <div class="learn-card">
+                            <div class="learn-card-header">
+                                <div class="learn-card-icon" style="background:#fef9c3">📈</div>
+                                <div><h3>Understanding Interest</h3><p>How money grows (or costs) over time</p></div>
+                            </div>
+                            <div class="learn-card-body">
+                                <p><strong>Savings interest</strong> is money the bank pays you for keeping funds in your account. Even a small rate compounds over time — meaning you earn interest on your interest.</p>
+                                <p><strong>Loan interest</strong> is what you pay when you borrow money. A high interest rate on debt can cost significantly more than the original amount borrowed.</p>
+                                <div class="learn-tip">📊 <strong>Example:</strong> ƒ10,000 at 5% annual interest becomes ƒ16,289 in 10 years with compound interest — without adding a single florin.</div>
+                                <div class="learn-tip learn-tip-amber" style="margin-top:0.5rem">⚠️ The same compounding works against you with debt — always pay more than the minimum.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="section-label" style="margin-top:0.5rem">Safe Banking</p>
+
+                    <div class="learn-grid">
+                        <div class="learn-card">
+                            <div class="learn-card-header">
+                                <div class="learn-card-icon" style="background:#fee2e2">🔐</div>
+                                <div><h3>Banking Security</h3><p>Protecting your money and identity</p></div>
+                            </div>
+                            <div class="learn-card-body">
+                                <p>Financial fraud is one of the most common crimes. Follow these best practices to stay protected:</p>
+                                <ul class="checklist">
+                                    <li>Never share your PIN, password, or full account number with anyone</li>
+                                    <li>Use strong, unique passwords for online banking</li>
+                                    <li>Enable two-factor authentication (2FA) on all accounts</li>
+                                    <li>Check your statements regularly for unauthorised transactions</li>
+                                    <li>Only use secure, private Wi-Fi when banking online</li>
+                                    <li>Be suspicious of unexpected calls or emails asking for account info</li>
+                                </ul>
+                                <div class="learn-tip learn-tip-amber">⚠️ <strong>Phishing alert:</strong> Your bank will never ask for your full password or PIN over email or phone.</div>
+                            </div>
+                        </div>
+                        <div class="learn-card">
+                            <div class="learn-card-header">
+                                <div class="learn-card-icon" style="background:#ffedd5">📉</div>
+                                <div><h3>Overdrafts &amp; Fees</h3><p>What happens when your balance runs low</p></div>
+                            </div>
+                            <div class="learn-card-body">
+                                <p>An <strong>overdraft</strong> occurs when you spend more money than your account holds. Banks may allow this but charge a fee — sometimes ƒ25–50 per occurrence.</p>
+                                <p>Common banking fees to know:</p>
+                                <ul class="term-list">
+                                    <li><strong>Overdraft fee</strong> Charged when balance goes negative</li>
+                                    <li><strong>Monthly fee</strong> Maintenance cost (often waivable)</li>
+                                    <li><strong>Wire transfer fee</strong> For large/international transfers</li>
+                                    <li><strong>ATM fee</strong> Using out-of-network machines</li>
+                                </ul>
+                                <div class="learn-tip learn-tip-green">✅ <strong>Avoid fees:</strong> Set up low-balance alerts so you always know before you're at risk.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="section-label" style="margin-top:0.5rem">Key Banking Terms</p>
+                    <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:1.25rem;margin-bottom:1.5rem">
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:0.5rem">
+                            <div style="display:flex;flex-direction:column;gap:0.5rem">
+                                <div style="display:flex;gap:0.625rem;font-size:0.82rem;color:var(--color-gray-700);padding:0.5rem 0.75rem;background:var(--color-gray-50);border-radius:var(--radius-md)"><strong style="color:var(--color-gray-900);min-width:130px;flex-shrink:0">Account Balance</strong>The total amount of money currently in your account</div>
+                                <div style="display:flex;gap:0.625rem;font-size:0.82rem;color:var(--color-gray-700);padding:0.5rem 0.75rem;background:var(--color-gray-50);border-radius:var(--radius-md)"><strong style="color:var(--color-gray-900);min-width:130px;flex-shrink:0">Direct Deposit</strong>Employer sends your pay electronically straight to your account</div>
+                                <div style="display:flex;gap:0.625rem;font-size:0.82rem;color:var(--color-gray-700);padding:0.5rem 0.75rem;background:var(--color-gray-50);border-radius:var(--radius-md)"><strong style="color:var(--color-gray-900);min-width:130px;flex-shrink:0">Debit Card</strong>Spends directly from your checking account in real-time</div>
+                                <div style="display:flex;gap:0.625rem;font-size:0.82rem;color:var(--color-gray-700);padding:0.5rem 0.75rem;background:var(--color-gray-50);border-radius:var(--radius-md)"><strong style="color:var(--color-gray-900);min-width:130px;flex-shrink:0">Credit Score</strong>A number (300–850) rating how reliably you repay debts</div>
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:0.5rem">
+                                <div style="display:flex;gap:0.625rem;font-size:0.82rem;color:var(--color-gray-700);padding:0.5rem 0.75rem;background:var(--color-gray-50);border-radius:var(--radius-md)"><strong style="color:var(--color-gray-900);min-width:130px;flex-shrink:0">APY / Interest Rate</strong>Annual percentage yield — how much your savings grow per year</div>
+                                <div style="display:flex;gap:0.625rem;font-size:0.82rem;color:var(--color-gray-700);padding:0.5rem 0.75rem;background:var(--color-gray-50);border-radius:var(--radius-md)"><strong style="color:var(--color-gray-900);min-width:130px;flex-shrink:0">Routing Number</strong>9-digit code identifying your bank (like a zip code for banks)</div>
+                                <div style="display:flex;gap:0.625rem;font-size:0.82rem;color:var(--color-gray-700);padding:0.5rem 0.75rem;background:var(--color-gray-50);border-radius:var(--radius-md)"><strong style="color:var(--color-gray-900);min-width:130px;flex-shrink:0">Compound Interest</strong>Earning interest on your interest — makes savings grow exponentially</div>
+                                <div style="display:flex;gap:0.625rem;font-size:0.82rem;color:var(--color-gray-700);padding:0.5rem 0.75rem;background:var(--color-gray-50);border-radius:var(--radius-md)"><strong style="color:var(--color-gray-900);min-width:130px;flex-shrink:0">Wire Transfer</strong>Electronic transfer of funds, often same-day for a fee</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="background:linear-gradient(135deg,#10b981,#059669);border-radius:var(--radius-xl);padding:1.25rem 1.5rem;color:white;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+                        <div>
+                            <div style="font-weight:700;font-size:1rem;margin-bottom:0.2rem">Ready to practise?</div>
+                            <div style="font-size:0.85rem;opacity:0.9">Make a transfer in the Banking page to earn XP and complete challenges.</div>
+                        </div>
+                        <a href="banking.html" class="btn" style="background:rgba(255,255,255,0.2);color:white;border:2px solid rgba(255,255,255,0.4);flex-shrink:0;text-decoration:none">🏦 Go to Banking →</a>
+                    </div>
+
+                </div><!-- /lit-panel-banking -->
+
+                <!-- ── Ecommerce Learn ─────────────────────────────── -->
+                <div class="page-tab-panel" id="lit-panel-ecommerce">
+
+                    <div class="did-you-know dyk-indigo">
+                        <div class="dyk-icon">💡</div>
+                        <div>
+                            <h3>Did You Know?</h3>
+                            <p>Global ecommerce sales exceed <strong>$6 trillion per year</strong>. Knowing how to shop safely, compare prices, and avoid impulse buying can save you hundreds — or thousands — annually.</p>
+                        </div>
+                    </div>
+
+                    <p class="section-label">How Online Shopping Works</p>
+
+                    <div class="learn-grid">
+                        <div class="learn-card">
+                            <div class="learn-card-header">
+                                <div class="learn-card-icon" style="background:#ede9fe">🛒</div>
+                                <div><h3>What Is Ecommerce?</h3><p>Buying and selling goods over the internet</p></div>
+                            </div>
+                            <div class="learn-card-body">
+                                <p>Ecommerce (electronic commerce) is any transaction that happens online. When you add an item to a cart and check out, your payment is processed electronically and your order is fulfilled by the seller.</p>
+                                <p>The typical ecommerce flow:</p>
+                                <ol class="steps-list">
+                                    <li>Browse and select items — add them to your cart</li>
+                                    <li>Review your cart and proceed to checkout</li>
+                                    <li>Enter payment and shipping details securely</li>
+                                    <li>Order is confirmed — seller processes and ships</li>
+                                    <li>Item arrives — you can review or return if needed</li>
+                                </ol>
+                            </div>
+                        </div>
+                        <div class="learn-card">
+                            <div class="learn-card-header">
+                                <div class="learn-card-icon" style="background:#fef9c3">🏷️</div>
+                                <div><h3>Understanding Prices &amp; Value</h3><p>Not all deals are what they seem</p></div>
+                            </div>
+                            <div class="learn-card-body">
+                                <p>Online prices change constantly and vary between retailers. A few things to watch for:</p>
+                                <ul class="term-list">
+                                    <li><strong>RRP / List price</strong>Manufacturer's suggested price — not always the real value</li>
+                                    <li><strong>Sale price</strong>May be artificially inflated before being "discounted"</li>
+                                    <li><strong>Shipping cost</strong>Can wipe out a discount — always check the final total</li>
+                                    <li><strong>Bundle deals</strong>Cheaper per item, but only valuable if you need all items</li>
+                                </ul>
+                                <div class="learn-tip learn-tip-amber">⚠️ <strong>Price tracking tip:</strong> Use a price-history tool to see if an item is genuinely on sale or if the "original" price was inflated.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="section-label" style="margin-top:0.5rem">Staying Safe Online</p>
+
+                    <div class="learn-grid">
+                        <div class="learn-card">
+                            <div class="learn-card-header">
+                                <div class="learn-card-icon" style="background:#dcfce7">🔒</div>
+                                <div><h3>Safe Online Payments</h3><p>Protect your money and personal data</p></div>
+                            </div>
+                            <div class="learn-card-body">
+                                <p>Every online purchase involves sharing financial data. These habits keep you protected:</p>
+                                <ul class="checklist">
+                                    <li>Only shop on sites with <strong>https://</strong> (the padlock icon)</li>
+                                    <li>Use a credit card — it has stronger fraud protection than debit</li>
+                                    <li>Never save card details on shared or public computers</li>
+                                    <li>Enable transaction notifications so you spot fraud instantly</li>
+                                    <li>Use PayPal or digital wallets to avoid sharing card numbers directly</li>
+                                    <li>Verify the seller's reviews and return policy before buying</li>
+                                </ul>
+                                <div class="learn-tip learn-tip-green">✅ <strong>If something feels off:</strong> trust your instincts — if a deal seems too good to be true, it usually is.</div>
+                            </div>
+                        </div>
+                        <div class="learn-card">
+                            <div class="learn-card-header">
+                                <div class="learn-card-icon" style="background:#dbeafe">📦</div>
+                                <div><h3>Returns &amp; Consumer Rights</h3><p>Know what you're entitled to as a buyer</p></div>
+                            </div>
+                            <div class="learn-card-body">
+                                <p>As an online shopper, you have important rights — but they vary by retailer and region. Always check before you buy:</p>
+                                <table class="compare-table">
+                                    <thead><tr><th>Policy Area</th><th>What to Check</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>Return window</td><td>Usually 14–30 days; some are non-refundable</td></tr>
+                                        <tr><td>Return shipping</td><td>Who pays? Free returns vs. deducted from refund</td></tr>
+                                        <tr><td>Condition required</td><td>Unused, original packaging, with tags</td></tr>
+                                        <tr><td>Refund method</td><td>Original payment, store credit, or exchange</td></tr>
+                                    </tbody>
+                                </table>
+                                <div class="learn-tip learn-tip-amber">⚠️ <strong>Keep order confirmations</strong> and tracking numbers until your item arrives and you're satisfied.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="section-label" style="margin-top:0.5rem">Spending Wisely</p>
+
+                    <div class="learn-grid">
+                        <div class="learn-card">
+                            <div class="learn-card-header">
+                                <div class="learn-card-icon" style="background:#fee2e2">🧠</div>
+                                <div><h3>Impulse Buying &amp; Budgeting</h3><p>Why we overspend — and how to stop</p></div>
+                            </div>
+                            <div class="learn-card-body">
+                                <p>Online stores are expertly designed to trigger impulse purchases — urgency timers, "only 3 left!", recommended items, and one-click buying all bypass your rational decision-making.</p>
+                                <p>Signs you're about to impulse buy:</p>
+                                <ul class="checklist">
+                                    <li>You only discovered the item today but feel you "need" it</li>
+                                    <li>You're browsing to relieve boredom, stress, or sadness</li>
+                                    <li>The sale timer is making you rush</li>
+                                    <li>You haven't checked if you already own something similar</li>
+                                </ul>
+                                <div class="learn-tip">💡 <strong>The 24-hour rule:</strong> Add items to your wishlist instead of the cart. If you still want it tomorrow, it's probably not an impulse.</div>
+                            </div>
+                        </div>
+                        <div class="learn-card">
+                            <div class="learn-card-header">
+                                <div class="learn-card-icon" style="background:#f0fdf4">✅</div>
+                                <div><h3>Smart Shopping Habits</h3><p>Building a healthier relationship with spending</p></div>
+                            </div>
+                            <div class="learn-card-body">
+                                <p>Adopt these habits to take control of your online spending and make every purchase count:</p>
+                                <ul class="checklist">
+                                    <li>Set a monthly discretionary spending budget — and stick to it</li>
+                                    <li>Compare at least 3 retailers before buying anything over ƒ50</li>
+                                    <li>Read recent negative reviews — they reveal real product flaws</li>
+                                    <li>Check the total price (item + shipping + taxes) before deciding</li>
+                                    <li>Unsubscribe from promotional emails that tempt you to spend</li>
+                                    <li>Track all purchases in a spending log or budgeting app</li>
+                                </ul>
+                                <div class="learn-tip learn-tip-green">✅ <strong>Long term:</strong> Every ƒ100 not spent on impulse purchases is ƒ100 that can build your emergency fund or savings.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="section-label" style="margin-top:0.5rem">Key Shopping Terms</p>
+                    <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:1.25rem;margin-bottom:1.5rem">
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:0.5rem">
+                            <div style="display:flex;flex-direction:column;gap:0.45rem">
+                                <div class="term-item"><strong>Cart Abandonment</strong>Leaving items in your cart without purchasing — many sites send reminders</div>
+                                <div class="term-item"><strong>Checkout</strong>The process of confirming and paying for items in your cart</div>
+                                <div class="term-item"><strong>SKU</strong>Stock Keeping Unit — a unique code identifying a specific product</div>
+                                <div class="term-item"><strong>Wishlist</strong>Saved items you're considering — great for delaying impulse purchases</div>
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:0.45rem">
+                                <div class="term-item"><strong>Flash Sale</strong>A limited-time discount designed to create urgency — compare prices first</div>
+                                <div class="term-item"><strong>Promo Code</strong>A discount code entered at checkout — always search for one before buying</div>
+                                <div class="term-item"><strong>Chargeback</strong>Disputing a charge with your bank — your last resort for fraud or non-delivery</div>
+                                <div class="term-item"><strong>Digital Wallet</strong>Secure online payment method (e.g. PayPal) that hides your card details</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border-radius:var(--radius-xl);padding:1.25rem 1.5rem;color:white;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+                        <div>
+                            <div style="font-weight:700;font-size:1rem;margin-bottom:0.2rem">Ready to shop smart?</div>
+                            <div style="font-size:0.85rem;opacity:0.9">Head to the Ecommerce page to complete challenges and earn XP with every purchase.</div>
+                        </div>
+                        <a href="ecommerce.html" class="btn" style="background:rgba(255,255,255,0.2);color:white;border:2px solid rgba(255,255,255,0.4);flex-shrink:0;text-decoration:none">🛒 Go to Shop →</a>
+                    </div>
+
+                </div><!-- /lit-panel-ecommerce -->
+
+                <!-- ── Utilities Learn ─────────────────────────────── -->
+                <div class="page-tab-panel" id="lit-panel-utilities">
+
+                    <div class="did-you-know dyk-green">
+                        <div class="dyk-icon">💡</div>
+                        <div>
+                            <h3>Did You Know?</h3>
+                            <p>The average household spends roughly <strong>8–10% of its income</strong> on utility bills. Learning to manage and budget for these expenses is one of the simplest ways to improve your financial health.</p>
+                        </div>
+                    </div>
+
+                    <p class="section-label">Understanding Utilities</p>
+
+                    <div class="learn-grid">
+                        <div class="learn-card">
+                            <div class="learn-card-header">
+                                <div class="learn-card-icon" style="background:#fef9c3">⚡</div>
+                                <div><h3>What Are Utility Bills?</h3><p>Essential services you pay for monthly</p></div>
+                            </div>
+                            <div class="learn-card-body">
+                                <p>Utilities are the essential services that power your home and daily life. Unlike a one-off purchase, utilities are ongoing monthly expenses — you use them, then pay for what you consumed.</p>
+                                <p>The six most common utility bills are:</p>
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;font-size:0.82rem">
+                                    <div style="background:var(--color-gray-50);border-radius:var(--radius-md);padding:0.4rem 0.6rem">⚡ Electricity</div>
+                                    <div style="background:var(--color-gray-50);border-radius:var(--radius-md);padding:0.4rem 0.6rem">💧 Water</div>
+                                    <div style="background:var(--color-gray-50);border-radius:var(--radius-md);padding:0.4rem 0.6rem">🔥 Gas</div>
+                                    <div style="background:var(--color-gray-50);border-radius:var(--radius-md);padding:0.4rem 0.6rem">🌐 Internet</div>
+                                    <div style="background:var(--color-gray-50);border-radius:var(--radius-md);padding:0.4rem 0.6rem">📱 Phone</div>
+                                    <div style="background:var(--color-gray-50);border-radius:var(--radius-md);padding:0.4rem 0.6rem">🏠 Property Tax</div>
+                                </div>
+                                <div class="learn-tip">💡 These bills arrive on a regular cycle. Treat them as <strong>fixed monthly expenses</strong> in your budget — they should always be paid before discretionary spending.</div>
+                            </div>
+                        </div>
+                        <div class="learn-card">
+                            <div class="learn-card-header">
+                                <div class="learn-card-icon" style="background:#dbeafe">📄</div>
+                                <div><h3>Reading Your Bill</h3><p>Understand every line before you pay</p></div>
+                            </div>
+                            <div class="learn-card-body">
+                                <p>Every utility bill has the same key sections:</p>
+                                <div style="display:flex;flex-direction:column;gap:0.45rem">
+                                    <div class="term-item"><strong>Account Number</strong>Your unique ID with this provider</div>
+                                    <div class="term-item"><strong>Billing Period</strong>The dates your usage covers</div>
+                                    <div class="term-item"><strong>Usage / Units</strong>How much electricity, water, etc. you used</div>
+                                    <div class="term-item"><strong>Rate per Unit</strong>What you're charged per kWh, litre, etc.</div>
+                                    <div class="term-item"><strong>Amount Due</strong>Total you must pay</div>
+                                    <div class="term-item"><strong>Due Date</strong>Deadline to avoid late fees</div>
+                                </div>
+                                <div class="learn-tip learn-tip-amber">⚠️ Always check usage against previous bills. A sudden spike may indicate a leak, faulty appliance, or billing error.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="section-label" style="margin-top:0.25rem">Why Paying On Time Matters</p>
+
+                    <div class="learn-grid">
+                        <div class="learn-card">
+                            <div class="learn-card-header">
+                                <div class="learn-card-icon" style="background:#dcfce7">⭐</div>
+                                <div><h3>Bills &amp; Your Credit Score</h3><p>The hidden connection between bills and borrowing</p></div>
+                            </div>
+                            <div class="learn-card-body">
+                                <p>Your <strong>credit score</strong> is a number that lenders use to decide whether to give you a loan, mortgage, or credit card — and at what interest rate. Late or missed utility payments can negatively affect it.</p>
+                                <ul class="checklist">
+                                    <li>Consistently paying on time builds a positive payment history</li>
+                                    <li>Missed payments sent to collections can lower your score by 50–100 points</li>
+                                    <li>A good score means lower interest rates — saving thousands over a lifetime</li>
+                                    <li>Some landlords check credit before approving rental applications</li>
+                                </ul>
+                                <div class="learn-tip learn-tip-green">✅ <strong>Simple rule:</strong> Pay every bill before the due date, every single month — no exceptions.</div>
+                            </div>
+                        </div>
+                        <div class="learn-card">
+                            <div class="learn-card-header">
+                                <div class="learn-card-icon" style="background:#fee2e2">⏰</div>
+                                <div><h3>Late Fees &amp; Consequences</h3><p>The true cost of missing a due date</p></div>
+                            </div>
+                            <div class="learn-card-body">
+                                <p>Missing a bill payment triggers a chain of consequences that can be costly and difficult to reverse:</p>
+                                <ol class="steps-list">
+                                    <li><strong>Late fee</strong> — typically ƒ10–50 added to your next bill</li>
+                                    <li><strong>Service interruption warning</strong> — provider sends a disconnection notice</li>
+                                    <li><strong>Service disconnection</strong> — power, water, or internet is cut off</li>
+                                    <li><strong>Reconnection fee</strong> — you pay to restore service (often ƒ50–200)</li>
+                                    <li><strong>Debt collection</strong> — unpaid bills are sold to collectors, damaging credit</li>
+                                </ol>
+                                <div class="learn-tip learn-tip-red">🚨 <strong>Reconnection costs more than the original bill.</strong> It's always cheaper to pay on time.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="section-label" style="margin-top:0.25rem">Smart Bill Management</p>
+
+                    <div class="learn-grid">
+                        <div class="learn-card">
+                            <div class="learn-card-header">
+                                <div class="learn-card-icon" style="background:#ede9fe">📊</div>
+                                <div><h3>Budgeting for Bills</h3><p>Plan ahead so bills are never a surprise</p></div>
+                            </div>
+                            <div class="learn-card-body">
+                                <p>The <strong>50/30/20 rule</strong> is a simple budgeting framework:</p>
+                                <div style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.75rem">
+                                    <div style="display:flex;align-items:center;gap:0.75rem">
+                                        <div style="width:40px;height:40px;border-radius:var(--radius-md);background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:0.85rem;flex-shrink:0">50%</div>
+                                        <div style="font-size:0.83rem;color:var(--color-gray-700)"><strong>Needs</strong> — housing, bills, food, transport</div>
+                                    </div>
+                                    <div style="display:flex;align-items:center;gap:0.75rem">
+                                        <div style="width:40px;height:40px;border-radius:var(--radius-md);background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:0.85rem;flex-shrink:0">30%</div>
+                                        <div style="font-size:0.83rem;color:var(--color-gray-700)"><strong>Wants</strong> — entertainment, dining out, hobbies</div>
+                                    </div>
+                                    <div style="display:flex;align-items:center;gap:0.75rem">
+                                        <div style="width:40px;height:40px;border-radius:var(--radius-md);background:linear-gradient(135deg,#10b981,#059669);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:0.85rem;flex-shrink:0">20%</div>
+                                        <div style="font-size:0.83rem;color:var(--color-gray-700)"><strong>Savings &amp; Debt</strong> — emergency fund, investments</div>
+                                    </div>
+                                </div>
+                                <div class="learn-tip">💡 <strong>Bill calendar:</strong> Note every bill's due date in a calendar app. Set a reminder 3 days before — this alone prevents most late payments.</div>
+                            </div>
+                        </div>
+                        <div class="learn-card">
+                            <div class="learn-card-header">
+                                <div class="learn-card-icon" style="background:#f0fdf4">🌿</div>
+                                <div><h3>Reducing Your Bills</h3><p>Small changes, big savings over time</p></div>
+                            </div>
+                            <div class="learn-card-body">
+                                <p>You have more control over your utility costs than you think. These habits can reduce bills by <strong>15–30%</strong>:</p>
+                                <ul class="checklist">
+                                    <li>Switch off lights and appliances when not in use</li>
+                                    <li>Wash clothes in cold water — uses 90% less energy</li>
+                                    <li>Fix leaking taps promptly — a dripping tap wastes thousands of litres yearly</li>
+                                    <li>Use energy-efficient LED bulbs throughout your home</li>
+                                    <li>Set your thermostat 1–2°C lower in winter — saves ~10% on heating</li>
+                                    <li>Compare providers annually and switch if better deals exist</li>
+                                </ul>
+                                <div class="learn-tip learn-tip-green">✅ <strong>Long term:</strong> Even saving ƒ50/month on bills = ƒ600/year that can go toward savings or paying off debt.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="section-label" style="margin-top:0.25rem">Key Utility Terms</p>
+                    <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:1.25rem;margin-bottom:1.5rem">
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:0.5rem">
+                            <div style="display:flex;flex-direction:column;gap:0.45rem">
+                                <div class="term-item"><strong>Direct Debit</strong>Automatic payment pulled from your account on the due date</div>
+                                <div class="term-item"><strong>Standing Order</strong>You instruct your bank to send a fixed amount each period</div>
+                                <div class="term-item"><strong>Estimated Bill</strong>Provider estimates usage when they can't read your meter</div>
+                                <div class="term-item"><strong>Tariff / Rate</strong>The price you're charged per unit of a utility</div>
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:0.45rem">
+                                <div class="term-item"><strong>Meter Reading</strong>The actual reading from your usage meter, used for accurate billing</div>
+                                <div class="term-item"><strong>Disconnection</strong>Service cut off due to non-payment</div>
+                                <div class="term-item"><strong>Security Deposit</strong>Upfront payment some providers require from new customers</div>
+                                <div class="term-item"><strong>Arrears</strong>Overdue payments that have not yet been made</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="background:linear-gradient(135deg,#6366f1 0%,#4f46e5 100%);border-radius:var(--radius-xl);padding:1.25rem 1.5rem;color:white;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+                        <div>
+                            <div style="font-weight:700;font-size:1rem;margin-bottom:0.2rem">Put it into practice!</div>
+                            <div style="font-size:0.85rem;opacity:0.9">Pay a bill in the Utilities page to earn XP and complete utility challenges.</div>
+                        </div>
+                        <a href="utilities.html" class="btn" style="background:rgba(255,255,255,0.2);color:white;border:2px solid rgba(255,255,255,0.4);flex-shrink:0;text-decoration:none">⚡ Go to Bills →</a>
+                    </div>
+
+                </div><!-- /lit-panel-utilities -->
+
+            </section>
+        </main>
+    </div>
+
+    <script src="auth.js"></script>
+    <script src="db.js"></script>
+    <script src="script.js"></script>
+    <script>
+    // ── Tutorial watched state ─────────────────────────────────────────────
+    var TUTS_WATCHED_KEY = 'digifinwiz_tutorials_watched';
+    var TUTORIAL_COUNT   = 4;
+
+    function getTutorialsWatched() {
+        try { return JSON.parse(localStorage.getItem(TUTS_WATCHED_KEY) || '{}'); } catch(e) { return {}; }
+    }
+
+    function markTutorialWatched(idx) {
+        var w = getTutorialsWatched();
+        w[String(idx)] = true;
+        localStorage.setItem(TUTS_WATCHED_KEY, JSON.stringify(w));
+        applyWatchedUI();
+    }
+
+    function resetTutorialsWatched() {
+        localStorage.removeItem(TUTS_WATCHED_KEY);
+        applyWatchedUI();
+    }
+
+    function applyWatchedUI() {
+        var w = getTutorialsWatched();
+        var count = 0;
+        for (var i = 0; i < TUTORIAL_COUNT; i++) {
+            var card = document.querySelector('.video-card[data-tut="' + i + '"]');
+            var watched = !!w[String(i)];
+            if (watched) count++;
+            if (card) {
+                card.classList.toggle('watched', watched);
+            }
+        }
+        var countEl = document.getElementById('tutWatchedCount');
+        var fillEl  = document.getElementById('tutProgressFill');
+        if (countEl) countEl.textContent = count + ' / ' + TUTORIAL_COUNT;
+        if (fillEl)  fillEl.style.width  = Math.round((count / TUTORIAL_COUNT) * 100) + '%';
+    }
+
+    // ── Financial Tips carousel ────────────────────────────────────────────
+    var FIN_TIPS = [
+        { title:'Budgeting 50/30/20', text:'Allocate 50% of income to needs, 30% to wants, and 20% to savings and debt repayment. This simple rule helps keep finances balanced.' },
+        { title:'Emergency Fund', text:'Aim to save 3–6 months of living expenses in an accessible account. This cushion protects you from unexpected bills or job loss.' },
+        { title:'Compound Interest', text:'Money grows exponentially when interest earns interest. Starting to save early, even small amounts, can lead to significant wealth over time.' },
+        { title:'Good vs Bad Debt', text:'Good debt (mortgages, student loans) builds future value. Bad debt (high-interest credit cards) drains wealth. Always prioritise paying off bad debt first.' },
+        { title:'Paying Bills On Time', text:'Late payments can hurt your credit score. Set reminders or auto-pay for recurring bills to avoid penalties and maintain a good financial reputation.' },
+        { title:'Track Your Spending', text:'Knowing where money goes is the first step to saving more. Review bank statements weekly to identify patterns and spot unnecessary expenses.' }
+    ];
+    var _tipIdx = Math.floor(Math.random() * FIN_TIPS.length);
+
+    function renderFinTip() {
+        var tip = FIN_TIPS[_tipIdx];
+        var display = document.getElementById('finTipDisplay');
+        var dots    = document.getElementById('finTipDots');
+        if (display) {
+            display.innerHTML = '<div class="fin-tip-item"><strong>' + tip.title + '</strong>' + tip.text + '</div>';
+        }
+        if (dots) {
+            dots.innerHTML = FIN_TIPS.map(function(_, i) {
+                return '<div style="width:7px;height:7px;border-radius:50%;background:' + (i === _tipIdx ? '#fff' : 'rgba(255,255,255,0.35)') + ';cursor:pointer;transition:background 0.3s" onclick="goToTip(' + i + ')"></div>';
+            }).join('');
+        }
+    }
+
+    function nextFinTip() {
+        _tipIdx = (_tipIdx + 1) % FIN_TIPS.length;
+        renderFinTip();
+    }
+
+    function goToTip(i) {
+        _tipIdx = i;
+        renderFinTip();
+    }
+
+    var CAT_ICONS_TUT = { banking:'&#127970;', ecommerce:'&#128722;', utilities:'&#9889;', general:'&#127919;' };
+
+    function escHtmlTut(s) {
+        if (!s) return '';
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function buildChallengeCardTut(c) {
+        var catIcon = CAT_ICONS_TUT[c.category] || '&#127919;';
+        var completedBadge = c.completed
+            ? '<span style="background:#dcfce7;color:#16a34a;padding:2px 8px;border-radius:12px;font-size:0.75rem;font-weight:600">&#9989; Completed</span>'
+            : '<span style="background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:12px;font-size:0.75rem">' + escHtmlTut(c.category) + '</span>';
+
+        return '<div class="challenge-card" style="' + (c.completed ? 'opacity:0.65;' : '') + '">' +
+            '<div class="challenge-illustration-small">' +
+            '<div style="width:60px;height:60px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.75rem">' + catIcon + '</div>' +
+            '</div>' +
+            '<div class="challenge-info">' +
+            '<h3>' + escHtmlTut(c.title) + '</h3>' +
+            '<p>' + escHtmlTut(c.description || 'Complete this challenge to earn bonus XP.') + '</p>' +
+            '<div class="challenge-actions">' +
+            completedBadge +
+            '<div class="challenge-rewards">' +
+            '<span class="badge badge-points">+' + (c.points || 0) + ' XP</span>' +
+            (c.florins ? '<span class="badge badge-florins">-&#402;' + c.florins + '</span>' : '') +
+            '</div></div></div></div>';
+    }
+
+    /* ── Financial Literacy tab switching ──────────────────────────── */
+    function switchLitTab(name) {
+        ['banking','ecommerce','utilities'].forEach(function(t) {
+            var panel = document.getElementById('lit-panel-' + t);
+            var btn   = document.getElementById('lit-btn-' + t);
+            if (!panel || !btn) return;
+            var active = (t === name);
+            panel.classList.toggle('active', active);
+            btn.classList.toggle('active', active);
+        });
+        sessionStorage.setItem('lit_tab', name);
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Restore watched tutorial states from localStorage
+        applyWatchedUI();
+        // Render first financial tip
+        renderFinTip();
+        // Restore last active Financial Literacy tab
+        switchLitTab(sessionStorage.getItem('lit_tab') || 'banking');
+
+        DigifinwizDB.init().then(function() {
+            return DigifinwizDB.getChallenges();
+        }).then(function(challenges) {
+            var active = challenges.filter(function(c){ return c.active; });
+            var incomplete = active.filter(function(c){ return !c.completed; });
+            var completed  = active.filter(function(c){ return  c.completed; });
+
+            // Featured challenge = first incomplete, or first completed if all done
+            var featured = incomplete[0] || completed[0];
+            if (featured) {
+                var titleEl   = document.getElementById('featuredChallengeTitle');
+                var descEl    = document.getElementById('featuredChallengeDesc');
+                var rewardsEl = document.getElementById('featuredChallengeRewards');
+                var cardEl    = document.getElementById('featuredChallengeCard');
+                if (titleEl) titleEl.textContent = featured.completed ? '&#9989; ' + featured.title : featured.title;
+                if (descEl)  descEl.textContent  = featured.description || 'Complete this challenge to earn bonus XP and florins.';
+                if (rewardsEl) rewardsEl.innerHTML = '<span class="badge badge-points">+' + (featured.points || 0) + ' XP</span>' +
+                    (featured.florins ? '<span class="badge badge-florins">-&#402;' + featured.florins + '</span>' : '');
+                if (cardEl && featured.completed) cardEl.style.opacity = '0.75';
+            }
+
+            // List = up to 5 challenges after the featured one (incomplete first)
+            var listContainer = document.getElementById('challengeListContainer');
+            if (!listContainer) return;
+
+            var listItems = incomplete.slice(1, 6);
+            if (listItems.length === 0) listItems = completed.slice(1, 4);
+
+            if (listItems.length === 0) {
+                listContainer.innerHTML = '<p style="color:#64748b;padding:1rem">No more challenges. <a href="challenges.html">View all challenges</a>.</p>';
+            } else {
+                listContainer.innerHTML = listItems.map(buildChallengeCardTut).join('');
+            }
+
+            // Summary line
+            var section = listContainer.closest('section');
+            if (section) {
+                var summary = section.querySelector('.section-desc');
+                if (summary) summary.textContent = completed.length + ' of ' + active.length + ' challenges completed. Visit Banking, Ecommerce and Utilities pages to complete more.';
+            }
+        }).catch(function(err) {
+            console.error('tutorials challenges load:', err);
+        });
+    });
+    </script>
+</body>
+</html>

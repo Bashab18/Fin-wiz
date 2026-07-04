@@ -1,0 +1,1195 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digifinwiz - Ecommerce</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="shopping-styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">Digifinwiz</div>
+            <button class="nav-toggle" aria-label="Toggle navigation"><span></span><span></span><span></span></button>
+            <ul class="nav-menu">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="tutorials.html">Tutorials</a></li>
+                <li><a href="challenges.html">Challenges</a></li>
+                <li><a href="about.html">About Us</a></li>
+                <li><a href="admin.html">Admin</a></li>                <li><a href="messages.html">Messages</a></li>
+                <li><a href="profile.html">Profile</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- InStyl Shop Sub-Header -->
+    <header class="shop-header">
+        <div class="shop-container">
+            <div class="shop-logo">InStyl.</div>
+            <nav class="shop-nav">
+                <a href="#" onclick="shopNavFilter('all');return false;" class="active">Shop All</a>
+                <a href="#" onclick="shopNavFilter('clothing');return false;">Clothing</a>
+                <a href="#" onclick="shopNavFilter('accessories');return false;">Accessories</a>
+                <a href="#" onclick="shopNavFilter('electronics');return false;">Electronics</a>
+                <a href="shop-account.html">My Account</a>
+            </nav>
+            <div class="shop-header-right">
+                <div class="shop-search-box">
+                    <input type="text" placeholder="Search products..." oninput="document.getElementById('productSearch').value=this.value;applyFilters()">
+                </div>
+                <div class="shop-icons">
+                    <button class="shop-icon-btn home" onclick="window.location.href='shop-account.html'" title="My Account">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+                    </button>
+                    <button class="shop-icon-btn bookmark" onclick="window.location.href='shop-saved-items.html'" title="Saved Items">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
+                    </button>
+                    <button class="shop-icon-btn cart" onclick="scrollToCart()" title="View Cart">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- InStyl Game Progress Bar -->
+    <div class="game-progress-bar">
+        <div class="shop-container">
+            <div class="progress-content">
+                <div class="progress-left">
+                    <span class="progress-label">GAME PROGRESS</span>
+                    <span class="level-info">Level <strong id="shopProgressLevel">1/50</strong></span>
+                </div>
+                <div class="progress-bar-container"><div class="progress-bar" id="shopProgressFill" style="width: 0%"></div></div>
+                <span class="progress-text" id="shopProgressText">0% completed</span>
+                <div class="progress-stats">
+                    <div class="stat">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg>
+                        <span id="shopProgressXP">0 XP</span>
+                    </div>
+                    <div class="stat coins">
+                        <div class="coin-icon">&#402;</div>
+                        <span id="shopProgressCoins">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <aside class="sidebar">
+            <div class="user-profile">
+                <div class="avatar">
+                    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect fill='%23667eea' width='80' height='80'/%3E%3Ctext x='50%25' y='50%25' font-size='32' fill='white' text-anchor='middle' dy='.3em'%3EJD%3C/text%3E%3C/svg%3E" alt="Jane Doe">
+                </div>
+                <h3>Jane Doe</h3>
+                <p class="username">janeDoee123</p>
+            </div>
+            <p class="sidebar-desc">Visit any of these pages to complete new tasks such as online shopping, paying bills or banking</p>
+            <nav class="sidebar-nav">
+                <a href="ecommerce.html" class="nav-item active">
+                    <span>Ecommerce<sup class="nav-badge" id="sidebarBadgeEcommerce">5</sup></span>
+                    <span class="arrow">→</span>
+                </a>
+                <a href="banking.html" class="nav-item">
+                    <span>Banking<sup class="nav-badge" id="sidebarBadgeBanking" style="display:none">0</sup></span>
+                    <span class="arrow">→</span>
+                </a>
+                <a href="utilities.html" class="nav-item">
+                    <span>Utilities<sup class="nav-badge" id="sidebarBadgeUtilities" style="display:none">0</sup></span>
+                    <span class="arrow">→</span>
+                </a>
+                <a href="account-balances.html" class="nav-item">
+                    <span>View account balances</span>
+                    <span class="arrow">∨</span>
+                </a>
+                <a href="account-progress.html" class="nav-item">
+                    <span>View account progress</span>
+                    <span class="arrow">∨</span>
+                </a>            </nav>
+        </aside>
+
+        <main class="main-content">
+            <div class="page-header">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.75rem">
+                    <div>
+                        <h1>Ecommerce Store</h1>
+                        <p>Shop for items and complete your ecommerce challenges. Each purchase earns you XP!</p>
+                    </div>
+                    <div style="background:linear-gradient(135deg,#667eea,#764ba2);border-radius:var(--radius-xl);padding:0.75rem 1.25rem;color:white;text-align:right">
+                        <div style="font-size:0.75rem;opacity:0.85">Your Balance</div>
+                        <div style="font-size:1.4rem;font-weight:700" id="ecoBalance">ƒ0.00</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ecommerce Stats Row -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0.75rem;margin-bottom:1rem">
+                <div style="background:linear-gradient(135deg,#667eea,#764ba2);border-radius:var(--radius-xl);padding:1rem;color:white;text-align:center">
+                    <div style="font-size:1.4rem;font-weight:700" id="ecoOrderCount">—</div>
+                    <div style="font-size:0.75rem;opacity:0.85">Orders Placed</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:var(--radius-xl);padding:1rem;color:white;text-align:center">
+                    <div style="font-size:1.4rem;font-weight:700" id="ecoTotalSpent">—</div>
+                    <div style="font-size:0.75rem;opacity:0.85">Total Spent</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#10b981,#059669);border-radius:var(--radius-xl);padding:1rem;color:white;text-align:center">
+                    <div style="font-size:1.4rem;font-weight:700" id="ecoXpEarned">—</div>
+                    <div style="font-size:0.75rem;opacity:0.85">XP Earned</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#3b82f6,#2563eb);border-radius:var(--radius-xl);padding:1rem;color:white;text-align:center">
+                    <div style="font-size:1.4rem;font-weight:700" id="ecoItemsBought">—</div>
+                    <div style="font-size:0.75rem;opacity:0.85">Items Bought</div>
+                </div>
+            </div>
+
+            <!-- Extended Shopping Stats Row -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0.75rem;margin-bottom:1.5rem">
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:var(--radius-xl);padding:0.875rem;text-align:center">
+                    <div style="font-size:1.2rem;font-weight:700;color:#8b5cf6" id="ecoAvgOrder">—</div>
+                    <div style="font-size:0.72rem;color:#64748b">Avg Order Value</div>
+                </div>
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:var(--radius-xl);padding:0.875rem;text-align:center">
+                    <div style="font-size:1.2rem;font-weight:700;color:#ec4899" id="ecoLargestOrder">—</div>
+                    <div style="font-size:0.72rem;color:#64748b">Largest Order</div>
+                </div>
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:var(--radius-xl);padding:0.875rem;text-align:center">
+                    <div style="font-size:1.2rem;font-weight:700;color:#f97316" id="ecoAvgItemsPerOrder">—</div>
+                    <div style="font-size:0.72rem;color:#64748b">Avg Items/Order</div>
+                </div>
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:var(--radius-xl);padding:0.875rem;text-align:center">
+                    <div style="font-size:1.2rem;font-weight:700;color:#0ea5e9" id="ecoNextMilestone">—</div>
+                    <div style="font-size:0.72rem;color:#64748b">Next Milestone</div>
+                </div>
+            </div>
+
+            <!-- Most Recent Purchase Row -->
+            <div id="ecoRecentRow" style="display:none;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:1rem;margin-bottom:1.5rem">
+                <div style="font-size:0.75rem;color:#94a3b8;margin-bottom:0.5rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">Most Recent Order</div>
+                <div style="display:flex;align-items:center;gap:0.875rem">
+                    <div style="width:44px;height:44px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0">🛒</div>
+                    <div style="flex:1;min-width:0">
+                        <div style="font-weight:700;font-size:0.9rem" id="ecoRecentItems">—</div>
+                        <div style="font-size:0.75rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="ecoRecentItemNames">—</div>
+                        <div style="font-size:0.72rem;color:#94a3b8" id="ecoRecentDate">—</div>
+                    </div>
+                    <div style="text-align:right;flex-shrink:0">
+                        <div style="font-size:1.1rem;font-weight:700;color:#1e293b" id="ecoRecentTotal">—</div>
+                        <div style="font-size:0.75rem;color:#10b981;font-weight:600" id="ecoRecentXp">—</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Page Tab Navigation ─────────────────────────────── -->
+            <div class="page-tabs">
+                <button class="page-tab-btn active" id="tab-btn-shop"  onclick="switchEcoPageTab('shop')">🛒 Shop</button>
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SHOP TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel active" id="panel-shop">
+
+            <!-- Challenge Tracker -->
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:1.25rem;margin-bottom:1.5rem">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+                    <h2 style="font-size:1rem;font-weight:700;margin:0">🛒 Ecommerce Challenges</h2>
+                    <a href="challenges.html" style="font-size:0.8rem;color:#6366f1;text-decoration:none">View all →</a>
+                </div>
+                <!-- Challenge Summary Bar -->
+                <div class="challenge-summary-grid">
+                    <div class="csg-item"><div class="csg-val" style="color:#10b981" id="ecoChalDoneCount">—</div><div class="csg-lbl">Completed</div></div>
+                    <div class="csg-item"><div class="csg-val" style="color:#6366f1" id="ecoChalPendingCount">—</div><div class="csg-lbl">In Progress</div></div>
+                    <div class="csg-item"><div class="csg-val" style="color:#f59e0b" id="ecoChalTotalXp">—</div><div class="csg-lbl">Total XP</div></div>
+                    <div class="csg-item"><div class="csg-val" style="color:#8b5cf6" id="ecoChalEarnedXp">—</div><div class="csg-lbl">XP Earned</div></div>
+                </div>
+                <div id="ecommerceChallengesList" style="display:flex;flex-direction:column;gap:0.6rem">
+                    <p style="color:#64748b;font-size:0.875rem">Loading challenges...</p>
+                </div>
+            </div>
+
+            <!-- Filter buttons + Sort dropdown -->
+            <div class="shop-filters">
+                <div style="display:flex;gap:0.75rem;flex-wrap:wrap;flex:1">
+                    <button class="filter-btn active" onclick="setCategory('all', event)">All Items</button>
+                    <button class="filter-btn" onclick="setCategory('clothing', event)">Clothing</button>
+                    <button class="filter-btn" onclick="setCategory('accessories', event)">Accessories</button>
+                    <button class="filter-btn" onclick="setCategory('electronics', event)">Electronics</button>
+                </div>
+                <select class="sort-select" id="productSort" onchange="applyFilters()">
+                    <option value="default">Sort: Default</option>
+                    <option value="price-asc">Price: Low → High</option>
+                    <option value="price-desc">Price: High → Low</option>
+                    <option value="name-asc">Name: A → Z</option>
+                    <option value="name-desc">Name: Z → A</option>
+                </select>
+            </div>
+
+            <!-- Price range filter pills -->
+            <div class="price-pills-wrap">
+                <span class="price-pill-label">Price:</span>
+                <button class="price-pill active" onclick="setPriceFilter('all',this)">All</button>
+                <button class="price-pill" onclick="setPriceFilter('u50',this)">Under ƒ50</button>
+                <button class="price-pill" onclick="setPriceFilter('50-150',this)">ƒ50 – ƒ150</button>
+                <button class="price-pill" onclick="setPriceFilter('o150',this)">Over ƒ150</button>
+            </div>
+
+            <!-- Product count indicator -->
+            <div style="display:flex;justify-content:space-between;align-items:center;margin:0.4rem 0 0.3rem;padding:0 0.25rem">
+                <span class="product-count-info" id="productCountInfo">12 products</span>
+                <span id="wishlistCountInfo" onclick="toggleWishlistPanel(true)" style="font-size:0.78rem;color:#ec4899;font-weight:600;display:none;cursor:pointer;user-select:none" title="View saved items">♥ <span id="wishlistCount">0</span> saved ↓</span>
+            </div>
+
+            <!-- Search bar -->
+            <div class="search-bar-wrapper">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="productSearch" class="product-search-input"
+                    placeholder="Search by name or brand..." oninput="applyFilters()" autocomplete="off">
+                <button class="search-clear-btn" id="searchClearBtn" onclick="clearSearch()" style="display:none" aria-label="Clear search">×</button>
+            </div>
+
+            <div class="products-grid" id="productsGrid">
+                <div class="product-card" data-category="clothing" data-price="35.99" data-name="Green Cotton Sweatshirt" data-rating="4.2">
+                    <div class="product-image" style="background: linear-gradient(135deg, #d4e4bc 0%, #c8ddb0 100%);">
+                        <span class="product-icon">👕</span>
+                    </div>
+                    <div class="product-info">
+                        <h3>Green Cotton Sweatshirt</h3>
+                        <p class="product-brand">EMJOL</p>
+                        <div class="product-rating" data-rating="4.2"><span class="stars"></span><span class="rating-value">4.2</span></div>
+                        <p class="product-description">Comfortable cotton sweatshirt perfect for winter weather</p>
+                        <div class="product-footer">
+                            <span class="product-price">ƒ35.99</span>
+                            <button class="btn btn-primary btn-sm" onclick="addToCart('Green Cotton Sweatshirt', 35.99, this)">Add to Cart</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="product-card" data-category="clothing" data-price="45.99" data-name="Pink Dress Shirt" data-badge="New" data-rating="4.0">
+                    <div class="product-image" style="background: linear-gradient(135deg, #f4d4d4 0%, #f0c8c8 100%);">
+                        <span class="product-icon">👔</span>
+                        <span class="product-badge product-badge--new">New</span>
+                    </div>
+                    <div class="product-info">
+                        <h3>Pink Dress Shirt</h3>
+                        <p class="product-brand">BRANDY</p>
+                        <div class="product-rating" data-rating="4.0"><span class="stars"></span><span class="rating-value">4.0</span></div>
+                        <p class="product-description">Elegant dress shirt for formal occasions</p>
+                        <div class="product-footer">
+                            <span class="product-price">ƒ45.99</span>
+                            <button class="btn btn-primary btn-sm" onclick="addToCart('Pink Dress Shirt', 45.99, this)">Add to Cart</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="product-card" data-category="accessories" data-price="89.99" data-name="Sport Backpack" data-badge="Best Seller" data-rating="4.7">
+                    <div class="product-image" style="background: linear-gradient(135deg, #c4dcd4 0%, #b8d4c8 100%);">
+                        <span class="product-icon">🎒</span>
+                        <span class="product-badge product-badge--best-seller">Best Seller</span>
+                    </div>
+                    <div class="product-info">
+                        <h3>Sport Backpack</h3>
+                        <p class="product-brand">NIKE</p>
+                        <div class="product-rating" data-rating="4.7"><span class="stars"></span><span class="rating-value">4.7</span></div>
+                        <p class="product-description">Durable backpack with multiple compartments</p>
+                        <div class="product-footer">
+                            <span class="product-price">ƒ89.99</span>
+                            <button class="btn btn-primary btn-sm" onclick="addToCart('Sport Backpack', 89.99, this)">Add to Cart</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="product-card" data-category="accessories" data-price="120.00" data-name="Running Shoes" data-badge="Best Seller" data-rating="4.8">
+                    <div class="product-image" style="background: linear-gradient(135deg, #ffd4a3 0%, #ffcb8e 100%);">
+                        <span class="product-icon">👟</span>
+                        <span class="product-badge product-badge--best-seller">Best Seller</span>
+                    </div>
+                    <div class="product-info">
+                        <h3>Running Shoes</h3>
+                        <p class="product-brand">ADIDAS</p>
+                        <div class="product-rating" data-rating="4.8"><span class="stars"></span><span class="rating-value">4.8</span></div>
+                        <p class="product-description">Lightweight running shoes for maximum comfort</p>
+                        <div class="product-footer">
+                            <span class="product-price">ƒ120.00</span>
+                            <button class="btn btn-primary btn-sm" onclick="addToCart('Running Shoes', 120.00, this)">Add to Cart</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="product-card" data-category="electronics" data-price="299.99" data-name="Wireless Headphones" data-badge="Sale" data-rating="4.5">
+                    <div class="product-image" style="background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);">
+                        <span class="product-icon">🎧</span>
+                        <span class="product-badge product-badge--sale">Sale</span>
+                    </div>
+                    <div class="product-info">
+                        <h3>Wireless Headphones</h3>
+                        <p class="product-brand">SONY</p>
+                        <div class="product-rating" data-rating="4.5"><span class="stars"></span><span class="rating-value">4.5</span></div>
+                        <p class="product-description">Premium noise-cancelling headphones</p>
+                        <div class="product-footer">
+                            <span class="product-price">ƒ299.99</span>
+                            <button class="btn btn-primary btn-sm" onclick="addToCart('Wireless Headphones', 299.99, this)">Add to Cart</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="product-card" data-category="electronics" data-price="25.99" data-name="Smartphone Case" data-rating="3.8">
+                    <div class="product-image" style="background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%);">
+                        <span class="product-icon">📱</span>
+                    </div>
+                    <div class="product-info">
+                        <h3>Smartphone Case</h3>
+                        <p class="product-brand">TECH</p>
+                        <div class="product-rating" data-rating="3.8"><span class="stars"></span><span class="rating-value">3.8</span></div>
+                        <p class="product-description">Protective case with sleek design</p>
+                        <div class="product-footer">
+                            <span class="product-price">ƒ25.99</span>
+                            <button class="btn btn-primary btn-sm" onclick="addToCart('Smartphone Case', 25.99, this)">Add to Cart</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="product-card" data-category="clothing" data-price="65.99" data-name="Denim Jeans" data-rating="4.1">
+                    <div class="product-image" style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);">
+                        <span class="product-icon">👖</span>
+                    </div>
+                    <div class="product-info">
+                        <h3>Denim Jeans</h3>
+                        <p class="product-brand">LEVI'S</p>
+                        <div class="product-rating" data-rating="4.1"><span class="stars"></span><span class="rating-value">4.1</span></div>
+                        <p class="product-description">Classic fit denim jeans</p>
+                        <div class="product-footer">
+                            <span class="product-price">ƒ65.99</span>
+                            <button class="btn btn-primary btn-sm" onclick="addToCart('Denim Jeans', 65.99, this)">Add to Cart</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="product-card" data-category="accessories" data-price="185.00" data-name="Leather Handbag" data-badge="New" data-rating="4.6">
+                    <div class="product-image" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);">
+                        <span class="product-icon">👜</span>
+                        <span class="product-badge product-badge--new">New</span>
+                    </div>
+                    <div class="product-info">
+                        <h3>Leather Handbag</h3>
+                        <p class="product-brand">COACH</p>
+                        <div class="product-rating" data-rating="4.6"><span class="stars"></span><span class="rating-value">4.6</span></div>
+                        <p class="product-description">Elegant leather handbag for everyday use</p>
+                        <div class="product-footer">
+                            <span class="product-price">ƒ185.00</span>
+                            <button class="btn btn-primary btn-sm" onclick="addToCart('Leather Handbag', 185.00, this)">Add to Cart</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="product-card" data-category="electronics" data-price="399.00" data-name="Smart Watch" data-badge="Best Seller" data-rating="4.9">
+                    <div class="product-image" style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);">
+                        <span class="product-icon">⌚</span>
+                        <span class="product-badge product-badge--best-seller">Best Seller</span>
+                    </div>
+                    <div class="product-info">
+                        <h3>Smart Watch</h3>
+                        <p class="product-brand">APPLE</p>
+                        <div class="product-rating" data-rating="4.9"><span class="stars"></span><span class="rating-value">4.9</span></div>
+                        <p class="product-description">Track fitness, notifications, and health data</p>
+                        <div class="product-footer">
+                            <span class="product-price">ƒ399.00</span>
+                            <button class="btn btn-primary btn-sm" onclick="addToCart('Smart Watch', 399.00, this)">Add to Cart</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="product-card" data-category="clothing" data-price="179.99" data-name="Winter Jacket" data-badge="Sale" data-rating="4.3">
+                    <div class="product-image" style="background: linear-gradient(135deg, #fde68a 0%, #fcd34d 100%);">
+                        <span class="product-icon">🧥</span>
+                        <span class="product-badge product-badge--sale">Sale</span>
+                    </div>
+                    <div class="product-info">
+                        <h3>Winter Jacket</h3>
+                        <p class="product-brand">NORTH FACE</p>
+                        <div class="product-rating" data-rating="4.3"><span class="stars"></span><span class="rating-value">4.3</span></div>
+                        <p class="product-description">Insulated jacket for cold weather adventures</p>
+                        <div class="product-footer">
+                            <span class="product-price">ƒ179.99</span>
+                            <button class="btn btn-primary btn-sm" onclick="addToCart('Winter Jacket', 179.99, this)">Add to Cart</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="product-card" data-category="accessories" data-price="149.99" data-name="Sunglasses" data-rating="4.0">
+                    <div class="product-image" style="background: linear-gradient(135deg, #e9d5ff 0%, #d8b4fe 100%);">
+                        <span class="product-icon">🕶️</span>
+                    </div>
+                    <div class="product-info">
+                        <h3>Sunglasses</h3>
+                        <p class="product-brand">RAY-BAN</p>
+                        <div class="product-rating" data-rating="4.0"><span class="stars"></span><span class="rating-value">4.0</span></div>
+                        <p class="product-description">UV-protected polarised sunglasses</p>
+                        <div class="product-footer">
+                            <span class="product-price">ƒ149.99</span>
+                            <button class="btn btn-primary btn-sm" onclick="addToCart('Sunglasses', 149.99, this)">Add to Cart</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="product-card" data-category="electronics" data-price="69.99" data-name="Gaming Controller" data-badge="New" data-rating="4.4">
+                    <div class="product-image" style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);">
+                        <span class="product-icon">🎮</span>
+                        <span class="product-badge product-badge--new">New</span>
+                    </div>
+                    <div class="product-info">
+                        <h3>Gaming Controller</h3>
+                        <p class="product-brand">XBOX</p>
+                        <div class="product-rating" data-rating="4.4"><span class="stars"></span><span class="rating-value">4.4</span></div>
+                        <p class="product-description">Wireless controller with haptic feedback</p>
+                        <div class="product-footer">
+                            <span class="product-price">ƒ69.99</span>
+                            <button class="btn btn-primary btn-sm" onclick="addToCart('Gaming Controller', 69.99, this)">Add to Cart</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- No results message -->
+                <p id="noProductsMsg" style="display:none;color:#64748b;text-align:center;padding:2rem;grid-column:1/-1;font-size:0.9rem">
+                    No products match your search. Try a different term.
+                </p>
+            </div>
+
+            <!-- Recently Viewed / Recommendations -->
+            <div class="recommendations-section" id="recommendationsSection" style="display:none;margin-top:1.5rem">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <h2 style="font-size:1rem;font-weight:700;margin:0">👀 Recently Viewed</h2>
+                    <button onclick="clearRecentlyViewed()" style="background:none;border:none;font-size:0.78rem;color:var(--color-gray-400);cursor:pointer;font-family:var(--font-sans)">Clear</button>
+                </div>
+                <div class="recommendations-grid" id="recommendationsGrid"></div>
+            </div>
+
+            <!-- Wishlist Quick Panel -->
+            <div class="wishlist-panel" id="wishlistQuickPanel" style="display:none">
+                <div class="wishlist-panel-header">
+                    <div class="wishlist-panel-title">♥ Saved Items (<span id="wishlistPanelCount">0</span>)</div>
+                    <button type="button" onclick="toggleWishlistPanel(false)" style="background:none;border:none;font-size:0.78rem;color:#94a3b8;cursor:pointer;font-family:var(--font-sans)">✕ Hide</button>
+                </div>
+                <div id="wishlistPanelGrid" class="wishlist-panel-grid"></div>
+            </div>
+
+            <!-- Shopping Cart -->
+            <div class="cart-summary" id="cartSummary" style="margin-top:1.5rem">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+                    <h2 style="margin:0">Shopping Cart <span class="cart-count" id="cartCount" style="background:#6366f1;color:#fff;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:0.8rem;margin-left:0.25rem">0</span></h2>
+                    <div style="display:flex;align-items:center;gap:0.75rem">
+                        <span style="font-size:0.8rem;color:#64748b">Items earn <strong style="color:#10b981">+45 XP</strong> each</span>
+                        <button class="btn-clear-cart" id="clearCartBtn" onclick="clearCartAndReload()" style="display:none">Clear Cart</button>
+                    </div>
+                </div>
+                <div id="cartItems"></div>
+                <!-- Cart order summary breakdown -->
+                <div class="cart-breakdown" style="border-top:1px solid #e2e8f0;margin-top:0.5rem;padding-top:0.35rem">
+                    <div class="cart-bdown-row">
+                        <span>Subtotal (<span id="cartItemCount">0</span> item<span id="cartItemCountSuffix">s</span>)</span>
+                        <span class="bval" id="cartSubtotal">ƒ0.00</span>
+                    </div>
+                    <div class="cart-bdown-row tax-row">
+                        <span>Estimated Tax <span style="font-size:0.7rem;color:#94a3b8">(5% — info only)</span></span>
+                        <span class="bval" id="cartTax">ƒ0.00</span>
+                    </div>
+                    <div class="cart-bdown-row total-row">
+                        <strong>Total</strong>
+                        <span class="bval" id="cartTotal">ƒ0.00</span>
+                    </div>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding-bottom:0.75rem;font-size:0.85rem;color:#64748b;margin-top:0.35rem">
+                    <span>Points you'll earn:</span>
+                    <span id="cartXpPreview" style="color:#10b981;font-weight:600">+0 XP</span>
+                </div>
+                <!-- Promo Code Section -->
+                <div style="margin-bottom:0.75rem">
+                    <button type="button" id="promoToggleBtn" onclick="togglePromoInput()" style="background:none;border:none;color:var(--color-primary-500);font-size:0.82rem;font-weight:600;cursor:pointer;padding:0.2rem 0;font-family:var(--font-sans)">🏷️ Have a promo code?</button>
+                    <div id="promoInputWrap" style="display:none;margin-top:0.5rem">
+                        <div style="display:flex;gap:0.5rem">
+                            <input type="text" id="promoCodeInput" class="form-input" placeholder="Enter code (e.g. SAVE10)" style="flex:1;padding:0.45rem 0.75rem;font-size:0.85rem;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+                            <button type="button" class="btn btn-primary" style="font-size:0.85rem;padding:0.45rem 1rem;white-space:nowrap" onclick="applyPromoCode()">Apply</button>
+                        </div>
+                        <div id="promoMsg" style="font-size:0.78rem;margin-top:0.35rem;display:none"></div>
+                    </div>
+                </div>
+                <!-- Promo discount row (hidden until code applied) -->
+                <div id="promoDiscountRow" style="display:none;justify-content:space-between;padding-bottom:0.5rem;font-size:0.875rem;color:#10b981;font-weight:600;border-bottom:1px solid #e2e8f0;margin-bottom:0.3rem">
+                    <span id="promoDiscountLabel">Discount</span>
+                    <span id="promoDiscountAmt"></span>
+                </div>
+                <button class="btn btn-primary btn-block" onclick="checkout()" id="checkoutBtn" disabled>Checkout & Earn XP</button>
+            </div>
+
+            <!-- Order History -->
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:1.25rem;margin-top:1.5rem">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+                    <h2 style="font-size:1rem;font-weight:700;margin:0">📦 Order History</h2>
+                    <span id="orderHistoryCount" style="font-size:0.8rem;color:#64748b"></span>
+                </div>
+                <div id="orderHistory">
+                    <p style="color:#64748b;font-size:0.875rem;text-align:center;padding:1rem">No orders yet. Start shopping!</p>
+                </div>
+            </div>
+
+            </div><!-- /panel-shop -->
+
+        </main>
+    </div>
+
+    <!-- Floating View Cart button — appears when cart has items -->
+    <button id="floatCartBtn"
+        onclick="scrollToCart()"
+        style="display:none;position:fixed;bottom:1.75rem;right:1.75rem;
+               background:linear-gradient(135deg,#667eea,#764ba2);
+               color:#fff;border:none;border-radius:50px;
+               padding:0.75rem 1.35rem;font-size:0.9rem;font-weight:700;
+               cursor:pointer;box-shadow:0 4px 20px rgba(102,102,234,0.45);
+               z-index:200;transition:opacity 0.3s,transform 0.2s"
+        onmouseover="this.style.transform='scale(1.05)'"
+        onmouseout="this.style.transform='scale(1)'">
+        🛒 View Cart (<span id="floatCartCount">0</span>)
+    </button>
+
+    <script src="auth.js"></script>
+    <script src="db.js"></script>
+    <script src="shop-bridge.js"></script>
+    <script src="script.js"></script>
+    <script src="ecommerce.js"></script>
+    <script>
+    /* ── Tab switching ──────────────────────────────────────────────── */
+    function switchEcoPageTab(name) {
+        ['shop'].forEach(function(t) {
+            var panel = document.getElementById('panel-' + t);
+            var btn   = document.getElementById('tab-btn-' + t);
+            if (!panel || !btn) return;
+            var active = (t === name);
+            panel.classList.toggle('active', active);
+            btn.classList.toggle('active', active);
+        });
+        sessionStorage.setItem('eco_page_tab', name);
+    }
+
+    function escHE(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }
+
+    // ── Filter / Search / Sort ─────────────────────────────────────────────────
+    var currentCategory   = 'all';
+    var currentPriceFilter = 'all';
+
+    function setCategory(category, evt) {
+        currentCategory = category;
+        document.querySelectorAll('.filter-btn').forEach(function(b){ b.classList.remove('active'); });
+        if (evt && evt.target) evt.target.classList.add('active');
+        applyFilters();
+    }
+
+    function setPriceFilter(range, btn) {
+        currentPriceFilter = range;
+        document.querySelectorAll('.price-pill').forEach(function(b){ b.classList.remove('active'); });
+        if (btn) btn.classList.add('active');
+        applyFilters();
+    }
+
+    function clearSearch() {
+        var inp = document.getElementById('productSearch');
+        if (inp) inp.value = '';
+        applyFilters();
+    }
+
+    function applyFilters() {
+        var searchText = ((document.getElementById('productSearch') || {}).value || '').trim().toLowerCase();
+        var sortVal    = ((document.getElementById('productSort')  || {}).value || 'default');
+
+        // Show/hide clear button
+        var clearBtn = document.getElementById('searchClearBtn');
+        if (clearBtn) clearBtn.style.display = searchText.length > 0 ? '' : 'none';
+
+        var grid  = document.getElementById('productsGrid');
+        var cards = Array.prototype.slice.call(grid.querySelectorAll('.product-card'));
+
+        // 1. Filter by category + price range + search text
+        cards.forEach(function(card) {
+            var catOk  = currentCategory === 'all' || card.dataset.category === currentCategory;
+            var price  = parseFloat(card.dataset.price || 0);
+            var priceOk = currentPriceFilter === 'all' ||
+                (currentPriceFilter === 'u50'    && price < 50) ||
+                (currentPriceFilter === '50-150' && price >= 50 && price <= 150) ||
+                (currentPriceFilter === 'o150'   && price > 150);
+            var name   = (card.dataset.name || '').toLowerCase();
+            var brand  = ((card.querySelector('.product-brand') || {}).textContent || '').toLowerCase();
+            var srchOk = !searchText || name.indexOf(searchText) > -1 || brand.indexOf(searchText) > -1;
+            card.style.display = (catOk && priceOk && srchOk) ? '' : 'none';
+        });
+
+        // 2. Sort visible cards
+        var visible = cards.filter(function(c){ return c.style.display !== 'none'; });
+        visible.sort(function(a, b) {
+            if (sortVal === 'price-asc')  return parseFloat(a.dataset.price) - parseFloat(b.dataset.price);
+            if (sortVal === 'price-desc') return parseFloat(b.dataset.price) - parseFloat(a.dataset.price);
+            if (sortVal === 'name-asc')   return (a.dataset.name || '').localeCompare(b.dataset.name || '');
+            if (sortVal === 'name-desc')  return (b.dataset.name || '').localeCompare(a.dataset.name || '');
+            return parseInt(a.dataset.originalIndex || 0) - parseInt(b.dataset.originalIndex || 0);
+        });
+        visible.forEach(function(c){ grid.appendChild(c); });
+        // Keep hidden cards in the grid (at the end, hidden)
+        cards.filter(function(c){ return c.style.display === 'none'; }).forEach(function(c){ grid.appendChild(c); });
+
+        // 3. No-results message
+        var noMsg = document.getElementById('noProductsMsg');
+        if (noMsg) noMsg.style.display = visible.length === 0 ? '' : 'none';
+
+        // 4. Product count indicator
+        var countEl = document.getElementById('productCountInfo');
+        if (countEl) {
+            var total = cards.length;
+            var shown = visible.length;
+            countEl.textContent = shown === total
+                ? total + ' product' + (total !== 1 ? 's' : '')
+                : 'Showing ' + shown + ' of ' + total + ' products';
+        }
+    }
+
+    // ── Quick View Modal ───────────────────────────────────────────────────────
+    function openQuickView(p) {
+        var existing = document.getElementById('quickViewModal');
+        if (existing) existing.remove();
+        trackRecentlyViewed(p);
+        var r    = parseFloat(p.rating || 0);
+        var full = Math.floor(r);
+        var half = (r - full) >= 0.5;
+        var stars = '★'.repeat(full) + (half ? '½' : '') + '☆'.repeat(5 - full - (half ? 1 : 0));
+        var overlay = document.createElement('div');
+        overlay.id        = 'quickViewModal';
+        overlay.className = 'quick-view-overlay';
+        overlay.innerHTML =
+            '<div class="quick-view-modal">' +
+            '<button class="quick-view-close" onclick="document.getElementById(\'quickViewModal\').remove()">×</button>' +
+            '<div class="quick-view-img" style="' + (p.imgStyle || '') + '">' + escHE(p.icon || '🛒') + '</div>' +
+            '<div class="quick-view-title">'  + escHE(p.name)  + '</div>' +
+            '<div class="quick-view-brand">'  + escHE(p.brand) + '</div>' +
+            (p.rating ? '<div class="quick-view-rating">' + stars + ' <span style="color:#94a3b8;font-size:0.8rem">(' + p.rating + ')</span></div>' : '') +
+            '<div class="quick-view-desc">'   + escHE(p.desc)  + '</div>' +
+            '<div class="quick-view-price">ƒ' + Number(p.price).toFixed(2) + '</div>' +
+            '<button class="btn btn-primary btn-block" onclick="' + (p.addFn || '') + ';document.getElementById(\'quickViewModal\').remove()">Add to Cart</button>' +
+            '</div>';
+        document.body.appendChild(overlay);
+        overlay.addEventListener('click', function(e){ if (e.target === overlay) overlay.remove(); });
+    }
+
+    // ── Recently Viewed / Recommendations ─────────────────────────────────────
+    function trackRecentlyViewed(p) {
+        var recent = JSON.parse(localStorage.getItem('digifinwiz_recently_viewed') || '[]');
+        recent = recent.filter(function(r){ return r.name !== p.name; });
+        recent.unshift({ name:p.name, price:p.price, brand:p.brand, icon:p.icon, imgStyle:p.imgStyle, desc:p.desc, rating:p.rating, addFn:p.addFn });
+        if (recent.length > 6) recent = recent.slice(0, 6);
+        localStorage.setItem('digifinwiz_recently_viewed', JSON.stringify(recent));
+        renderRecommendations();
+    }
+
+    function renderRecommendations() {
+        var recent  = JSON.parse(localStorage.getItem('digifinwiz_recently_viewed') || '[]');
+        var section = document.getElementById('recommendationsSection');
+        var grid    = document.getElementById('recommendationsGrid');
+        if (!section || !grid) return;
+        if (recent.length === 0) { section.style.display = 'none'; return; }
+        section.style.display = '';
+        grid.innerHTML = recent.slice(0, 4).map(function(p, i) {
+            return '<div class="rec-card" data-rec-idx="' + i + '">' +
+                '<div class="rec-card-img" style="' + (p.imgStyle || '') + '">' + escHE(p.icon || '🛒') + '</div>' +
+                '<div class="rec-card-body">' +
+                '<div class="rec-card-name">'  + escHE(p.name) + '</div>' +
+                '<div class="rec-card-price">ƒ' + Number(p.price).toFixed(2) + '</div>' +
+                '</div></div>';
+        }).join('');
+        grid.querySelectorAll('.rec-card').forEach(function(card) {
+            card.addEventListener('click', function() {
+                var idx    = parseInt(this.dataset.recIdx);
+                var recent2 = JSON.parse(localStorage.getItem('digifinwiz_recently_viewed') || '[]');
+                if (recent2[idx]) openQuickView(recent2[idx]);
+            });
+        });
+    }
+
+    function clearRecentlyViewed() {
+        localStorage.removeItem('digifinwiz_recently_viewed');
+        renderRecommendations();
+    }
+
+    // ── Challenge Tracker ─────────────────────────────────────────────────────
+    function loadEcommerceChallenges() {
+        if (typeof DigifinwizDB === 'undefined') return;
+        Promise.all([
+            DigifinwizDB.getChallenges(),
+            DigifinwizDB.getPurchases(1000)
+        ]).then(function(res) {
+            var challenges = res[0];
+            var purchases = res[1];
+            var ecom = challenges.filter(function(c){ return c.active && c.category === 'ecommerce'; });
+            var container = document.getElementById('ecommerceChallengesList');
+            if (!container) return;
+
+            // Populate challenge summary bar
+            var totalXpAvail = ecom.reduce(function(s,c){ return s+(c.points||0); }, 0);
+            var doneList = ecom.filter(function(c){ return c.completed; });
+            var earnedXp = doneList.reduce(function(s,c){ return s+(c.points||0); }, 0);
+            var pending = ecom.filter(function(c){ return !c.completed; });
+            var set = function(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; };
+            set('ecoChalDoneCount', doneList.length + '/' + ecom.length);
+            set('ecoChalPendingCount', pending.length);
+            set('ecoChalTotalXp', '+' + totalXpAvail + ' XP');
+            set('ecoChalEarnedXp', '+' + earnedXp + ' XP');
+
+            if (ecom.length === 0) {
+                container.innerHTML = '<p style="color:#64748b;font-size:0.875rem">No ecommerce challenges yet.</p>';
+                return;
+            }
+            var totalSpent = purchases.reduce(function(s,p){ return s+(p.total||0); }, 0);
+            var totalItems = purchases.reduce(function(s,p){ return s+(p.items?p.items.length:0); }, 0);
+            var maxItems = purchases.reduce(function(mx,p){ return Math.max(mx, p.items ? p.items.length : 0); }, 0);
+            container.innerHTML = ecom.map(function(c) {
+                var pct = 0;
+                var progressLabel = '';
+                if (c.completed) {
+                    pct = 100;
+                } else if (c.condition === 'first_purchase') {
+                    pct = purchases.length > 0 ? 100 : 0;
+                    progressLabel = purchases.length > 0 ? 'First purchase made!' : 'Make your first purchase';
+                } else if (c.condition === 'purchase_items') {
+                    pct = Math.min(100, Math.round((maxItems / (c.conditionValue||1)) * 100));
+                    progressLabel = 'Best order: ' + maxItems + ' / ' + (c.conditionValue||0) + ' items';
+                } else if (c.condition === 'total_spent_ecom') {
+                    pct = Math.min(100, Math.round((totalSpent / (c.conditionValue||1)) * 100));
+                    progressLabel = 'ƒ' + totalSpent.toFixed(0) + ' / ƒ' + (c.conditionValue||0) + ' spent';
+                } else if (c.condition === 'transaction_count') {
+                    pct = Math.min(100, Math.round((purchases.length / (c.conditionValue||1)) * 100));
+                    progressLabel = purchases.length + ' / ' + (c.conditionValue||0) + ' orders';
+                } else if (c.condition === 'manual') {
+                    pct = 0;
+                    progressLabel = 'Complete manually';
+                }
+                var done = c.completed;
+                var barColor = done ? '#10b981' : (pct >= 75 ? '#10b981' : (pct >= 40 ? '#f59e0b' : '#6366f1'));
+                var completedDate = done && c.completedAt ? new Date(c.completedAt).toLocaleDateString() : null;
+                return '<div style="background:' + (done?'#f0fdf4':'#f8fafc') + ';border:1px solid ' + (done?'#bbf7d0':'#e2e8f0') + ';border-radius:10px;padding:0.875rem">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.5rem">' +
+                    '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.875rem">' + (done?'✅ ':'⏳ ') + escHE(c.title) + '</div>' +
+                    '<div style="font-size:0.75rem;color:#64748b;margin-top:0.15rem">' + escHE(c.description||'') + '</div></div>' +
+                    '<span style="background:' + (done?'#dcfce7':'#fef3c7') + ';color:' + (done?'#16a34a':'#d97706') + ';padding:2px 8px;border-radius:12px;font-size:0.72rem;font-weight:700;margin-left:0.5rem;white-space:nowrap">+' + (c.points||0) + ' XP</span>' +
+                    '</div>' +
+                    '<div style="background:#e2e8f0;border-radius:4px;height:7px;overflow:hidden">' +
+                    '<div style="background:' + barColor + ';width:' + pct + '%;height:100%;transition:width 0.6s ease;border-radius:4px"></div></div>' +
+                    '<div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#94a3b8;margin-top:0.25rem">' +
+                    '<span>' + (done && completedDate ? 'Completed ' + completedDate : done ? 'Completed!' : pct + '% complete') + '</span>' +
+                    (progressLabel && !done ? '<span style="color:#6366f1;font-weight:600">' + escHE(progressLabel) + '</span>' : '') +
+                    '</div>' +
+                    '</div>';
+            }).join('');
+        }).catch(function(){});
+    }
+
+    // Category icon heuristic based on item names
+    var ECO_ICON_MAP = {
+        'headphones':'🎧','watch':'⌚','controller':'🎮','phone':'📱','smart':'⌚',
+        'shirt':'👔','dress':'👗','jeans':'👖','jacket':'🧥','sweatshirt':'👕',
+        'shoes':'👟','bag':'👜','backpack':'🎒','sunglasses':'🕶️','handbag':'👜'
+    };
+    function getOrderIcon(items) {
+        if (!items || items.length === 0) return '📦';
+        var nameLower = (items[0].name || '').toLowerCase();
+        var keys = Object.keys(ECO_ICON_MAP);
+        for (var i = 0; i < keys.length; i++) {
+            if (nameLower.indexOf(keys[i]) > -1) return ECO_ICON_MAP[keys[i]];
+        }
+        return items.length >= 4 ? '📦' : items.length >= 2 ? '🛒' : '🎁';
+    }
+
+    function loadOrderHistory() {
+        DigifinwizDB.getPurchases(20).then(function(purchases) {
+            var container = document.getElementById('orderHistory');
+            var countEl   = document.getElementById('orderHistoryCount');
+            if (!container) return;
+            if (countEl) countEl.textContent = purchases.length + ' order' + (purchases.length !== 1 ? 's' : '');
+            if (purchases.length === 0) {
+                container.innerHTML = '<p style="color:#64748b;font-size:0.875rem;text-align:center;padding:1rem">No orders yet. Start shopping!</p>';
+                return;
+            }
+            container.innerHTML = purchases.map(function(p, idx) {
+                var itemCount = p.items ? p.items.length : 0;
+                var icon      = getOrderIcon(p.items);
+                var orderNum  = 'ORD-' + String(purchases.length - idx).padStart(4, '0');
+                var itemNames = p.items ? p.items.map(function(i){ return escHE(i.name); }).join(', ') : '—';
+                return '<div style="display:flex;align-items:center;gap:0.75rem;padding:0.875rem 0;border-bottom:1px solid #f1f5f9">' +
+                    '<div style="width:42px;height:42px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0">' + icon + '</div>' +
+                    '<div style="flex:1;min-width:0">' +
+                        '<div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.15rem">' +
+                            '<span style="font-weight:600;font-size:0.875rem">' + itemCount + ' item' + (itemCount !== 1 ? 's' : '') + ' purchased</span>' +
+                            '<span class="order-status-badge order-status-delivered">✓ Delivered</span>' +
+                        '</div>' +
+                        '<div style="font-size:0.75rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + itemNames + '</div>' +
+                        '<div style="font-size:0.7rem;color:#94a3b8;margin-top:0.1rem">' + escHE(p.date||'') + ' · ' + orderNum + '</div>' +
+                    '</div>' +
+                    '<div style="text-align:right;flex-shrink:0">' +
+                        '<div style="font-weight:700;color:#1e293b">ƒ' + Number(p.total||0).toFixed(2) + '</div>' +
+                        '<div style="font-size:0.72rem;color:#10b981;margin-top:0.1rem">+' + (p.pointsEarned||0) + ' XP</div>' +
+                    '</div>' +
+                    '</div>';
+            }).join('');
+        }).catch(function(){});
+    }
+
+    function loadEcoStats() {
+        DigifinwizDB.getPurchases(1000).then(function(purchases) {
+            var totalSpent = purchases.reduce(function(s,p){ return s+(p.total||0); }, 0);
+            var totalXp = purchases.reduce(function(s,p){ return s+(p.pointsEarned||0); }, 0);
+            var totalItems = purchases.reduce(function(s,p){ return s+(p.items?p.items.length:0); }, 0);
+            var set = function(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; };
+
+            set('ecoOrderCount', purchases.length);
+            set('ecoTotalSpent', 'ƒ'+totalSpent.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}));
+            set('ecoXpEarned', '+'+totalXp+' XP');
+            set('ecoItemsBought', totalItems);
+
+            var avgOrder = purchases.length > 0 ? totalSpent / purchases.length : 0;
+            var largestOrder = purchases.reduce(function(mx,p){ return Math.max(mx, p.total||0); }, 0);
+            var avgItemsPerOrder = purchases.length > 0 ? (totalItems / purchases.length) : 0;
+            set('ecoAvgOrder', purchases.length > 0 ? 'ƒ' + avgOrder.toFixed(2) : '—');
+            set('ecoLargestOrder', purchases.length > 0 ? 'ƒ' + largestOrder.toFixed(2) : '—');
+            set('ecoAvgItemsPerOrder', purchases.length > 0 ? avgItemsPerOrder.toFixed(1) + ' items' : '—');
+            var milestones = [1,3,5,10,20];
+            var next = milestones.find(function(m){ return purchases.length < m; });
+            set('ecoNextMilestone', next ? purchases.length + '/' + next + ' orders' : 'Max reached!');
+
+            DigifinwizDB.getBalance('checking').then(function(bal) {
+                var balEl = document.getElementById('ecoBalance');
+                if (balEl) balEl.textContent = 'ƒ' + bal.toLocaleString('en-US',{minimumFractionDigits:2});
+            }).catch(function(){});
+
+            if (purchases.length > 0) {
+                var last = purchases[0];
+                var rowEl = document.getElementById('ecoRecentRow');
+                if (rowEl) rowEl.style.display = '';
+                var lastItemCount = last.items ? last.items.length : 0;
+                var lastItemNames = last.items ? last.items.map(function(i){ return escHE(i.name); }).join(', ') : '—';
+                set('ecoRecentItems', lastItemCount + ' item' + (lastItemCount !== 1 ? 's' : '') + ' purchased');
+                var recentNamesEl = document.getElementById('ecoRecentItemNames');
+                if (recentNamesEl) recentNamesEl.innerHTML = lastItemNames;
+                set('ecoRecentDate', last.date || '—');
+                set('ecoRecentTotal', 'ƒ' + Number(last.total||0).toFixed(2));
+                set('ecoRecentXp', '+' + (last.pointsEarned||0) + ' XP earned');
+            }
+        }).catch(function(){});
+    }
+
+    function refreshEcoPage() {
+        loadEcommerceChallenges();
+        loadOrderHistory();
+        loadEcoStats();
+        if (typeof updateBalanceLabel === 'function') updateBalanceLabel();
+    }
+
+    /* ── Wishlist helpers ───────────────────────────────────────────── */
+    function toggleWishlist(btn, name) {
+        var saved = JSON.parse(localStorage.getItem('digifinwiz_wishlist') || '{}');
+        if (saved[name]) {
+            delete saved[name];
+            btn.innerHTML = '♡';
+            btn.classList.remove('wishlisted');
+            btn.title = 'Save to wishlist';
+            if (typeof showNotification === 'function') showNotification('Removed from wishlist', 'info');
+        } else {
+            saved[name] = true;
+            btn.innerHTML = '♥';
+            btn.classList.add('wishlisted');
+            btn.title = 'Remove from wishlist';
+            if (typeof showNotification === 'function') showNotification(name + ' saved to wishlist ♥', 'success');
+        }
+        localStorage.setItem('digifinwiz_wishlist', JSON.stringify(saved));
+        updateWishlistCounter();
+    }
+
+    function updateWishlistCounter() {
+        var saved = JSON.parse(localStorage.getItem('digifinwiz_wishlist') || '{}');
+        var count = Object.keys(saved).length;
+        var infoEl  = document.getElementById('wishlistCountInfo');
+        var countEl = document.getElementById('wishlistCount');
+        if (infoEl)  infoEl.style.display = count > 0 ? '' : 'none';
+        if (countEl) countEl.textContent   = count;
+        // Also update panel count if panel is open
+        var panelCntEl = document.getElementById('wishlistPanelCount');
+        if (panelCntEl) panelCntEl.textContent = count;
+        var panel = document.getElementById('wishlistQuickPanel');
+        if (panel && panel.style.display !== 'none') renderWishlistPanel();
+    }
+
+    function shopNavFilter(category) {
+        var btn = document.querySelector('.filter-btn[onclick*="\'' + category + '\'"]');
+        if (btn) { btn.click(); } else { setCategory(category, null); }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Restore last active tab
+        switchEcoPageTab(sessionStorage.getItem('eco_page_tab') || 'shop');
+
+        // Populate InStyl game progress bar from ShopBridge
+        if (typeof ShopBridge !== 'undefined') {
+            ShopBridge.getXPData().then(function(xp) {
+                var pct = Math.round(((xp.xp % 1000) / 1000) * 100);
+                var set = function(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
+                set('shopProgressLevel', xp.level + '/50');
+                set('shopProgressText', pct + '% completed');
+                set('shopProgressXP', xp.xp.toLocaleString() + ' XP');
+                set('shopProgressCoins', xp.coins.toLocaleString());
+                var fillEl = document.getElementById('shopProgressFill');
+                if (fillEl) fillEl.style.width = pct + '%';
+            }).catch(function(){});
+        }
+
+        // Store original card order for "Sort: Default" restoration
+        document.querySelectorAll('.product-card').forEach(function(c, i){ c.dataset.originalIndex = i; });
+
+        // ── Category item counts ──────────────────────────────────────
+        var catCounts = { all:0, clothing:0, accessories:0, electronics:0 };
+        document.querySelectorAll('.product-card').forEach(function(c) {
+            catCounts.all++;
+            var cat = c.dataset.category || '';
+            if (catCounts[cat] !== undefined) catCounts[cat]++;
+        });
+        document.querySelectorAll('.filter-btn').forEach(function(btn) {
+            var onclick = btn.getAttribute('onclick') || '';
+            var m = onclick.match(/setCategory\('(\w+)'/);
+            if (m && catCounts[m[1]] !== undefined) {
+                btn.textContent = btn.textContent.trim().replace(/ \(\d+\)$/, '') + ' (' + catCounts[m[1]] + ')';
+            }
+        });
+
+        // ── Best Value badge ──────────────────────────────────────────
+        updateBestValueBadge();
+
+        // ── Stock level chips ─────────────────────────────────────────
+        injectStockChips();
+
+        // ── Load recently viewed recommendations ────────────────────
+        renderRecommendations();
+
+        // ── Inject quick-view click on product images ────────────────
+        document.querySelectorAll('.product-card').forEach(function(card) {
+            var imgDiv = card.querySelector('.product-image');
+            if (!imgDiv) return;
+            imgDiv.style.cursor = 'pointer';
+            imgDiv.title = 'Quick view';
+            imgDiv.addEventListener('click', function(e) {
+                if (e.target.classList.contains('wishlist-btn') || e.target.classList.contains('product-badge')) return;
+                var addBtn = card.querySelector('.btn.btn-primary');
+                openQuickView({
+                    name:     card.dataset.name    || '',
+                    price:    card.dataset.price   || '0',
+                    brand:    ((card.querySelector('.product-brand') || {}).textContent || ''),
+                    desc:     ((card.querySelector('.product-description') || {}).textContent || ''),
+                    rating:   card.dataset.rating  || '',
+                    icon:     ((card.querySelector('.product-icon') || {}).textContent || '🛒'),
+                    imgStyle: imgDiv.getAttribute('style') || '',
+                    addFn:    addBtn ? addBtn.getAttribute('onclick') : ''
+                });
+            });
+        });
+
+        // ── Inject wishlist heart buttons onto every product card ────
+        var savedWishlist = JSON.parse(localStorage.getItem('digifinwiz_wishlist') || '{}');
+        var wishlistCount = Object.keys(savedWishlist).length;
+        document.querySelectorAll('.product-card').forEach(function(card) {
+            var imgDiv = card.querySelector('.product-image');
+            if (!imgDiv || imgDiv.querySelector('.wishlist-btn')) return;
+            var name = card.dataset.name || '';
+            var btn  = document.createElement('button');
+            btn.className   = 'wishlist-btn' + (savedWishlist[name] ? ' wishlisted' : '');
+            btn.title       = savedWishlist[name] ? 'Remove from wishlist' : 'Save to wishlist';
+            btn.setAttribute('aria-label', 'Wishlist');
+            btn.innerHTML   = savedWishlist[name] ? '♥' : '♡';
+            btn.addEventListener('click', function(e) { e.stopPropagation(); toggleWishlist(btn, name); });
+            imgDiv.appendChild(btn);
+        });
+        updateWishlistCounter();
+
+        // Render star ratings from data-rating attributes
+        document.querySelectorAll('.product-card').forEach(function(card) {
+            var rEl = card.querySelector('.product-rating');
+            if (!rEl) return;
+            var r = parseFloat(rEl.dataset.rating || 0);
+            var full = Math.floor(r);
+            var half = (r - full) >= 0.5;
+            var starsEl = rEl.querySelector('.stars');
+            if (starsEl) starsEl.textContent = '★'.repeat(full) + (half ? '½' : '') + '☆'.repeat(5 - full - (half ? 1 : 0));
+        });
+
+        // Hook into checkout button to refresh stats + challenges after purchase
+        var origBtn = document.getElementById('checkoutBtn');
+        if (origBtn) {
+            origBtn.addEventListener('click', function() {
+                setTimeout(refreshEcoPage, 1400);
+            }, true);
+        }
+
+        // Update cart XP preview whenever cart count changes
+        var observer = new MutationObserver(function() {
+            var count = parseInt(document.getElementById('cartCount').textContent) || 0;
+            var xpEl = document.getElementById('cartXpPreview');
+            if (xpEl) xpEl.textContent = '+' + (count * 45) + ' XP';
+        });
+        var cartCountEl = document.getElementById('cartCount');
+        if (cartCountEl) observer.observe(cartCountEl, { childList: true, characterData: true, subtree: true });
+    });
+
+    // Refresh challenge tracker when user returns to this tab
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') {
+            refreshEcoPage();
+            switchEcoPageTab(sessionStorage.getItem('eco_page_tab') || 'shop');
+        }
+    });
+
+    // ── Promo codes ────────────────────────────────────────────────────────
+    var PROMO_CODES = {
+        'SAVE10':  { type:'pct',  value:10, label:'10% off' },
+        'SAVE20':  { type:'pct',  value:20, label:'20% off' },
+        'WELCOME': { type:'flat', value:15, label:'ƒ15 off' },
+        'STUDENT': { type:'pct',  value:5,  label:'5% student discount' }
+    };
+    var activePromo = null;
+
+    function togglePromoInput() {
+        var wrap = document.getElementById('promoInputWrap');
+        if (!wrap) return;
+        var showing = wrap.style.display !== 'none';
+        wrap.style.display = showing ? 'none' : '';
+        var btn = document.getElementById('promoToggleBtn');
+        if (btn) btn.textContent = showing ? '🏷️ Have a promo code?' : '🏷️ Hide promo code';
+    }
+
+    function applyPromoCode() {
+        var code = ((document.getElementById('promoCodeInput') || {}).value || '').trim().toUpperCase();
+        var msgEl = document.getElementById('promoMsg');
+        var promo = PROMO_CODES[code];
+        if (!promo) {
+            if (msgEl) { msgEl.style.display=''; msgEl.style.color='#ef4444'; msgEl.textContent='❌ Invalid code. Try SAVE10, SAVE20, or WELCOME.'; }
+            return;
+        }
+        activePromo = { code: code, type: promo.type, value: promo.value, label: promo.label };
+        if (msgEl) { msgEl.style.display=''; msgEl.style.color='#10b981'; msgEl.textContent='✓ Code "' + code + '" applied — ' + promo.label + '!'; }
+        updateCartWithPromo();
+        if (typeof showNotification === 'function') showNotification('Promo "' + code + '" applied! ' + promo.label, 'success');
+    }
+
+    function updateCartWithPromo() {
+        var rawTotal = (typeof cart !== 'undefined' ? cart : []).reduce(function(s,i){ return s+i.price; }, 0);
+        var discount = 0;
+        if (activePromo) {
+            if (activePromo.type === 'pct')  discount = rawTotal * (activePromo.value / 100);
+            if (activePromo.type === 'flat') discount = Math.min(activePromo.value, rawTotal);
+        }
+        var finalTotal = Math.max(0, rawTotal - discount);
+        var totalEl = document.getElementById('cartTotal');
+        if (totalEl) totalEl.textContent = 'ƒ' + finalTotal.toFixed(2);
+        var discRow = document.getElementById('promoDiscountRow');
+        var discLbl = document.getElementById('promoDiscountLabel');
+        var discAmt = document.getElementById('promoDiscountAmt');
+        if (activePromo && discount > 0) {
+            if (discRow) discRow.style.display = 'flex';
+            if (discLbl) discLbl.textContent = 'Promo: ' + activePromo.code;
+            if (discAmt) discAmt.textContent = '−ƒ' + discount.toFixed(2);
+        } else {
+            if (discRow) discRow.style.display = 'none';
+        }
+    }
+
+    // ── Wishlist quick panel ──────────────────────────────────────────────
+    function toggleWishlistPanel(forceOpen) {
+        var panel = document.getElementById('wishlistQuickPanel');
+        if (!panel) return;
+        var isVisible = panel.style.display !== 'none';
+        var show = (forceOpen !== undefined) ? forceOpen : !isVisible;
+        if (show) {
+            renderWishlistPanel();
+            panel.style.display = '';
+            panel.scrollIntoView({ behavior:'smooth', block:'nearest' });
+            var infoEl = document.getElementById('wishlistCountInfo');
+            if (infoEl) infoEl.innerHTML = '♥ <span id="wishlistCount">' + (document.getElementById('wishlistCount')||{textContent:0}).textContent + '</span> saved ↑';
+        } else {
+            panel.style.display = 'none';
+            var infoEl2 = document.getElementById('wishlistCountInfo');
+            if (infoEl2) { var cnt = document.getElementById('wishlistCount'); infoEl2.innerHTML = '♥ <span id="wishlistCount">' + (cnt ? cnt.textContent : 0) + '</span> saved ↓'; }
+        }
+    }
+
+    function renderWishlistPanel() {
+        var saved  = JSON.parse(localStorage.getItem('digifinwiz_wishlist') || '{}');
+        var names  = Object.keys(saved);
+        var grid   = document.getElementById('wishlistPanelGrid');
+        var cntEl  = document.getElementById('wishlistPanelCount');
+        if (cntEl) cntEl.textContent = names.length;
+        if (!grid) return;
+        if (names.length === 0) { grid.innerHTML = '<p style="font-size:0.82rem;color:#94a3b8;padding:0.5rem 0">Your wishlist is empty.</p>'; return; }
+        // Find product data from DOM cards
+        var productData = {};
+        document.querySelectorAll('.product-card').forEach(function(c) {
+            var n = c.dataset.name || '';
+            if (n) productData[n] = { price: c.dataset.price || '0', addFn: (c.querySelector('.btn.btn-primary')||{}).getAttribute('onclick') || '' };
+        });
+        grid.innerHTML = names.map(function(n) {
+            var pd = productData[n] || {};
+            var price = parseFloat(pd.price || 0);
+            var safeAdd = (pd.addFn || '').replace(/"/g,'&quot;');
+            return '<div class="wishlist-item">' +
+                '<div class="wishlist-item-info">' +
+                '<div class="wishlist-item-name" title="' + escHE(n) + '">' + escHE(n) + '</div>' +
+                '<div class="wishlist-item-price">' + (price > 0 ? 'ƒ'+price.toFixed(2) : '—') + '</div>' +
+                '</div>' +
+                (pd.addFn ? '<button class="wishlist-item-add" onclick="' + safeAdd + ';renderWishlistPanel()">+ Cart</button>' : '') +
+                '</div>';
+        }).join('');
+    }
+
+    // ── Stock level chips ──────────────────────────────────────────────────
+    function injectStockChips() {
+        document.querySelectorAll('.product-card').forEach(function(card) {
+            var imgDiv = card.querySelector('.product-image');
+            if (!imgDiv || imgDiv.querySelector('.stock-chip')) return;
+            imgDiv.style.position = 'relative';
+            var name = card.dataset.name || '';
+            // Deterministic hash: same name always shows same "stock"
+            var h = 5381;
+            for (var i = 0; i < name.length; i++) h = ((h * 33) ^ name.charCodeAt(i)) & 0xFFFFFF;
+            var stock = (Math.abs(h) % 11) + 2; // 2–12
+            var chip  = document.createElement('span');
+            chip.className = 'stock-chip ' + (stock <= 3 ? 'low' : stock <= 6 ? 'medium' : 'plenty');
+            chip.textContent = stock <= 3 ? 'Only ' + stock + ' left!' : stock <= 6 ? stock + ' left' : 'In stock';
+            imgDiv.appendChild(chip);
+        });
+    }
+
+    // ── Best Value badge ──────────────────────────────────────────────────
+    function updateBestValueBadge() {
+        var cards = document.querySelectorAll('.product-card');
+        var best = null; var bestScore = 0;
+        cards.forEach(function(c) {
+            var price  = parseFloat(c.dataset.price  || 0);
+            var rating = parseFloat(c.dataset.rating || 0);
+            if (price > 0 && rating > 0) {
+                var score = rating / price;
+                if (score > bestScore) { bestScore = score; best = c; }
+            }
+            var old = c.querySelector('.best-value-badge');
+            if (old) old.remove();
+        });
+        if (best) {
+            var badge = document.createElement('span');
+            badge.className = 'best-value-badge';
+            badge.style.cssText = 'position:absolute;top:0.4rem;left:0.4rem;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;font-size:0.6rem;font-weight:800;padding:0.2rem 0.45rem;border-radius:6px;text-transform:uppercase;letter-spacing:0.04em;pointer-events:none;z-index:5';
+            badge.textContent = '⭐ Best Value';
+            var imgDiv = best.querySelector('.product-image');
+            if (imgDiv) { imgDiv.style.position = 'relative'; imgDiv.appendChild(badge); }
+        }
+    }
+    </script>
+</body>
+</html>

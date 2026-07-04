@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InStyl - Address Book</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="shopping-styles.css">
+    <script src="auth.js"></script>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">Digifinwiz</div>
+            <button class="nav-toggle" aria-label="Toggle navigation"><span></span><span></span><span></span></button>
+            <ul class="nav-menu">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="tutorials.html">Tutorials</a></li>
+                <li><a href="challenges.html">Challenges</a></li>
+                <li><a href="about.html">About Us</a></li>
+                <li><a href="messages.html">Messages</a></li>
+                <li><a href="profile.html">Profile</a></li>
+                <li><a href="ecommerce.html" class="active">Store</a></li>
+            </ul>
+        </div>
+    </nav>
+    <header class="shop-header">
+        <div class="shop-container">
+            <div class="shop-logo">InStyl.</div>
+            <nav class="shop-nav">
+                <a href="shop-all.html">Shop All</a>
+                <a href="shop-all.html">On Sale</a>
+                <a href="shop-all.html">Women</a>
+                <a href="shop-all.html">Men</a>
+                <a href="shop-all.html">Outdoors</a>
+                <a href="shop-all.html">Cooking</a>
+            </nav>
+            <div class="shop-header-right">
+                <div class="shop-search-box"><input type="text" placeholder="Search..."></div>
+                <div class="shop-icons">
+                    <button class="shop-icon-btn home" onclick="window.location.href='shop-account.html'">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+                    </button>
+                    <button class="shop-icon-btn user"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg></button>
+                    <button class="shop-icon-btn bookmark" onclick="window.location.href='shop-saved-items.html'">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
+                    </button>
+                    <button class="shop-icon-btn cart"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg></button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="game-progress-bar">
+        <div class="shop-container">
+            <div class="progress-content">
+                <div class="progress-left">
+                    <span class="progress-label">GAME PROGRESS</span>
+                    <span class="level-info">Level <strong>2/50</strong></span>
+                </div>
+                <div class="progress-bar-container"><div class="progress-bar" style="width: 40%"></div></div>
+                <span class="progress-text">40% completed</span>
+                <div class="progress-stats">
+                    <div class="stat"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg><span>1400 XP</span></div>
+                    <div class="stat coins"><div class="coin-icon">&#402;</div><span>3400</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="shop-main-content">
+        <div class="shop-container">
+            <aside class="shop-sidebar">
+                <nav class="shop-sidebar-nav">
+                    <a href="shop-account.html" class="shop-nav-item">Account Summary</a>
+                    <a href="shop-profile.html" class="shop-nav-item">Profile</a>
+                    <a href="shop-change-password.html" class="shop-nav-item">Change Password</a>
+                    <a href="shop-address-book.html" class="shop-nav-item active">Address Book</a>
+                    <a href="shop-order-history.html" class="shop-nav-item">Order History</a>
+                    <a href="shop-order-status.html" class="shop-nav-item">Order Status</a>
+                    <a href="shop-wallet.html" class="shop-nav-item">Wallet</a>
+                    <a href="shop-saved-items.html" class="shop-nav-item">Saved Items</a>
+                    <a href="ecommerce.html" class="shop-nav-item back-link">&#8592; Back to Store</a>
+                </nav>
+            </aside>
+
+            <main class="shop-content-area">
+                <div class="shop-page-header"><h1>Address Book</h1></div>
+
+                <div class="address-book-header">
+                    <button class="btn btn-primary" onclick="showAddressForm()">+ Add New Address</button>
+                </div>
+
+                <div id="addressFormContainer"></div>
+                <div class="address-list" id="addressList">
+                    <p style="color:#64748b;padding:20px 0;">Loading addresses...</p>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="db.js"></script>
+    <script src="shop-bridge.js"></script>
+    <script src="shopping-script.js"></script>
+    <script>
+    var _addresses = [];
+    var _editingId = null;
+
+    function _addrId() { return 'addr_' + Date.now() + '_' + Math.random().toString(36).slice(2,6); }
+
+    function _escH(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    function renderAddresses() {
+        var el = document.getElementById('addressList');
+        if (!el) return;
+        if (_addresses.length === 0) {
+            el.innerHTML = '<p style="color:#64748b;padding:20px 0;">No addresses saved yet. Click &ldquo;+ Add New Address&rdquo; to get started.</p>';
+            return;
+        }
+        el.innerHTML = _addresses.map(function(addr) {
+            return '<div class="address-card' + (addr.isDefault ? ' default' : '') + '">' +
+                '<div class="address-card-header">' +
+                (addr.isDefault
+                    ? '<span class="default-badge">Default</span>'
+                    : '<button class="btn-link" onclick="setDefaultAddress(' + JSON.stringify(addr.id) + ')">Set as Default</button>') +
+                '<div class="address-actions">' +
+                '<button class="btn-icon" title="Edit" onclick="showAddressForm(' + JSON.stringify(addr.id) + ')">' +
+                '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>' +
+                '<button class="btn-icon" title="Delete" onclick="deleteAddress(' + JSON.stringify(addr.id) + ')">' +
+                '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></button>' +
+                '</div></div>' +
+                '<div class="address-card-body">' +
+                '<h3>' + _escH(addr.name) + '</h3>' +
+                '<p>' + _escH(addr.street) + '</p>' +
+                '<p>' + _escH(addr.city) + (addr.state ? ', ' + _escH(addr.state) : '') + ' ' + _escH(addr.zip) + '</p>' +
+                (addr.country ? '<p>' + _escH(addr.country) + '</p>' : '') +
+                (addr.phone   ? '<p class="address-phone">' + _escH(addr.phone) + '</p>' : '') +
+                '</div></div>';
+        }).join('');
+    }
+
+    function showAddressForm(id) {
+        var addr = id ? _addresses.find(function(a) { return a.id === id; }) : null;
+        _editingId = addr ? addr.id : null;
+        var fc = document.getElementById('addressFormContainer');
+        if (!fc) return;
+        fc.innerHTML =
+            '<div class="form-container" style="margin-bottom:24px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:24px">' +
+            '<h3 style="margin:0 0 16px;font-size:1rem;font-weight:600">' + (addr ? 'Edit' : 'Add New') + ' Address</h3>' +
+            '<div class="form-row">' +
+            '<div class="form-group"><label>Full Name</label><input type="text" id="af_name" value="' + _escH(addr ? addr.name : '') + '" placeholder="Full name" required></div>' +
+            '<div class="form-group"><label>Phone</label><input type="tel" id="af_phone" value="' + _escH(addr ? addr.phone : '') + '" placeholder="(555) 555-5555"></div>' +
+            '</div>' +
+            '<div class="form-group"><label>Street Address</label><input type="text" id="af_street" value="' + _escH(addr ? addr.street : '') + '" placeholder="123 Main St" required></div>' +
+            '<div class="form-row">' +
+            '<div class="form-group"><label>City</label><input type="text" id="af_city" value="' + _escH(addr ? addr.city : '') + '" placeholder="City" required></div>' +
+            '<div class="form-group"><label>State</label><input type="text" id="af_state" value="' + _escH(addr ? addr.state : '') + '" placeholder="MA"></div>' +
+            '<div class="form-group"><label>ZIP</label><input type="text" id="af_zip" value="' + _escH(addr ? addr.zip : '') + '" placeholder="02101" required></div>' +
+            '</div>' +
+            '<div class="form-row">' +
+            '<div class="form-group"><label>Country</label><input type="text" id="af_country" value="' + _escH(addr ? (addr.country || 'United States') : 'United States') + '"></div>' +
+            ((!addr || !addr.isDefault) ? '<div class="form-group" style="display:flex;align-items:center;gap:8px;margin-top:24px"><input type="checkbox" id="af_default"' + (addr && addr.isDefault ? ' checked' : '') + '><label for="af_default" style="margin:0">Set as default</label></div>' : '') +
+            '</div>' +
+            '<div class="form-actions">' +
+            '<button type="button" class="btn btn-secondary" onclick="cancelAddressForm()">Cancel</button>' +
+            '<button type="button" class="btn btn-primary" onclick="saveAddressForm()">Save Address</button>' +
+            '</div></div>';
+        fc.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function cancelAddressForm() {
+        var fc = document.getElementById('addressFormContainer');
+        if (fc) fc.innerHTML = '';
+        _editingId = null;
+    }
+
+    function saveAddressForm() {
+        var name   = (document.getElementById('af_name')    || {}).value || '';
+        var street = (document.getElementById('af_street')  || {}).value || '';
+        var city   = (document.getElementById('af_city')    || {}).value || '';
+        var state  = (document.getElementById('af_state')   || {}).value || '';
+        var zip    = (document.getElementById('af_zip')     || {}).value || '';
+        var country= (document.getElementById('af_country') || {}).value || 'United States';
+        var phone  = (document.getElementById('af_phone')   || {}).value || '';
+        var setDef = !!(document.getElementById('af_default') || {}).checked;
+
+        if (!name.trim() || !street.trim() || !city.trim() || !zip.trim()) {
+            showShopToast('Please fill in required fields.', true);
+            return;
+        }
+
+        if (_editingId) {
+            _addresses = _addresses.map(function(a) {
+                return a.id === _editingId
+                    ? Object.assign({}, a, { name:name.trim(), street:street.trim(), city:city.trim(), state:state.trim(), zip:zip.trim(), country:country.trim(), phone:phone.trim() })
+                    : a;
+            });
+        } else {
+            var newAddr = { id: _addrId(), name:name.trim(), street:street.trim(), city:city.trim(), state:state.trim(), zip:zip.trim(), country:country.trim(), phone:phone.trim(), isDefault:false };
+            _addresses.push(newAddr);
+            if (setDef || _addresses.length === 1) setDef = true;
+            if (setDef) newAddr.isDefault = true;
+        }
+
+        if (setDef && !_editingId) {
+            _addresses = _addresses.map(function(a) {
+                return Object.assign({}, a, { isDefault: a.isDefault && a.id !== _addrId });
+            });
+            var last = _addresses[_addresses.length - 1];
+            if (last) {
+                _addresses = _addresses.map(function(a) { return Object.assign({}, a, { isDefault: a.id === last.id }); });
+            }
+        }
+
+        ShopBridge.saveAddresses(_addresses).then(function() {
+            cancelAddressForm();
+            renderAddresses();
+            showShopToast('Address saved!');
+        }).catch(function() {
+            showShopToast('Error saving address.', true);
+        });
+    }
+
+    function deleteAddress(id) {
+        if (!confirm('Delete this address?')) return;
+        var wasDefault = (_addresses.find(function(a) { return a.id === id; }) || {}).isDefault;
+        _addresses = _addresses.filter(function(a) { return a.id !== id; });
+        if (wasDefault && _addresses.length > 0) _addresses[0].isDefault = true;
+        ShopBridge.saveAddresses(_addresses).then(function() {
+            renderAddresses();
+            showShopToast('Address removed.');
+        });
+    }
+
+    function setDefaultAddress(id) {
+        _addresses = _addresses.map(function(a) {
+            return Object.assign({}, a, { isDefault: a.id === id });
+        });
+        ShopBridge.saveAddresses(_addresses).then(function() {
+            renderAddresses();
+            showShopToast('Default address updated.');
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof ShopBridge === 'undefined') return;
+        ShopBridge.getAddresses().then(function(addresses) {
+            _addresses = addresses;
+            renderAddresses();
+        }).catch(function() {
+            document.getElementById('addressList').innerHTML =
+                '<p style="color:#ef4444;padding:20px 0;">Could not load addresses.</p>';
+        });
+    });
+    </script>
+</body>
+</html>

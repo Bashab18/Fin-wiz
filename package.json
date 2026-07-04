@@ -1,0 +1,17 @@
+{
+  "name": "test-1",
+  "version": "1.0.0",
+  "description": "1. Open login.html → login as admin / Admin1234 → lands on admin.html\r 2. Go to Users tab in admin sidebar to manage registrations\r 3. Participants register via register.html → admin approves → they can log in → land on index.html\r 4. Each participant has isolated balances, XP, transactions, and challenges\r 5. Logout button appears in navbar on every protected page",
+  "main": "admin.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}

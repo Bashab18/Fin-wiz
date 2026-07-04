@@ -1,0 +1,140 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digifinwiz - Login</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <h1 class="login-logo">Digifinwiz</h1>
+                <p>Welcome back! Please login to your account</p>
+            </div>
+
+            <form id="loginForm" class="login-form">
+                <div class="form-group">
+                    <label>Username or Email</label>
+                    <input type="text" class="form-input" id="loginUsername" placeholder="Enter your username or email" required autocomplete="username">
+                </div>
+
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" class="form-input" id="loginPassword" placeholder="Enter your password" required autocomplete="current-password">
+                </div>
+
+                <!-- Inline error message -->
+                <div id="loginError" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:8px;padding:0.75rem 1rem;font-size:0.875rem;margin-bottom:1rem"></div>
+
+                <div class="form-options">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="rememberMe"> Remember me
+                    </label>
+                    <a href="#" class="forgot-link">Forgot password?</a>
+                </div>
+
+                <button type="submit" id="loginBtn" class="btn btn-primary btn-block">Login</button>
+            </form>
+
+            <div class="login-footer" style="margin-top:1.5rem;text-align:center">
+                <p>Don't have an account? <a href="register.html" style="color:#6366f1;font-weight:600">Sign up here</a></p>
+            </div>
+
+            <!-- Dev hint -->
+            <div style="margin-top:1rem;padding:0.75rem;background:#f8fafc;border-radius:8px;font-size:0.78rem;color:#64748b;text-align:center;border:1px dashed #e2e8f0">
+                Default admin: <strong>admin</strong> / <strong>Admin1234</strong>
+            </div>
+        </div>
+
+        <div class="login-illustration">
+            <h2>Start Your Financial Journey</h2>
+            <p>Learn banking, manage finances, and earn rewards through our gamified platform</p>
+            <div class="illustration-features">
+                <div class="feature-point">✓ Interactive tutorials</div>
+                <div class="feature-point">✓ Gamified challenges</div>
+                <div class="feature-point">✓ Track your progress</div>
+                <div class="feature-point">✓ Earn badges &amp; rewards</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="auth.js"></script>
+    <script src="db.js"></script>
+    <script>
+        var loginError = document.getElementById('loginError');
+        var loginBtn   = document.getElementById('loginBtn');
+
+        function showError(msg) {
+            loginError.textContent = msg;
+            loginError.style.display = 'block';
+        }
+
+        function hideError() {
+            loginError.style.display = 'none';
+        }
+
+        // Initialise DB on page load (ensures default admin is seeded)
+        DigifinwizDB.init().catch(function(err) {
+            console.error('DB init error:', err);
+        });
+
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            hideError();
+
+            var usernameOrEmail = document.getElementById('loginUsername').value.trim();
+            var password        = document.getElementById('loginPassword').value;
+
+            if (!usernameOrEmail || !password) {
+                showError('Please enter your username/email and password.');
+                return;
+            }
+
+            loginBtn.disabled    = true;
+            loginBtn.textContent = 'Logging in...';
+
+            DigifinwizDB.authenticateUser(usernameOrEmail, password).then(function(result) {
+                if (!result.success) {
+                    loginBtn.disabled    = false;
+                    loginBtn.textContent = 'Login';
+                    switch (result.reason) {
+                        case 'not_found':
+                            showError('No account found with that username or email.');
+                            break;
+                        case 'wrong_password':
+                            showError('Incorrect password. Please try again.');
+                            break;
+                        case 'pending':
+                            showError('Your account is awaiting admin approval. Please check back later.');
+                            break;
+                        case 'rejected':
+                            showError('Your registration was not approved. Please contact your administrator.');
+                            break;
+                        default:
+                            showError('Login failed. Please try again.');
+                    }
+                    return;
+                }
+
+                // Success — set session and redirect
+                var remember = document.getElementById('rememberMe').checked;
+                DigifinwizAuth.setSession(result.user, remember);
+                DigifinwizDB.recordLastLogin(result.user.id).catch(function(){});
+
+                if (result.user.role === 'admin') {
+                    window.location.replace('admin.html');
+                } else {
+                    window.location.replace('index.html');
+                }
+            }).catch(function(err) {
+                console.error('Login error:', err);
+                loginBtn.disabled    = false;
+                loginBtn.textContent = 'Login';
+                showError('An error occurred. Please try again.');
+            });
+        });
+    </script>
+</body>
+</html>
