@@ -142,7 +142,9 @@ function payBill(billType, amount, accountNumber) {
                         checkingBalance:      chkBal,
                         savingsBalance:       savBal,
                         uniqueRecipients:     Object.keys(recipientSet).length,
-                        savingsTransferCount: savingsTxCount
+                        savingsTransferCount: savingsTxCount,
+                        lastRecipient:        null,
+                        lastRecipientAccount: null
                     });
                 }).then(function(result) {
                     var completed = result.completed || [];

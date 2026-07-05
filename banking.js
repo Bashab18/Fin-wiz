@@ -178,7 +178,9 @@ document.getElementById('transferForm').addEventListener('submit', function(e) {
                         checkingBalance:      chkBal,
                         savingsBalance:       savBal,
                         uniqueRecipients:     Object.keys(recipientSet).length,
-                        savingsTransferCount: savingsTxCount
+                        savingsTransferCount: savingsTxCount,
+                        lastRecipient:        recipientName,
+                        lastRecipientAccount: recipientAcct
                     });
                 }).then(function(result) {
                     var completed = result.completed || [];

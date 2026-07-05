@@ -428,14 +428,15 @@ document.addEventListener('DOMContentLoaded', function () {
         savings_balance:        'Savings ≥ ƒ{v}',
         unique_recipients:      'Recipients ≥ {v}',
         first_savings_transfer: 'First savings transfer',
-        savings_transfer_count: 'Savings transfers ≥ {v}'
+        savings_transfer_count: 'Savings transfers ≥ {v}',
+        transfer_to_beneficiary: 'Transfer to "{v}"'
     };
-    // Conditions that require a numeric threshold
+    // Conditions that require a threshold/target value
     const COND_NEEDS_VALUE = new Set([
         'transfer_amount', 'total_transferred', 'purchase_items', 'total_spent_ecom', 'payment_count',
         'transaction_count', 'reach_level', 'payment_amount', 'purchase_count', 'total_paid_bills',
         'total_xp_earned', 'florin_balance', 'checking_balance', 'savings_balance', 'unique_recipients',
-        'savings_transfer_count', 'custom'
+        'savings_transfer_count', 'transfer_to_beneficiary', 'custom'
     ]);
     const COND_VALUE_LABEL = {
         transfer_amount:   'Minimum florin amount (ƒ)',
@@ -454,6 +455,7 @@ document.addEventListener('DOMContentLoaded', function () {
         savings_balance:        'Minimum savings balance (ƒ)',
         unique_recipients:      'Number of unique recipients',
         savings_transfer_count: 'Number of transfers from Savings',
+        transfer_to_beneficiary: 'Beneficiary name or account number',
         custom:            'Comparison Value'
     };
 
@@ -479,7 +481,8 @@ document.addEventListener('DOMContentLoaded', function () {
         savings_balance:        'savings account balance is ≥ ƒ{v}',
         unique_recipients:      'the user has transferred to ≥ {v} unique recipients',
         first_savings_transfer: 'the user makes their first transfer from a Savings account',
-        savings_transfer_count: 'total transfers from Savings reaches {v}'
+        savings_transfer_count: 'total transfers from Savings reaches {v}',
+        transfer_to_beneficiary: 'the user transfers to "{v}" (by name or account number)'
     };
 
     // Fields a "custom" condition can compare — mirrors the server-side
@@ -529,13 +532,21 @@ document.addEventListener('DOMContentLoaded', function () {
         return fieldMeta.label + ' ' + opSymbol + ' ' + valStr;
     }
 
+    // Text-type conditions (e.g. a beneficiary name) show a placeholder
+    // instead of "0" when empty; numeric ones keep the old 0 fallback.
+    function condValueDisplay(condition, value) {
+        const meta = COND_META[condition] || COND_META.manual;
+        if (meta.inputType === 'text') return value || '…';
+        return value || 0;
+    }
+
     function condLabel(c) {
         let label;
         if (c.condition === 'custom') {
             label = 'Custom: ' + customClauseShort(c);
         } else {
             const tmpl = COND_LABELS[c.condition] || c.condition;
-            label = tmpl.replace('{v}', c.conditionValue || 0);
+            label = tmpl.replace('{v}', condValueDisplay(c.condition, c.conditionValue));
         }
         const extra = Array.isArray(c.extraConditions) ? c.extraConditions : [];
         if (extra.length > 0) {
@@ -553,7 +564,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const all     = [primary].concat(Array.isArray(c.extraConditions) ? c.extraConditions : []);
         const clauses = all.map(cc => cc.condition === 'custom'
             ? customClauseShort(cc)
-            : (COND_CLAUSE[cc.condition] || cc.condition).replace('{v}', cc.conditionValue || 0));
+            : (COND_CLAUSE[cc.condition] || cc.condition).replace('{v}', condValueDisplay(cc.condition, cc.conditionValue)));
         if (clauses.length === 1) return '🤖 Auto-completes when ' + clauses[0] + '.';
         const joiner = c.conditionLogic === 'any' ? ' OR ' : ' AND ';
         return '🤖 Auto-completes when ' + clauses.join(joiner) + '.';
@@ -582,12 +593,15 @@ document.addEventListener('DOMContentLoaded', function () {
         unique_recipients:      { category: 'banking', prefix: null, suffix: 'recipients', step: 1,    min: 1,    max: 999  },
         first_savings_transfer: { category: 'banking', prefix: null, suffix: null,          step: null, min: null, max: null },
         savings_transfer_count: { category: 'banking', prefix: null, suffix: 'transfers',  step: 1,    min: 1,    max: 999  },
+        transfer_to_beneficiary: { category: 'banking', prefix: null, suffix: null, step: null, min: null, max: null, inputType: 'text', placeholder: 'e.g. Bruce Lee or account number' },
         custom:             { category: null,         prefix: null, suffix: null,        step: 'any', min: 0,   max: null }
     };
 
     // Applies label/ƒ-prefix/unit-suffix/step/min/max for a condition onto an
     // arbitrary set of fields — shared by the primary condition and every
-    // dynamically-added extra-condition row.
+    // dynamically-added extra-condition row. Most conditions use a numeric
+    // threshold, but a few (e.g. "transfer to specific beneficiary") need a
+    // free-text target instead — meta.inputType drives which.
     function applyCondMetaToFields(condition, fields) {
         const meta     = COND_META[condition] || COND_META.manual;
         const needsVal = COND_NEEDS_VALUE.has(condition);
@@ -597,12 +611,31 @@ document.addEventListener('DOMContentLoaded', function () {
             if (fields.prefixEl) { fields.prefixEl.style.display = meta.prefix ? '' : 'none'; fields.prefixEl.textContent = meta.prefix || ''; }
             if (fields.suffixEl) { fields.suffixEl.style.display = meta.suffix ? '' : 'none'; fields.suffixEl.textContent = meta.suffix || ''; }
             if (fields.input) {
-                fields.input.step = meta.step != null ? String(meta.step) : 'any';
-                fields.input.min  = meta.min  != null ? String(meta.min)  : '0';
-                if (meta.max != null) fields.input.max = String(meta.max); else fields.input.removeAttribute('max');
+                const newType = meta.inputType || 'number';
+                if (fields.input.type !== newType) fields.input.value = '';
+                fields.input.type = newType;
+                if (newType === 'text') {
+                    fields.input.placeholder = meta.placeholder || 'Enter value';
+                    fields.input.removeAttribute('step');
+                    fields.input.removeAttribute('min');
+                    fields.input.removeAttribute('max');
+                } else {
+                    fields.input.placeholder = meta.placeholder || '0';
+                    fields.input.step = meta.step != null ? String(meta.step) : 'any';
+                    fields.input.min  = meta.min  != null ? String(meta.min)  : '0';
+                    if (meta.max != null) fields.input.max = String(meta.max); else fields.input.removeAttribute('max');
+                }
             }
         }
         return meta;
+    }
+
+    // Reads the threshold input as either a trimmed string (for text-type
+    // conditions like transfer_to_beneficiary) or a parsed number.
+    function parseCondValue(condition, rawValue) {
+        const meta = COND_META[condition] || COND_META.manual;
+        if (meta.inputType === 'text') return String(rawValue || '').trim();
+        return parseFloat(rawValue) || 0;
     }
 
     // Keeps the primary threshold input in sync with the chosen Completion
@@ -690,6 +723,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 '<option value="unique_recipients">Transferred to ≥ N unique recipients</option>' +
                 '<option value="first_savings_transfer">First transfer from Savings</option>' +
                 '<option value="savings_transfer_count">Transfers from Savings ≥ N</option>' +
+                '<option value="transfer_to_beneficiary">Transfer to specific beneficiary</option>' +
             '</optgroup>' +
             '<optgroup label="🛒 Ecommerce">' +
                 '<option value="first_purchase">First ecommerce purchase</option>' +
@@ -842,7 +876,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const input  = row.querySelector('.chal-extra-cond-input');
             const data = {
                 condition:      select.value,
-                conditionValue: COND_NEEDS_VALUE.has(select.value) ? (parseFloat(input.value) || 0) : null
+                conditionValue: COND_NEEDS_VALUE.has(select.value) ? parseCondValue(select.value, input.value) : null
             };
             if (select.value === 'custom') {
                 data.customField    = row.querySelector('.chal-extra-custom-field').value;
@@ -1149,7 +1183,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const points   = parseInt(getVal('chal-points'))    || 0;
         const florins  = parseFloat(getVal('chal-florins')) || 0;
         const cond     = getVal('chal-condition') || 'manual';
-        const condVal  = parseFloat(getVal('chal-condval')) || 0;
+        const condVal  = parseCondValue(cond, getVal('chal-condval'));
 
         const catEl = document.getElementById('chal-preview-cat');
         catEl.textContent = CAT_LABELS[category] || category;
@@ -1207,7 +1241,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const points         = parseInt(getVal('chal-points'))    || 0;
         const florins        = parseFloat(getVal('chal-florins')) || 0;
         const condition      = getVal('chal-condition') || 'manual';
-        const conditionValue = COND_NEEDS_VALUE.has(condition) ? (parseFloat(getVal('chal-condval')) || 0) : null;
+        const conditionValue = COND_NEEDS_VALUE.has(condition) ? parseCondValue(condition, getVal('chal-condval')) : null;
         const customField    = condition === 'custom' ? getVal('chal-custom-field')    : null;
         const customOperator = condition === 'custom' ? getVal('chal-custom-operator') : null;
         // Manual challenges can't combine with automatic extra conditions.
@@ -1216,6 +1250,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (!title) { showToast('Title is required.', 'error'); return; }
         if (!desc)  { showToast('Description is required.', 'error'); return; }
+        if ((COND_META[condition] || {}).inputType === 'text' && !conditionValue) {
+            showToast('Please enter a beneficiary name or account number.', 'error');
+            return;
+        }
 
         const payload = { title, description: desc, category, active, points, florins, condition, conditionValue, customField, customOperator, extraConditions, conditionLogic };
 

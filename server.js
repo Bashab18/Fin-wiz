@@ -227,6 +227,13 @@ function evaluateCondition(cc, context) {
         case 'unique_recipients':       return context.uniqueRecipients     >= val;
         case 'first_savings_transfer':  return context.savingsTransferCount >= 1;
         case 'savings_transfer_count':  return context.savingsTransferCount >= val;
+        case 'transfer_to_beneficiary': {
+            const target = String(cc.conditionValue || '').toLowerCase().trim();
+            if (!target) return false;
+            const recipient = String(context.lastRecipient        || '').toLowerCase().trim();
+            const account   = String(context.lastRecipientAccount || '').toLowerCase().trim();
+            return recipient === target || account === target;
+        }
         case 'custom':
             if (!CUSTOM_FIELD_WHITELIST.has(cc.customField)) return false;
             return compareOp(Number(context[cc.customField]) || 0, cc.customOperator, val);
