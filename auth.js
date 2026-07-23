@@ -65,8 +65,11 @@ const DigifinwizAuth = (() => {
     // ── Auth guard ───────────────────────────────────────────────────────
     // Runs synchronously on script load.
     function runGuard() {
-        const page = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
-        const publicPages = ['login.html', 'register.html'];
+        // Netlify's Pretty URLs (and hand-typed URLs) can serve these pages
+        // without their .html extension, so match on the name alone.
+        const rawPage = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
+        const page    = rawPage.replace(/\.html$/, '');
+        const publicPages = ['login', 'register'];
         const isPublicPage = publicPages.indexOf(page) !== -1;
 
         if (isPublicPage) {
@@ -86,7 +89,7 @@ const DigifinwizAuth = (() => {
         }
 
         // Admin-only pages
-        if (page === 'admin.html' && s.role !== 'admin') {
+        if (page === 'admin' && s.role !== 'admin') {
             window.location.replace('index.html');
             return;
         }
