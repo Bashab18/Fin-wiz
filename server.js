@@ -13,7 +13,10 @@ const DATA_DIR = path.join(__dirname, 'data');
 // Origin of the static frontend when it's hosted separately (e.g. on Netlify)
 // from this API (e.g. on Render). '*' is fine here since auth uses custom
 // headers rather than cookies, so no credentials are ever sent cross-origin.
+// Any *.netlify.app origin is always allowed too, so a Netlify site rename
+// or a branch/preview deploy doesn't silently break sign up again.
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
+const NETLIFY_ORIGIN_RE = /^https:\/\/[a-z0-9-]+\.netlify\.app$/;
 
 // ── Storage backend ────────────────────────────────────────────────────────────
 // If DATABASE_URL is set (e.g. a Render Postgres instance), every named
@@ -317,7 +320,12 @@ async function checkAndCompleteChallengesForUser(userId, context) {
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors({
-    origin:      ALLOWED_ORIGIN,
+    origin: (origin, callback) => {
+        if (!origin || ALLOWED_ORIGIN === '*' || origin === ALLOWED_ORIGIN || NETLIFY_ORIGIN_RE.test(origin)) {
+            return callback(null, true);
+        }
+        callback(new Error('Not allowed by CORS'));
+    },
     methods:     ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'X-User-Id', 'X-User-Role']
 }));
