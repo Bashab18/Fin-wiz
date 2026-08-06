@@ -1,10 +1,14 @@
 // config.js — single place to point the frontend at the backend API.
 //
-// Same-origin deploy (everything on one host, e.g. Render, or local dev):
-// requests go to the current origin.
-// Split deploy (static frontend on Netlify, API on Render): only the
-// deployed Netlify frontend routes to the separate Render backend — local
-// dev and same-origin deploys must never be forced through it.
-window.API_BASE_URL = (window.location.hostname === 'loquacious-pie-f7ae65.netlify.app')
-    ? 'https://fin-wiz.onrender.com'
-    : '';
+// Detects environment instead of hardcoding a specific frontend hostname,
+// so this keeps working no matter what the Netlify site is named/renamed to:
+//   - localhost / 127.0.0.1 (local dev)      -> same-origin (relative URLs)
+//   - *.onrender.com (same-origin Render deploy) -> same-origin (relative URLs)
+//   - anything else (Netlify, custom domain, ...) -> the deployed Render API
+var RENDER_API_URL = 'https://fin-wiz.onrender.com';
+window.API_BASE_URL = (function () {
+    var host = window.location.hostname;
+    var isLocal  = host === 'localhost' || host === '127.0.0.1';
+    var isRender = host.endsWith('.onrender.com');
+    return (isLocal || isRender) ? '' : RENDER_API_URL;
+})();
