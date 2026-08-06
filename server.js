@@ -24,35 +24,69 @@ const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
 // readJSON(name) / writeJSON(name, data) contract the rest of this file uses.
 const DATABASE_URL = process.env.DATABASE_URL;
 const pool = DATABASE_URL
-    ? new Pool({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } })
+    ? new Pool({
+        connectionString: DATABASE_URL,
+        ssl: { rejectUnauthorized: false },
+        // Without this, an unreachable database (expired free-tier instance,
+        // network partition, etc.) hangs the connection attempt forever —
+        // and since initStorage() awaits it before app.listen(), the whole
+        // server never comes up. Fail fast instead so boot can fall back.
+        connectionTimeoutMillis: 8000
+    })
     : null;
+// True once Postgres is confirmed reachable; flipped false (permanently
+// falling back to local JSON files) if it never connects or later errors out.
+let dbUsable = !!pool;
 
-const STORE_NAMES = ['users', 'transactions', 'payments', 'purchases', 'challenges', 'messages', 'cart', 'bills'];
+if (pool) {
+    pool.on('error', err => {
+        console.error('DigifinwizDB: unexpected Postgres pool error, falling back to local JSON files:', err.message);
+        dbUsable = false;
+    });
+}
 
-async function initStorage() {
-    if (pool) {
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS app_store (
-                name TEXT PRIMARY KEY,
-                data JSONB NOT NULL DEFAULT '[]'::jsonb
-            )
-        `);
-        console.log('DigifinwizDB: connected to Postgres.');
-        return;
-    }
-    // Local JSON-file fallback — ensure data directory + files exist.
+function ensureLocalDataFiles() {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
     STORE_NAMES.forEach(name => {
         const fp = path.join(DATA_DIR, name + '.json');
         if (!fs.existsSync(fp)) fs.writeFileSync(fp, '[]', 'utf8');
     });
-    console.log('DigifinwizDB: no DATABASE_URL set — using local JSON files in data/.');
+}
+
+const STORE_NAMES = ['users', 'transactions', 'payments', 'purchases', 'challenges', 'messages', 'cart', 'bills'];
+
+async function initStorage() {
+    if (pool) {
+        try {
+            await pool.query(`
+                CREATE TABLE IF NOT EXISTS app_store (
+                    name TEXT PRIMARY KEY,
+                    data JSONB NOT NULL DEFAULT '[]'::jsonb
+                )
+            `);
+            dbUsable = true;
+            console.log('DigifinwizDB: connected to Postgres.');
+            return;
+        } catch (err) {
+            dbUsable = false;
+            console.error('DigifinwizDB: Postgres unreachable at boot, falling back to local JSON files:', err.message);
+        }
+    }
+    // Local JSON-file fallback — ensure data directory + files exist.
+    ensureLocalDataFiles();
+    if (!pool) console.log('DigifinwizDB: no DATABASE_URL set — using local JSON files in data/.');
 }
 
 async function readJSON(name) {
-    if (pool) {
-        const { rows } = await pool.query('SELECT data FROM app_store WHERE name = $1', [name]);
-        return rows.length ? rows[0].data : [];
+    if (pool && dbUsable) {
+        try {
+            const { rows } = await pool.query('SELECT data FROM app_store WHERE name = $1', [name]);
+            return rows.length ? rows[0].data : [];
+        } catch (err) {
+            dbUsable = false;
+            ensureLocalDataFiles();
+            console.error('DigifinwizDB: Postgres read failed, falling back to local JSON files:', err.message);
+        }
     }
     try {
         const raw = fs.readFileSync(path.join(DATA_DIR, name + '.json'), 'utf8');
@@ -63,13 +97,19 @@ async function readJSON(name) {
 }
 
 async function writeJSON(name, data) {
-    if (pool) {
-        await pool.query(
-            `INSERT INTO app_store (name, data) VALUES ($1, $2::jsonb)
-             ON CONFLICT (name) DO UPDATE SET data = EXCLUDED.data`,
-            [name, JSON.stringify(data)]
-        );
-        return;
+    if (pool && dbUsable) {
+        try {
+            await pool.query(
+                `INSERT INTO app_store (name, data) VALUES ($1, $2::jsonb)
+                 ON CONFLICT (name) DO UPDATE SET data = EXCLUDED.data`,
+                [name, JSON.stringify(data)]
+            );
+            return;
+        } catch (err) {
+            dbUsable = false;
+            ensureLocalDataFiles();
+            console.error('DigifinwizDB: Postgres write failed, falling back to local JSON files:', err.message);
+        }
     }
     fs.writeFileSync(path.join(DATA_DIR, name + '.json'), JSON.stringify(data, null, 2), 'utf8');
 }
