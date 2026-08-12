@@ -405,6 +405,13 @@
 
     /* ── HTML escape ────────────────────────────────────────────────── */
     function escHB(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }
+    // Safe to splice into a single-quoted HTML attribute: JSON.stringify() a value for use as a JS
+    // argument literal, then neutralize characters that could break out of the attribute or get
+    // decoded as an HTML entity before the JS parser ever sees them.
+    function jsAttrB(v) {
+        return JSON.stringify(v)
+            .replace(/&/g, '\\u0026').replace(/</g, '\\u003C').replace(/>/g, '\\u003E').replace(/'/g, '\\u0027');
+    }
 
     /* ── Quick-amount presets ───────────────────────────────────────── */
     function setAmount(val) {
@@ -502,9 +509,7 @@
                 var initials = r.name.trim().split(/\s+/).slice(0,2).map(function(w){ return (w[0]||'').toUpperCase(); }).join('') || '?';
                 var grad     = CUST_RECIP_GRADS[i % CUST_RECIP_GRADS.length];
                 var masked   = '****' + String(r.account).slice(-4);
-                var safeName = r.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-                var safeAcct = r.account.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-                return '<div class="saved-recip-card" onclick="selectRecipient(\'' + safeName + '\',\'' + safeAcct + '\')">' +
+                return "<div class=\"saved-recip-card\" onclick='selectRecipient(" + jsAttrB(r.name) + ',' + jsAttrB(r.account) + ")'>" +
                     '<div style="width:30px;height:30px;border-radius:50%;background:' + grad + ';display:flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:700;color:#fff;flex-shrink:0">' + initials + '</div>' +
                     '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.82rem">' + escHB(r.name) + '</div>' +
                     '<div style="font-size:0.72rem;color:#94a3b8">' + masked + '</div></div>' +
@@ -534,8 +539,15 @@
 
     /* ── Today's transfer stats ─────────────────────────────────────── */
     function loadTodayStats(txs) {
-        var todayStr  = new Date().toLocaleDateString();
-        var todayTxs  = txs.filter(function(t){ return t.date === todayStr; });
+        // Compare against t.timestamp (a reliable epoch value the server always
+        // stamps), not t.date — that's a toLocaleDateString() string formatted
+        // in whatever locale was active when the transfer was made, so
+        // comparing it against a freshly-formatted string breaks the moment
+        // the browser's locale differs from that (or the transfer was made on
+        // a different device/locale).
+        var now       = new Date();
+        var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        var todayTxs  = txs.filter(function(t){ return (t.timestamp || 0) >= todayStart; });
         var todayAmt  = todayTxs.reduce(function(s,t){ return s+(t.amount||0); }, 0);
         var barEl     = document.getElementById('txTodayBar');
         var countEl   = document.getElementById('todayTxCount');
@@ -561,10 +573,14 @@
         var today = new Date(); today.setHours(0,0,0,0);
         for (var d = 6; d >= 0; d--) {
             var dt = new Date(today); dt.setDate(today.getDate() - d);
-            days.push({ label: d === 0 ? 'Today' : dt.toLocaleDateString('en-US',{weekday:'short'}), dateStr: dt.toLocaleDateString(), total: 0, isToday: d === 0 });
+            var dayStart = dt.getTime();
+            days.push({ label: d === 0 ? 'Today' : dt.toLocaleDateString('en-US',{weekday:'short'}), start: dayStart, end: dayStart + 86400000, total: 0, isToday: d === 0 });
         }
+        // Bucket by t.timestamp, not a locale-formatted date-string match — see
+        // loadTodayStats for why string comparison breaks across locales/devices.
         txs.forEach(function(t) {
-            var match = days.find(function(dd){ return dd.dateStr === t.date; });
+            var ts = t.timestamp || 0;
+            var match = days.find(function(dd){ return ts >= dd.start && ts < dd.end; });
             if (match) match.total += (t.amount || 0);
         });
         var maxAmt = Math.max.apply(null, days.map(function(d){ return d.total; }));
@@ -703,7 +719,7 @@
             if (txs.length>0) {
                 var latest=txs[0];
                 var initials=(latest.recipient||'?').trim().split(' ').map(function(w){ return w[0]||''; }).slice(0,2).join('').toUpperCase()||'?';
-                set('statLastRecipient','Last transfer → '+escHB(latest.recipient||'—'));
+                set('statLastRecipient','Last transfer → '+(latest.recipient||'—'));
                 set('statLastDate',(latest.date||'')+(latest.fromAccount?' · from '+latest.fromAccount:'')+(latest.description?' · '+latest.description:''));
                 set('statLastAmount','-'+fmt(latest.amount));
                 set('statLastXp','+'+(latest.pointsEarned||0)+' XP earned');
@@ -756,7 +772,7 @@
             if (!userData) return;
             var level  = userData.level || 1;
             var points = userData.points || 0;
-            var pToNext = userData.pointsToNextLevel || 1000;
+            var pToNext = userData.pointsToNextLevel != null ? userData.pointsToNextLevel : 1000;
             var coins  = userData.coins || 0;
             var earned = Math.max(0, 1000 - pToNext);
             var pct    = Math.min(100, Math.round((earned / 1000) * 100));

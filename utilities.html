@@ -296,6 +296,13 @@
     function switchUtilTab(name) { switchUtilPageTab(name === 'bills' ? 'bills' : name === 'history' ? 'history' : name); }
 
     function escHU(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }
+    // Safe to splice into a single-quoted HTML attribute: JSON.stringify() a value for use as a JS
+    // argument literal, then neutralize any characters that could break out of the attribute or be
+    // decoded as an HTML entity before the JS parser ever sees them.
+    function jsAttr(v) {
+        return JSON.stringify(v)
+            .replace(/&/g, '\\u0026').replace(/</g, '\\u003C').replace(/>/g, '\\u003E').replace(/'/g, '\\u0027');
+    }
 
     var BILL_TYPES      = ['Electricity','Water','Internet','Property Tax','Phone','Gas'];
     var BILL_ICONS_PAGE = { Electricity:'⚡', Water:'💧', Internet:'🌐', 'Property Tax':'🏠', Phone:'📱', Gas:'🔥' };
@@ -369,7 +376,7 @@
                             '<span class="autopay-label">🔄 Auto-pay</span>' +
                             '<label class="autopay-switch">' +
                                 '<input type="checkbox" id="autopay-' + escHU(safeId) + '" ' + (isAutopay ? 'checked' : '') +
-                                    ' onchange="toggleAutopay(' + JSON.stringify(b.name) + ')">' +
+                                    " onchange='toggleAutopay(" + jsAttr(b.name) + ")'>" +
                                 '<span class="autopay-slider"></span>' +
                             '</label>' +
                         '</div>';
@@ -378,9 +385,9 @@
                     var savedNote   = notes[b.name] || '';
                     var noteHtml    =
                         '<div class="bill-note-wrap">' +
-                            '<button id="billNote-btn-' + escHU(safeId) + '" class="bill-note-btn" onclick="toggleBillNote(' + JSON.stringify(b.name) + ')">📝 ' + (savedNote ? 'Edit note' : 'Add note') + '</button>' +
+                            '<button id="billNote-btn-' + escHU(safeId) + "\" class=\"bill-note-btn\" onclick='toggleBillNote(" + jsAttr(b.name) + ")'>📝 " + (savedNote ? 'Edit note' : 'Add note') + '</button>' +
                             '<textarea id="billNote-area-' + escHU(safeId) + '" class="bill-note-area" rows="2" placeholder="Personal reminder…" ' +
-                                'onblur="saveBillNote(' + JSON.stringify(b.name) + ')">' + '</textarea>' +
+                                "onblur='saveBillNote(" + jsAttr(b.name) + ")'>" + '</textarea>' +
                             '<div id="billNote-disp-' + escHU(safeId) + '" class="bill-note-display" style="' + (savedNote ? '' : 'display:none') + '">' + escHU(savedNote) + '</div>' +
                         '</div>';
                     // Savings estimator (auto-pay saves ~4%)
@@ -406,7 +413,7 @@
                             tip +
                             '<button class="btn btn-primary btn-block" id="payBtn-' + escHU(safeId) + '" ' +
                                 (isPaid ? 'disabled style="opacity:0.6"' : '') + ' ' +
-                                'onclick="payBill(' + JSON.stringify(b.name) + ',' + Number(b.amount) + ',' + JSON.stringify(b.accountNumber||'') + ')">' +
+                                "onclick='payBill(" + jsAttr(b.name) + ',' + Number(b.amount) + ',' + jsAttr(b.accountNumber||'') + ")'>" +
                                 (isPaid ? 'Paid This Month ✓' : 'Pay Now') +
                             '</button>' +
                             autopayRow +
@@ -574,7 +581,7 @@
         wrap.innerHTML = types.map(function(t) {
             var icon = t === 'all' ? '📋' : (BILL_ICONS_PAGE[t] || '🧾');
             var cls  = t === currentPayFilter ? 'pay-hist-pill active' : 'pay-hist-pill';
-            return '<button class="' + cls + '" onclick="setPayHistFilter(' + JSON.stringify(t) + ')">' + icon + ' ' + (t === 'all' ? 'All' : escHU(t)) + '</button>';
+            return '<button class="' + cls + "\" onclick='setPayHistFilter(" + jsAttr(t) + ")'>" + icon + ' ' + (t === 'all' ? 'All' : escHU(t)) + '</button>';
         }).join('');
     }
 
@@ -615,7 +622,7 @@
         var existing = notes[billName] || '';
         if (area.style.display === 'none' || !area.style.display) {
             area.value       = existing;
-            area.style.display = '';
+            area.style.display = 'block';
             area.focus();
             if (btn) btn.textContent = '✕ Cancel note';
         } else {
@@ -713,7 +720,7 @@
             if (!userData) return;
             var level  = userData.level || 1;
             var points = userData.points || 0;
-            var pToNext = userData.pointsToNextLevel || 1000;
+            var pToNext = userData.pointsToNextLevel != null ? userData.pointsToNextLevel : 1000;
             var coins  = userData.coins || 0;
             var earned = Math.max(0, 1000 - pToNext);
             var pct    = Math.min(100, Math.round((earned / 1000) * 100));
@@ -751,18 +758,31 @@
         var btn = document.getElementById('payAllBtn');
         if (btn) { btn.disabled = true; btn.textContent = 'Processing…'; }
         var idx = 0;
+        var paidCount = 0;
+        // Wait for each bill's confirm modal to actually resolve (confirmed or
+        // cancelled) before moving to the next — previously this fired every
+        // modal on a fixed timer, so unconfirmed ones got clobbered by the
+        // next modal and were silently skipped while still reporting success.
         function payNext() {
             if (idx >= unpaid.length) {
                 if (btn) {
                     btn.disabled = false;
                     btn.innerHTML = '⚡ Pay All Unpaid Bills <span id="payAllCount" style="background:rgba(255,255,255,0.25);border-radius:99px;padding:0.1rem 0.6rem;font-size:0.8rem;margin-left:0.4rem">0 bills unpaid</span>';
                 }
-                showNotification('All bills paid! 🎉', 'success');
+                if (paidCount === unpaid.length) {
+                    showNotification('All bills paid! 🎉', 'success');
+                } else if (paidCount > 0) {
+                    showNotification(paidCount + ' of ' + unpaid.length + ' bill' + (unpaid.length !== 1 ? 's' : '') + ' paid.', 'info');
+                } else {
+                    showNotification('No bills were paid.', 'info');
+                }
                 return;
             }
             var b = unpaid[idx++];
-            payBill(b.name, b.amount, b.accountNumber || '');
-            setTimeout(payNext, 1800);
+            payBill(b.name, b.amount, b.accountNumber || '').then(function(result) {
+                if (result && result.paid) paidCount++;
+                payNext();
+            });
         }
         payNext();
     }
