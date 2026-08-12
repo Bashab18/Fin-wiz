@@ -29,9 +29,11 @@
             <div class="shop-logo">InStyl.</div>
             <nav class="shop-nav">
                 <a href="#" onclick="shopNavFilter('all');return false;" class="active">Shop All</a>
-                <a href="#" onclick="shopNavFilter('clothing');return false;">Clothing</a>
-                <a href="#" onclick="shopNavFilter('accessories');return false;">Accessories</a>
-                <a href="#" onclick="shopNavFilter('electronics');return false;">Electronics</a>
+                <a href="#" onclick="shopNavFilter('sale');return false;">On Sale</a>
+                <a href="#" onclick="shopNavFilter('women');return false;">Women</a>
+                <a href="#" onclick="shopNavFilter('men');return false;">Men</a>
+                <a href="#" onclick="shopNavFilter('outdoors');return false;">Outdoors</a>
+                <a href="#" onclick="shopNavFilter('cooking');return false;">Cooking</a>
                 <a href="shop-account.html">My Account</a>
             </nav>
             <div class="shop-header-right">
@@ -213,9 +215,13 @@
             <div class="shop-filters">
                 <div style="display:flex;gap:0.75rem;flex-wrap:wrap;flex:1">
                     <button class="filter-btn active" onclick="setCategory('all', event)">All Items</button>
-                    <button class="filter-btn" onclick="setCategory('clothing', event)">Clothing</button>
-                    <button class="filter-btn" onclick="setCategory('accessories', event)">Accessories</button>
+                    <button class="filter-btn" onclick="setCategory('women', event)">Women</button>
+                    <button class="filter-btn" onclick="setCategory('men', event)">Men</button>
+                    <button class="filter-btn" onclick="setCategory('outdoors', event)">Outdoors</button>
+                    <button class="filter-btn" onclick="setCategory('cooking', event)">Cooking</button>
                     <button class="filter-btn" onclick="setCategory('electronics', event)">Electronics</button>
+                    <button class="filter-btn" onclick="setCategory('accessories', event)">Accessories</button>
+                    <button class="filter-btn" onclick="setCategory('sale', event)">On Sale</button>
                 </div>
                 <select class="sort-select" id="productSort" onchange="applyFilters()">
                     <option value="default">Sort: Default</option>
@@ -237,7 +243,7 @@
 
             <!-- Product count indicator -->
             <div style="display:flex;justify-content:space-between;align-items:center;margin:0.4rem 0 0.3rem;padding:0 0.25rem">
-                <span class="product-count-info" id="productCountInfo">12 products</span>
+                <span class="product-count-info" id="productCountInfo">Loading&hellip;</span>
                 <span id="wishlistCountInfo" onclick="toggleWishlistPanel(true)" style="font-size:0.78rem;color:#ec4899;font-weight:600;display:none;cursor:pointer;user-select:none" title="View saved items">♥ <span id="wishlistCount">0</span> saved ↓</span>
             </div>
 
@@ -250,210 +256,7 @@
             </div>
 
             <div class="products-grid" id="productsGrid">
-                <div class="product-card" data-category="clothing" data-price="35.99" data-name="Green Cotton Sweatshirt" data-rating="4.2">
-                    <div class="product-image" style="background: linear-gradient(135deg, #d4e4bc 0%, #c8ddb0 100%);">
-                        <span class="product-icon">👕</span>
-                    </div>
-                    <div class="product-info">
-                        <h3>Green Cotton Sweatshirt</h3>
-                        <p class="product-brand">EMJOL</p>
-                        <div class="product-rating" data-rating="4.2"><span class="stars"></span><span class="rating-value">4.2</span></div>
-                        <p class="product-description">Comfortable cotton sweatshirt perfect for winter weather</p>
-                        <div class="product-footer">
-                            <span class="product-price">ƒ35.99</span>
-                            <button class="btn btn-primary btn-sm" onclick="addToCart('Green Cotton Sweatshirt', 35.99, this)">Add to Cart</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="product-card" data-category="clothing" data-price="45.99" data-name="Pink Dress Shirt" data-badge="New" data-rating="4.0">
-                    <div class="product-image" style="background: linear-gradient(135deg, #f4d4d4 0%, #f0c8c8 100%);">
-                        <span class="product-icon">👔</span>
-                        <span class="product-badge product-badge--new">New</span>
-                    </div>
-                    <div class="product-info">
-                        <h3>Pink Dress Shirt</h3>
-                        <p class="product-brand">BRANDY</p>
-                        <div class="product-rating" data-rating="4.0"><span class="stars"></span><span class="rating-value">4.0</span></div>
-                        <p class="product-description">Elegant dress shirt for formal occasions</p>
-                        <div class="product-footer">
-                            <span class="product-price">ƒ45.99</span>
-                            <button class="btn btn-primary btn-sm" onclick="addToCart('Pink Dress Shirt', 45.99, this)">Add to Cart</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="product-card" data-category="accessories" data-price="89.99" data-name="Sport Backpack" data-badge="Best Seller" data-rating="4.7">
-                    <div class="product-image" style="background: linear-gradient(135deg, #c4dcd4 0%, #b8d4c8 100%);">
-                        <span class="product-icon">🎒</span>
-                        <span class="product-badge product-badge--best-seller">Best Seller</span>
-                    </div>
-                    <div class="product-info">
-                        <h3>Sport Backpack</h3>
-                        <p class="product-brand">NIKE</p>
-                        <div class="product-rating" data-rating="4.7"><span class="stars"></span><span class="rating-value">4.7</span></div>
-                        <p class="product-description">Durable backpack with multiple compartments</p>
-                        <div class="product-footer">
-                            <span class="product-price">ƒ89.99</span>
-                            <button class="btn btn-primary btn-sm" onclick="addToCart('Sport Backpack', 89.99, this)">Add to Cart</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="product-card" data-category="accessories" data-price="120.00" data-name="Running Shoes" data-badge="Best Seller" data-rating="4.8">
-                    <div class="product-image" style="background: linear-gradient(135deg, #ffd4a3 0%, #ffcb8e 100%);">
-                        <span class="product-icon">👟</span>
-                        <span class="product-badge product-badge--best-seller">Best Seller</span>
-                    </div>
-                    <div class="product-info">
-                        <h3>Running Shoes</h3>
-                        <p class="product-brand">ADIDAS</p>
-                        <div class="product-rating" data-rating="4.8"><span class="stars"></span><span class="rating-value">4.8</span></div>
-                        <p class="product-description">Lightweight running shoes for maximum comfort</p>
-                        <div class="product-footer">
-                            <span class="product-price">ƒ120.00</span>
-                            <button class="btn btn-primary btn-sm" onclick="addToCart('Running Shoes', 120.00, this)">Add to Cart</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="product-card" data-category="electronics" data-price="299.99" data-name="Wireless Headphones" data-badge="Sale" data-rating="4.5">
-                    <div class="product-image" style="background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);">
-                        <span class="product-icon">🎧</span>
-                        <span class="product-badge product-badge--sale">Sale</span>
-                    </div>
-                    <div class="product-info">
-                        <h3>Wireless Headphones</h3>
-                        <p class="product-brand">SONY</p>
-                        <div class="product-rating" data-rating="4.5"><span class="stars"></span><span class="rating-value">4.5</span></div>
-                        <p class="product-description">Premium noise-cancelling headphones</p>
-                        <div class="product-footer">
-                            <span class="product-price">ƒ299.99</span>
-                            <button class="btn btn-primary btn-sm" onclick="addToCart('Wireless Headphones', 299.99, this)">Add to Cart</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="product-card" data-category="electronics" data-price="25.99" data-name="Smartphone Case" data-rating="3.8">
-                    <div class="product-image" style="background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%);">
-                        <span class="product-icon">📱</span>
-                    </div>
-                    <div class="product-info">
-                        <h3>Smartphone Case</h3>
-                        <p class="product-brand">TECH</p>
-                        <div class="product-rating" data-rating="3.8"><span class="stars"></span><span class="rating-value">3.8</span></div>
-                        <p class="product-description">Protective case with sleek design</p>
-                        <div class="product-footer">
-                            <span class="product-price">ƒ25.99</span>
-                            <button class="btn btn-primary btn-sm" onclick="addToCart('Smartphone Case', 25.99, this)">Add to Cart</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="product-card" data-category="clothing" data-price="65.99" data-name="Denim Jeans" data-rating="4.1">
-                    <div class="product-image" style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);">
-                        <span class="product-icon">👖</span>
-                    </div>
-                    <div class="product-info">
-                        <h3>Denim Jeans</h3>
-                        <p class="product-brand">LEVI'S</p>
-                        <div class="product-rating" data-rating="4.1"><span class="stars"></span><span class="rating-value">4.1</span></div>
-                        <p class="product-description">Classic fit denim jeans</p>
-                        <div class="product-footer">
-                            <span class="product-price">ƒ65.99</span>
-                            <button class="btn btn-primary btn-sm" onclick="addToCart('Denim Jeans', 65.99, this)">Add to Cart</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="product-card" data-category="accessories" data-price="185.00" data-name="Leather Handbag" data-badge="New" data-rating="4.6">
-                    <div class="product-image" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);">
-                        <span class="product-icon">👜</span>
-                        <span class="product-badge product-badge--new">New</span>
-                    </div>
-                    <div class="product-info">
-                        <h3>Leather Handbag</h3>
-                        <p class="product-brand">COACH</p>
-                        <div class="product-rating" data-rating="4.6"><span class="stars"></span><span class="rating-value">4.6</span></div>
-                        <p class="product-description">Elegant leather handbag for everyday use</p>
-                        <div class="product-footer">
-                            <span class="product-price">ƒ185.00</span>
-                            <button class="btn btn-primary btn-sm" onclick="addToCart('Leather Handbag', 185.00, this)">Add to Cart</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="product-card" data-category="electronics" data-price="399.00" data-name="Smart Watch" data-badge="Best Seller" data-rating="4.9">
-                    <div class="product-image" style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);">
-                        <span class="product-icon">⌚</span>
-                        <span class="product-badge product-badge--best-seller">Best Seller</span>
-                    </div>
-                    <div class="product-info">
-                        <h3>Smart Watch</h3>
-                        <p class="product-brand">APPLE</p>
-                        <div class="product-rating" data-rating="4.9"><span class="stars"></span><span class="rating-value">4.9</span></div>
-                        <p class="product-description">Track fitness, notifications, and health data</p>
-                        <div class="product-footer">
-                            <span class="product-price">ƒ399.00</span>
-                            <button class="btn btn-primary btn-sm" onclick="addToCart('Smart Watch', 399.00, this)">Add to Cart</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="product-card" data-category="clothing" data-price="179.99" data-name="Winter Jacket" data-badge="Sale" data-rating="4.3">
-                    <div class="product-image" style="background: linear-gradient(135deg, #fde68a 0%, #fcd34d 100%);">
-                        <span class="product-icon">🧥</span>
-                        <span class="product-badge product-badge--sale">Sale</span>
-                    </div>
-                    <div class="product-info">
-                        <h3>Winter Jacket</h3>
-                        <p class="product-brand">NORTH FACE</p>
-                        <div class="product-rating" data-rating="4.3"><span class="stars"></span><span class="rating-value">4.3</span></div>
-                        <p class="product-description">Insulated jacket for cold weather adventures</p>
-                        <div class="product-footer">
-                            <span class="product-price">ƒ179.99</span>
-                            <button class="btn btn-primary btn-sm" onclick="addToCart('Winter Jacket', 179.99, this)">Add to Cart</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="product-card" data-category="accessories" data-price="149.99" data-name="Sunglasses" data-rating="4.0">
-                    <div class="product-image" style="background: linear-gradient(135deg, #e9d5ff 0%, #d8b4fe 100%);">
-                        <span class="product-icon">🕶️</span>
-                    </div>
-                    <div class="product-info">
-                        <h3>Sunglasses</h3>
-                        <p class="product-brand">RAY-BAN</p>
-                        <div class="product-rating" data-rating="4.0"><span class="stars"></span><span class="rating-value">4.0</span></div>
-                        <p class="product-description">UV-protected polarised sunglasses</p>
-                        <div class="product-footer">
-                            <span class="product-price">ƒ149.99</span>
-                            <button class="btn btn-primary btn-sm" onclick="addToCart('Sunglasses', 149.99, this)">Add to Cart</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="product-card" data-category="electronics" data-price="69.99" data-name="Gaming Controller" data-badge="New" data-rating="4.4">
-                    <div class="product-image" style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);">
-                        <span class="product-icon">🎮</span>
-                        <span class="product-badge product-badge--new">New</span>
-                    </div>
-                    <div class="product-info">
-                        <h3>Gaming Controller</h3>
-                        <p class="product-brand">XBOX</p>
-                        <div class="product-rating" data-rating="4.4"><span class="stars"></span><span class="rating-value">4.4</span></div>
-                        <p class="product-description">Wireless controller with haptic feedback</p>
-                        <div class="product-footer">
-                            <span class="product-price">ƒ69.99</span>
-                            <button class="btn btn-primary btn-sm" onclick="addToCart('Gaming Controller', 69.99, this)">Add to Cart</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- No results message -->
-                <p id="noProductsMsg" style="display:none;color:#64748b;text-align:center;padding:2rem;grid-column:1/-1;font-size:0.9rem">
-                    No products match your search. Try a different term.
-                </p>
+                <p style="grid-column:1/-1;text-align:center;color:#64748b;padding:2rem;font-size:0.9rem">Loading products&hellip;</p>
             </div>
 
             <!-- Recently Viewed / Recommendations -->
@@ -574,6 +377,66 @@
 
     function escHE(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }
 
+    // ── Product catalog rendering ────────────────────────────────────────────
+    // Pastel gradient palette cycled by product id — the catalog now comes
+    // from the server (GET /api/products) instead of being hardcoded per
+    // card, so each card picks its background deterministically rather than
+    // having one hand-picked per product.
+    var GRADIENT_PALETTE = [
+        'linear-gradient(135deg, #d4e4bc 0%, #c8ddb0 100%)',
+        'linear-gradient(135deg, #f4d4d4 0%, #f0c8c8 100%)',
+        'linear-gradient(135deg, #c4dcd4 0%, #b8d4c8 100%)',
+        'linear-gradient(135deg, #ffd4a3 0%, #ffcb8e 100%)',
+        'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
+        'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+        'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
+        'linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%)',
+        'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)',
+        'linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)',
+        'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
+        'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)'
+    ];
+    var ALL_PRODUCTS = [];
+
+    function badgeClass(badge) {
+        if (badge === 'New')         return 'product-badge--new';
+        if (badge === 'Best Seller') return 'product-badge--best-seller';
+        if (badge === 'Sale')        return 'product-badge--sale';
+        return '';
+    }
+
+    function renderProductGrid(products) {
+        var grid = document.getElementById('productsGrid');
+        if (!grid) return;
+        // grid.innerHTML is fully replaced here, so the no-results message
+        // has to be re-appended as part of this template rather than living
+        // as static markup that this render would otherwise wipe out.
+        var cardsHtml = products.map(function(p) {
+            var gradient = GRADIENT_PALETTE[p.id % GRADIENT_PALETTE.length];
+            var priceHtml = (p.originalPrice
+                ? '<span style="text-decoration:line-through;color:#94a3b8;font-size:0.78rem;margin-right:0.35rem">ƒ' + Number(p.originalPrice).toFixed(2) + '</span>'
+                : '') + 'ƒ' + Number(p.price).toFixed(2);
+            return '<div class="product-card" data-category="' + escHE(p.category) + '" data-price="' + p.price + '" data-name="' + escHE(p.name) + '" data-badge="' + escHE(p.badge || '') + '" data-rating="' + p.rating + '" data-stock="' + p.stock + '">' +
+                '<div class="product-image" style="background: ' + gradient + ';">' +
+                    '<span class="product-icon">' + p.icon + '</span>' +
+                    (p.badge ? '<span class="product-badge ' + badgeClass(p.badge) + '">' + escHE(p.badge) + '</span>' : '') +
+                '</div>' +
+                '<div class="product-info">' +
+                    '<h3>' + escHE(p.name) + '</h3>' +
+                    '<p class="product-brand">' + escHE(p.brand) + '</p>' +
+                    '<div class="product-rating" data-rating="' + p.rating + '"><span class="stars"></span><span class="rating-value">' + p.rating + '</span></div>' +
+                    '<p class="product-description">' + escHE(p.description) + '</p>' +
+                    '<div class="product-footer">' +
+                        '<span class="product-price">' + priceHtml + '</span>' +
+                        "<button class=\"btn btn-primary btn-sm\" onclick='addToCart(" + jsAttr(p.name) + ',' + p.price + ",this)'>Add to Cart</button>" +
+                    '</div>' +
+                '</div>' +
+                '</div>';
+        }).join('');
+        grid.innerHTML = cardsHtml +
+            '<p id="noProductsMsg" style="display:none;color:#64748b;text-align:center;padding:2rem;grid-column:1/-1;font-size:0.9rem">No products match your search. Try a different term.</p>';
+    }
+
     // ── Filter / Search / Sort ─────────────────────────────────────────────────
     var currentCategory   = 'all';
     var currentPriceFilter = 'all';
@@ -611,7 +474,8 @@
 
         // 1. Filter by category + price range + search text
         cards.forEach(function(card) {
-            var catOk  = currentCategory === 'all' || card.dataset.category === currentCategory;
+            var catOk  = currentCategory === 'all' ||
+                (currentCategory === 'sale' ? card.dataset.badge === 'Sale' : card.dataset.category === currentCategory);
             var price  = parseFloat(card.dataset.price || 0);
             var priceOk = currentPriceFilter === 'all' ||
                 (currentPriceFilter === 'u50'    && price < 50) ||
@@ -818,17 +682,19 @@
             container.innerHTML = purchases.map(function(p, idx) {
                 var itemCount = p.items ? p.items.length : 0;
                 var icon      = getOrderIcon(p.items);
-                var orderNum  = 'ORD-' + String(purchases.length - idx).padStart(4, '0');
+                var orderNum  = p.orderId || ('ORD-' + String(purchases.length - idx).padStart(4, '0'));
                 var itemNames = p.items ? p.items.map(function(i){ return escHE(i.name); }).join(', ') : '—';
+                var status    = p.status || 'processing';
+                var statusIcon = { processing: '⏳', shipped: '📦', out_for_delivery: '🚚', delivered: '✓' }[status] || '⏳';
                 return '<div style="display:flex;align-items:center;gap:0.75rem;padding:0.875rem 0;border-bottom:1px solid #f1f5f9">' +
                     '<div style="width:42px;height:42px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0">' + icon + '</div>' +
                     '<div style="flex:1;min-width:0">' +
                         '<div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.15rem">' +
                             '<span style="font-weight:600;font-size:0.875rem">' + itemCount + ' item' + (itemCount !== 1 ? 's' : '') + ' purchased</span>' +
-                            '<span class="order-status-badge order-status-delivered">✓ Delivered</span>' +
+                            '<span class="order-status-badge order-status-' + status + '">' + statusIcon + ' ' + escHE(p.statusLabel || 'Processing') + '</span>' +
                         '</div>' +
                         '<div style="font-size:0.75rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + itemNames + '</div>' +
-                        '<div style="font-size:0.7rem;color:#94a3b8;margin-top:0.1rem">' + escHE(p.date||'') + ' · ' + orderNum + '</div>' +
+                        '<div style="font-size:0.7rem;color:#94a3b8;margin-top:0.1rem">' + escHE(p.date||'') + ' · ' + escHE(orderNum) + '</div>' +
                     '</div>' +
                     '<div style="text-align:right;flex-shrink:0">' +
                         '<div style="font-weight:700;color:#1e293b">ƒ' + Number(p.total||0).toFixed(2) + '</div>' +
@@ -928,33 +794,21 @@
         if (btn) { btn.click(); } else { setCategory(category, null); }
     }
 
-    document.addEventListener('DOMContentLoaded', function() {
-        // Restore last active tab
-        switchEcoPageTab(sessionStorage.getItem('eco_page_tab') || 'shop');
-
-        // Populate InStyl game progress bar from ShopBridge
-        if (typeof ShopBridge !== 'undefined') {
-            ShopBridge.getXPData().then(function(xp) {
-                var pct = Math.round(((xp.xp % 1000) / 1000) * 100);
-                var set = function(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
-                set('shopProgressLevel', xp.level + '/50');
-                set('shopProgressText', pct + '% completed');
-                set('shopProgressXP', xp.xp.toLocaleString() + ' XP');
-                set('shopProgressCoins', xp.coins.toLocaleString());
-                var fillEl = document.getElementById('shopProgressFill');
-                if (fillEl) fillEl.style.width = pct + '%';
-            }).catch(function(){});
-        }
-
+    // Everything below depends on .product-card elements actually existing in
+    // the DOM, so it runs once after the catalog fetch + render — not
+    // directly in DOMContentLoaded like it did back when the cards were
+    // hardcoded HTML.
+    function initProductCardBehaviors() {
         // Store original card order for "Sort: Default" restoration
         document.querySelectorAll('.product-card').forEach(function(c, i){ c.dataset.originalIndex = i; });
 
         // ── Category item counts ──────────────────────────────────────
-        var catCounts = { all:0, clothing:0, accessories:0, electronics:0 };
+        var catCounts = { all: 0, sale: 0 };
         document.querySelectorAll('.product-card').forEach(function(c) {
             catCounts.all++;
             var cat = c.dataset.category || '';
-            if (catCounts[cat] !== undefined) catCounts[cat]++;
+            catCounts[cat] = (catCounts[cat] || 0) + 1;
+            if (c.dataset.badge === 'Sale') catCounts.sale++;
         });
         document.querySelectorAll('.filter-btn').forEach(function(btn) {
             var onclick = btn.getAttribute('onclick') || '';
@@ -969,9 +823,6 @@
 
         // ── Stock level chips ─────────────────────────────────────────
         injectStockChips();
-
-        // ── Load recently viewed recommendations ────────────────────
-        renderRecommendations();
 
         // ── Inject quick-view click on product images ────────────────
         document.querySelectorAll('.product-card').forEach(function(card) {
@@ -997,7 +848,6 @@
 
         // ── Inject wishlist heart buttons onto every product card ────
         var savedWishlist = JSON.parse(localStorage.getItem('digifinwiz_wishlist') || '{}');
-        var wishlistCount = Object.keys(savedWishlist).length;
         document.querySelectorAll('.product-card').forEach(function(card) {
             var imgDiv = card.querySelector('.product-image');
             if (!imgDiv || imgDiv.querySelector('.wishlist-btn')) return;
@@ -1023,13 +873,48 @@
             if (starsEl) starsEl.textContent = '★'.repeat(full) + (half ? '½' : '') + '☆'.repeat(5 - full - (half ? 1 : 0));
         });
 
-        // Hook into checkout button to refresh stats + challenges after purchase
-        var origBtn = document.getElementById('checkoutBtn');
-        if (origBtn) {
-            origBtn.addEventListener('click', function() {
-                setTimeout(refreshEcoPage, 1400);
-            }, true);
+        // Apply a ?category= or ?sale=true filter from an incoming shop-nav
+        // link (e.g. from a shop-*.html account page's "Women"/"On Sale" link);
+        // each of those already calls applyFilters() internally via setCategory.
+        // Otherwise just run the default filter/sort/count pass once so the
+        // count indicator and card order are correct on first paint.
+        var params = new URLSearchParams(window.location.search);
+        if (params.get('sale') === 'true') shopNavFilter('sale');
+        else if (params.get('category')) shopNavFilter(params.get('category'));
+        else applyFilters();
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Restore last active tab
+        switchEcoPageTab(sessionStorage.getItem('eco_page_tab') || 'shop');
+
+        // Populate InStyl game progress bar from ShopBridge
+        if (typeof ShopBridge !== 'undefined') {
+            ShopBridge.getXPData().then(function(xp) {
+                var pct = Math.round(((xp.xp % 1000) / 1000) * 100);
+                var set = function(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
+                set('shopProgressLevel', xp.level + '/50');
+                set('shopProgressText', pct + '% completed');
+                set('shopProgressXP', xp.xp.toLocaleString() + ' XP');
+                set('shopProgressCoins', xp.coins.toLocaleString());
+                var fillEl = document.getElementById('shopProgressFill');
+                if (fillEl) fillEl.style.width = pct + '%';
+            }).catch(function(){});
         }
+
+        // ── Load recently viewed recommendations ────────────────────
+        renderRecommendations();
+
+        // ── Fetch the catalog, render it, then wire up per-card behavior ──
+        DigifinwizDB.getProducts().then(function(products) {
+            ALL_PRODUCTS = products;
+            renderProductGrid(products);
+            initProductCardBehaviors();
+        }).catch(function(err) {
+            console.error('Failed to load products:', err);
+            var grid = document.getElementById('productsGrid');
+            if (grid) grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:#ef4444;padding:2rem">Could not load products. Please refresh the page.</p>';
+        });
 
         // Update cart XP preview whenever cart count changes
         var observer = new MutationObserver(function() {
@@ -1156,14 +1041,12 @@
             var imgDiv = card.querySelector('.product-image');
             if (!imgDiv || imgDiv.querySelector('.stock-chip')) return;
             imgDiv.style.position = 'relative';
-            var name = card.dataset.name || '';
-            // Deterministic hash: same name always shows same "stock"
-            var h = 5381;
-            for (var i = 0; i < name.length; i++) h = ((h * 33) ^ name.charCodeAt(i)) & 0xFFFFFF;
-            var stock = (Math.abs(h) % 11) + 2; // 2–12
+            // Real inventory count from the catalog (decrements on checkout),
+            // not a fabricated per-name hash.
+            var stock = parseInt(card.dataset.stock, 10) || 0;
             var chip  = document.createElement('span');
-            chip.className = 'stock-chip ' + (stock <= 3 ? 'low' : stock <= 6 ? 'medium' : 'plenty');
-            chip.textContent = stock <= 3 ? 'Only ' + stock + ' left!' : stock <= 6 ? stock + ' left' : 'In stock';
+            chip.className = 'stock-chip ' + (stock <= 3 ? 'low' : stock <= 15 ? 'medium' : 'plenty');
+            chip.textContent = stock <= 0 ? 'Out of stock' : stock <= 3 ? 'Only ' + stock + ' left!' : stock <= 15 ? stock + ' left' : 'In stock';
             imgDiv.appendChild(chip);
         });
     }

@@ -749,6 +749,11 @@ body {
     color: #0c5460;
 }
 
+.order-status-badge.shipped {
+    background-color: #e0e7ff;
+    color: #3730a3;
+}
+
 .order-actions {
     display: flex;
     gap: 10px;
@@ -805,6 +810,16 @@ body {
 .tracking-status.processing {
     background-color: #fff3cd;
     color: #856404;
+}
+
+.tracking-status.shipped {
+    background-color: #e0e7ff;
+    color: #3730a3;
+}
+
+.tracking-status.delivered {
+    background-color: #d4edda;
+    color: #155724;
 }
 
 .tracking-timeline {
@@ -996,10 +1011,12 @@ body {
 }
 
 .visa-logo,
-.mastercard-logo {
+.mastercard-logo,
+.card-brand-label {
     font-weight: 700;
     font-size: 18px;
     letter-spacing: 2px;
+    text-transform: uppercase;
 }
 
 .card-number {

@@ -29,12 +29,12 @@
         <div class="shop-container">
             <div class="shop-logo">InStyl.</div>
             <nav class="shop-nav">
-                <a href="shop-all.html">Shop All</a>
-                <a href="shop-all.html">On Sale</a>
-                <a href="shop-all.html">Women</a>
-                <a href="shop-all.html">Men</a>
-                <a href="shop-all.html">Outdoors</a>
-                <a href="shop-all.html">Cooking</a>
+                <a href="ecommerce.html">Shop All</a>
+                <a href="ecommerce.html?sale=true">On Sale</a>
+                <a href="ecommerce.html?category=women">Women</a>
+                <a href="ecommerce.html?category=men">Men</a>
+                <a href="ecommerce.html?category=outdoors">Outdoors</a>
+                <a href="ecommerce.html?category=cooking">Cooking</a>
             </nav>
             <div class="shop-header-right">
                 <div class="shop-search-box"><input type="text" placeholder="Search..."></div>
@@ -100,33 +100,26 @@
     <script src="shop-bridge.js"></script>
     <script src="shopping-script.js"></script>
     <script>
-    function _getOrderStatus(timestamp) {
-        var ageMs  = Date.now() - (timestamp || 0);
-        var ageMin = ageMs / 60000;
-        if (ageMin < 60)        return { label: 'Processing',  cls: 'processing',  step: 1 };
-        if (ageMin < 720)       return { label: 'Shipped',      cls: 'shipped',     step: 2 };
-        if (ageMin < 4320)      return { label: 'In Transit',   cls: 'in-transit',  step: 3 };
-        // step 5, not 4: _buildTimeline marks index < step as "completed" and
-        // index === step as "active" (in progress). The Delivered step is
-        // index 4, so it needs step > 4 to ever read as completed instead of
-        // being permanently stuck showing "In progress".
-        return                         { label: 'Delivered',    cls: 'delivered',   step: 5 };
-    }
+    // Status/timeline now comes from the server (GET /api/me/purchases
+    // attaches status/statusLabel/trackingSteps to every order, computed
+    // from elapsed time since checkout) instead of being recomputed here —
+    // keeps this page, order history, and the dashboard all agreeing.
+    var STATUS_ICONS   = { processing: '&#9881;', shipped: '&#10003;', out_for_delivery: '&#128666;', delivered: '&#128230;' };
+    var STATUS_CSS_CLS = { processing: 'processing', shipped: 'shipped', out_for_delivery: 'in-transit', delivered: 'delivered' };
 
-    function _buildTimeline(step) {
-        var steps = [
-            { icon: '&#10003;', label: 'Order Placed' },
-            { icon: '&#9881;',  label: 'Processing'   },
-            { icon: '&#10003;', label: 'Shipped'       },
-            { icon: '&#128666;',label: 'In Transit'    },
-            { icon: '&#128230;',label: 'Delivered'     }
-        ];
+    function _buildTimeline(trackingSteps) {
+        var steps = [{ label: 'Order Placed', done: true, icon: '&#10003;' }].concat(
+            (trackingSteps || []).map(function(s) {
+                return { label: s.label, done: s.done, icon: STATUS_ICONS[s.key] || '&#8226;' };
+            })
+        );
+        var activeIdx = steps.findIndex(function(s) { return !s.done; });
         return steps.map(function(s, i) {
-            var cls = i < step ? 'completed' : i === step ? 'active' : '';
+            var cls = s.done ? 'completed' : (i === activeIdx ? 'active' : '');
             return '<div class="timeline-step ' + cls + '">' +
-                '<div class="timeline-icon">' + (i < step ? '&#10003;' : s.icon) + '</div>' +
+                '<div class="timeline-icon">' + (s.done ? '&#10003;' : s.icon) + '</div>' +
                 '<div class="timeline-content"><h4>' + s.label + '</h4>' +
-                (i < step ? '<p>Completed</p>' : i === step ? '<p>In progress</p>' : '<p>Pending</p>') +
+                (s.done ? '<p>Completed</p>' : (i === activeIdx ? '<p>In progress</p>' : '<p>Pending</p>')) +
                 '</div></div>';
         }).join('');
     }
@@ -143,17 +136,19 @@
             return;
         }
         el.innerHTML = purchases.slice(0, 5).map(function(p, idx) {
-            var status    = _getOrderStatus(p.timestamp);
             var dateStr   = p.timestamp ? new Date(p.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
-            var orderId   = p.id ? String(p.id).padStart(8, '0') : String(idx + 1).padStart(8, '0');
+            var orderNum  = p.orderId || ('#' + String(p.id || idx + 1).padStart(8, '0'));
             var items     = p.items || [{ name: p.name || p.description || 'Items', price: p.total || p.amount || 0 }];
             var totalAmt  = typeof p.total === 'number' ? p.total : (p.amount || 0);
+            var cssCls    = STATUS_CSS_CLS[p.status] || 'processing';
+            var estDate   = p.estimatedDelivery ? new Date(p.estimatedDelivery).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
             return '<div class="order-tracking-card">' +
                 '<div class="tracking-header">' +
-                '<div><h3>Order #' + orderId + '</h3><p class="order-date">Placed ' + dateStr + '</p></div>' +
-                '<div class="tracking-status ' + status.cls + '">' + status.label + '</div>' +
+                '<div><h3>Order ' + _escH(orderNum) + '</h3><p class="order-date">Placed ' + dateStr +
+                (estDate && p.status !== 'delivered' ? ' &middot; Est. delivery ' + estDate : '') + '</p></div>' +
+                '<div class="tracking-status ' + cssCls + '">' + _escH(p.statusLabel || 'Processing') + '</div>' +
                 '</div>' +
-                '<div class="tracking-timeline">' + _buildTimeline(status.step) + '</div>' +
+                '<div class="tracking-timeline">' + _buildTimeline(p.trackingSteps) + '</div>' +
                 '<div class="tracking-products">' +
                 items.map(function(item) {
                     return '<div class="product-item">' +
@@ -170,8 +165,8 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-        if (typeof ShopBridge === 'undefined') return;
-        ShopBridge.getPurchases().then(function(purchases) {
+        if (typeof DigifinwizDB === 'undefined') return;
+        DigifinwizDB.getPurchases().then(function(purchases) {
             renderOrderStatus(purchases);
         }).catch(function() {
             var el = document.getElementById('orderStatusList');

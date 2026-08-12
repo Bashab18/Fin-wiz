@@ -448,6 +448,59 @@ const DigifinwizDB = (() => {
         return _api('DELETE', '/api/me/scheduled-transfers/' + id);
     }
 
+    // ── E-Commerce: product catalog ─────────────────────────────────────────────
+    function getProducts(filters) {
+        var f = filters || {};
+        var qs = [];
+        if (f.category) qs.push('category=' + encodeURIComponent(f.category));
+        if (f.onSale)   qs.push('onSale=true');
+        if (f.q)        qs.push('q=' + encodeURIComponent(f.q));
+        return _api('GET', '/api/products' + (qs.length ? '?' + qs.join('&') : ''));
+    }
+
+    // ── E-Commerce: shipping addresses ──────────────────────────────────────────
+    function getAddresses() {
+        return _api('GET', '/api/me/addresses');
+    }
+
+    function createAddress(address) {
+        return _api('POST', '/api/me/addresses', address);
+    }
+
+    function updateAddress(id, patch) {
+        return _api('PUT', '/api/me/addresses/' + id, patch);
+    }
+
+    function deleteAddress(id) {
+        return _api('DELETE', '/api/me/addresses/' + id);
+    }
+
+    // ── E-Commerce: payment methods ─────────────────────────────────────────────
+    function getPaymentMethods() {
+        return _api('GET', '/api/me/payment-methods');
+    }
+
+    function addPaymentMethod(card) {
+        return _api('POST', '/api/me/payment-methods', card);
+    }
+
+    function setDefaultPaymentMethod(id) {
+        return _api('PATCH', '/api/me/payment-methods/' + id + '/default');
+    }
+
+    function deletePaymentMethod(id) {
+        return _api('DELETE', '/api/me/payment-methods/' + id);
+    }
+
+    // ── E-Commerce: checkout ─────────────────────────────────────────────────────
+    function checkout(details) {
+        return _api('POST', '/api/me/checkout', details);
+    }
+
+    function getOrder(id) {
+        return _api('GET', '/api/me/purchases/' + id);
+    }
+
     // ── Public API ────────────────────────────────────────────────────────────
     return {
         // Init
@@ -567,6 +620,25 @@ const DigifinwizDB = (() => {
         getScheduledTransfers,
         createScheduledTransfer,
         toggleScheduledTransfer,
-        cancelScheduledTransfer
+        cancelScheduledTransfer,
+
+        // E-Commerce: products
+        getProducts,
+
+        // E-Commerce: addresses
+        getAddresses,
+        createAddress,
+        updateAddress,
+        deleteAddress,
+
+        // E-Commerce: payment methods
+        getPaymentMethods,
+        addPaymentMethod,
+        setDefaultPaymentMethod,
+        deletePaymentMethod,
+
+        // E-Commerce: checkout
+        checkout,
+        getOrder
     };
 })();

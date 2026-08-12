@@ -56,7 +56,7 @@ function ensureLocalDataFiles() {
 const STORE_NAMES = [
     'users', 'transactions', 'payments', 'purchases', 'challenges', 'messages', 'cart', 'bills',
     'creditCards', 'creditActivity', 'loans', 'loanPayments', 'savingsGoals', 'savingsGoalActivity',
-    'scheduledTransfers'
+    'scheduledTransfers', 'products', 'addresses', 'paymentMethods'
 ];
 
 async function initStorage() {
@@ -149,6 +149,75 @@ function simpleHash(str) {
 const DEFAULT_BALANCES     = { checking: 88674.00, savings: 18074.00 };
 const DEFAULT_USER_DATA    = { level: 1, points: 0, pointsToNextLevel: 1000, challenges: 0, completedTasks: 0, coins: 0 };
 const DEFAULT_ALERT_PREFS  = { lowBalanceEnabled: true, lowBalanceThreshold: 100, largeTxEnabled: true, largeTxThreshold: 1000 };
+
+// ── E-Commerce: US sales tax, shipping, and promo tables ───────────────────
+// Approximate combined state+average-local sales tax rates. Sales tax in the
+// US is charged based on the delivery address, not the seller's location, so
+// checkout looks this up by the shipping address's state. States with no
+// sales tax (e.g. OR, NH, MT, DE, AK) are 0. Not official rates — good enough
+// for a financial-literacy simulation, not a tax filing.
+const STATE_TAX_RATES = {
+    AL: 0.0922, AK: 0.0176, AZ: 0.0840, AR: 0.0946, CA: 0.0872, CO: 0.0777, CT: 0.0635,
+    DE: 0,      FL: 0.0705, GA: 0.0732, HI: 0.0444, ID: 0.0603, IL: 0.0886, IN: 0.0700,
+    IA: 0.0694, KS: 0.0869, KY: 0.0600, LA: 0.0955, ME: 0.0550, MD: 0.0600, MA: 0.0625,
+    MI: 0.0600, MN: 0.0778, MS: 0.0707, MO: 0.0839, MT: 0,      NE: 0.0694, NV: 0.0823,
+    NH: 0,      NJ: 0.0663, NM: 0.0768, NY: 0.0852, NC: 0.0699, ND: 0.0696, OH: 0.0723,
+    OK: 0.0895, OR: 0,      PA: 0.0634, RI: 0.0700, SC: 0.0746, SD: 0.0640, TN: 0.0955,
+    TX: 0.0820, UT: 0.0719, VT: 0.0622, VA: 0.0575, WA: 0.0923, WV: 0.0655, WI: 0.0543,
+    WY: 0.0533, DC: 0.0600
+};
+
+const SHIPPING_RATES = {
+    standard: { label: 'Standard (5-7 business days)', cost: 5.99, days: 6, freeThreshold: 75 },
+    express:  { label: 'Express (2 business days)',    cost: 14.99, days: 2, freeThreshold: null }
+};
+
+const PROMO_CODES = {
+    SAVE10:  { type: 'pct',  value: 10, label: '10% off' },
+    SAVE20:  { type: 'pct',  value: 20, label: '20% off' },
+    WELCOME: { type: 'flat', value: 15, label: 'ƒ15 off' },
+    STUDENT: { type: 'pct',  value: 5,  label: '5% student discount' }
+};
+
+function computePromoDiscount(code, subtotal) {
+    const promo = PROMO_CODES[String(code || '').toUpperCase()];
+    if (!promo) return { code: null, label: null, discount: 0 };
+    const discount = promo.type === 'pct' ? subtotal * (promo.value / 100) : Math.min(promo.value, subtotal);
+    return { code: String(code).toUpperCase(), label: promo.label, discount: parseFloat(discount.toFixed(2)) };
+}
+
+// Orders have no real fulfillment backend, so status is derived purely from
+// elapsed time since the order was placed (computed fresh on every read,
+// same idea the old client-side-only tracking page used, just centralized
+// here so every page — order history, tracking, dashboard — agrees).
+function computeOrderStatus(order) {
+    const shipInfo   = SHIPPING_RATES[order.shippingMethod] || SHIPPING_RATES.standard;
+    const totalMs     = shipInfo.days * 24 * 60 * 60 * 1000;
+    const elapsed       = Date.now() - (order.timestamp || 0);
+    const processingMs   = 60 * 60 * 1000; // 1 hour
+    const outForDeliveryMs = Math.max(processingMs, totalMs - 12 * 60 * 60 * 1000);
+
+    let status, statusLabel;
+    if (elapsed < processingMs) { status = 'processing'; statusLabel = 'Processing'; }
+    else if (elapsed < outForDeliveryMs) { status = 'shipped'; statusLabel = 'Shipped'; }
+    else if (elapsed < totalMs) { status = 'out_for_delivery'; statusLabel = 'Out for Delivery'; }
+    else { status = 'delivered'; statusLabel = 'Delivered'; }
+
+    return {
+        status, statusLabel,
+        estimatedDelivery: (order.timestamp || 0) + totalMs,
+        // "done" means this stage has been passed, not that it's the current
+        // one — e.g. the Processing step reads done once the order has moved
+        // on to Shipped. The always-true "Order Placed" step is added by the
+        // client in front of this list, since placing the order is instant.
+        trackingSteps: [
+            { key: 'processing',       label: 'Processing',       done: elapsed >= processingMs },
+            { key: 'shipped',          label: 'Shipped',          done: elapsed >= outForDeliveryMs },
+            { key: 'out_for_delivery', label: 'Out for Delivery', done: elapsed >= totalMs },
+            { key: 'delivered',        label: 'Delivered',        done: elapsed >= totalMs }
+        ]
+    };
+}
 
 // Pushes a system message into the user's own Messages inbox when a balance
 // change crosses one of their configured alert thresholds. Called from
@@ -661,7 +730,7 @@ app.delete('/api/users/:id', async (req, res) => {
     for (const store of [
         'transactions', 'payments', 'purchases', 'challenges',
         'creditCards', 'creditActivity', 'loans', 'loanPayments', 'savingsGoals', 'savingsGoalActivity',
-        'scheduledTransfers'
+        'scheduledTransfers', 'addresses', 'paymentMethods'
     ]) {
         const rows = await readJSON(store);
         await writeJSON(store, rows.filter(r => r.userId !== id));
@@ -898,7 +967,16 @@ app.get('/api/me/purchases', async (req, res) => {
     const all      = await readJSON('purchases');
     let filtered   = all.filter(p => p.userId === req.userId);
     filtered.sort((a, b) => (b.id || 0) - (a.id || 0));
+    filtered = filtered.map(p => Object.assign({}, p, computeOrderStatus(p)));
     res.json(limit ? filtered.slice(0, limit) : filtered);
+});
+
+app.get('/api/me/purchases/:id', async (req, res) => {
+    const id  = Number(req.params.id);
+    const all = await readJSON('purchases');
+    const order = all.find(p => p.id === id && p.userId === req.userId);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    res.json(Object.assign({}, order, computeOrderStatus(order)));
 });
 
 app.post('/api/me/purchases', async (req, res) => {
@@ -947,6 +1025,151 @@ app.delete('/api/me/cart', async (req, res) => {
     const all = await readJSON('cart');
     await writeJSON('cart', all.filter(i => i.userId !== req.userId));
     res.json({ ok: true });
+});
+
+// ── Me: checkout ─────────────────────────────────────────────────────────────
+// Single atomic endpoint (replaces the old client-orchestrated multi-call
+// checkout) — reads the server's own cart and product catalog rather than
+// trusting client-supplied items/prices, requires a real address + payment
+// method, computes tax from the shipping address's state and shipping cost
+// from the chosen speed, then does the balance debit + stock decrement +
+// order write + cart clear inside one withUserLock so a mid-checkout failure
+// can't leave money deducted with no order recorded.
+app.post('/api/me/checkout', async (req, res) => {
+    const body = req.body || {};
+    const addressId       = Number(body.addressId);
+    const paymentMethodId = Number(body.paymentMethodId);
+    const shippingMethod  = SHIPPING_RATES.hasOwnProperty(body.shippingMethod) ? body.shippingMethod : 'standard';
+    const promoCodeInput  = body.promoCode;
+
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const [cartRows, products, addresses, paymentMethods, users] = await Promise.all([
+                readJSON('cart'), readJSON('products'), readJSON('addresses'), readJSON('paymentMethods'), readJSON('users')
+            ]);
+            const myCart = cartRows.filter(c => c.userId === req.userId);
+            if (myCart.length === 0) { const e = new Error('Cart is empty'); e.status = 400; throw e; }
+
+            const address = addresses.find(a => a.id === addressId && a.userId === req.userId);
+            if (!address) { const e = new Error('Select a shipping address'); e.status = 400; throw e; }
+            const paymentMethod = paymentMethods.find(p => p.id === paymentMethodId && p.userId === req.userId);
+            if (!paymentMethod) { const e = new Error('Select a payment method'); e.status = 400; throw e; }
+
+            // Resolve authoritative prices/stock from the catalog — never
+            // trust client-supplied cart prices.
+            const items = [];
+            for (const row of myCart) {
+                const product = products.find(p => p.name === row.name);
+                if (!product) { const e = new Error('"' + row.name + '" is no longer available'); e.status = 409; throw e; }
+                const qty = row.quantity || 1;
+                if (qty > product.stock) { const e = new Error('Only ' + product.stock + ' left of "' + product.name + '"'); e.status = 409; throw e; }
+                items.push({ productId: product.id, name: product.name, price: product.price, quantity: qty });
+            }
+
+            const subtotal       = parseFloat(items.reduce((s, i) => s + i.price * i.quantity, 0).toFixed(2));
+            const promo          = computePromoDiscount(promoCodeInput, subtotal);
+            const afterDiscount  = parseFloat((subtotal - promo.discount).toFixed(2));
+
+            const shipInfo      = SHIPPING_RATES[shippingMethod];
+            const shippingCost  = (shipInfo.freeThreshold != null && afterDiscount >= shipInfo.freeThreshold) ? 0 : shipInfo.cost;
+
+            // US sales tax is charged based on the delivery address, not the
+            // seller's location.
+            const taxRate = STATE_TAX_RATES.hasOwnProperty(address.state) ? STATE_TAX_RATES[address.state] : 0;
+            const tax     = parseFloat((afterDiscount * taxRate).toFixed(2));
+
+            const total = parseFloat((afterDiscount + tax + shippingCost).toFixed(2));
+
+            const uidx = users.findIndex(u => u.id === req.userId);
+            if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
+            const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
+            const current  = balances.checking;
+
+            const itemCount    = items.reduce((s, i) => s + i.quantity, 0);
+            const pointsEarned = itemCount * 45;
+            const coinsEarned  = Math.floor(total / 10);
+
+            // Preview mode — compute the same authoritative totals the real
+            // checkout would charge, without touching balances, stock, or
+            // writing an order. Lets the client show an accurate confirm
+            // screen without duplicating the tax/shipping/promo tables.
+            if (body.dryRun) {
+                return {
+                    items, subtotal, promoCode: promo.code, promoLabel: promo.label, discount: promo.discount,
+                    taxRate, tax, shippingMethod, shippingCost, total, itemCount, pointsEarned, coinsEarned,
+                    checking: current, sufficientFunds: total <= current
+                };
+            }
+
+            if (total > current) { const e = new Error('Insufficient funds. Available: ƒ' + current.toFixed(2)); e.status = 409; throw e; }
+            const next = parseFloat((current - total).toFixed(2));
+            balances.checking = next;
+
+            const userData = Object.assign({}, DEFAULT_USER_DATA, users[uidx].userData || {});
+            userData.points            = (userData.points || 0) + pointsEarned;
+            userData.pointsToNextLevel = (userData.pointsToNextLevel != null ? userData.pointsToNextLevel : 1000) - pointsEarned;
+            userData.completedTasks    = (userData.completedTasks || 0) + 1;
+            userData.coins              = (userData.coins || 0) + coinsEarned;
+            let leveledUp = false, newLevel = 0;
+            if (userData.pointsToNextLevel <= 0) {
+                if (userData.level === 1) {
+                    const challenges = await readJSON('challenges');
+                    const reqMet = LEVEL_1_REQUIRED_CONDITIONS.every(cond =>
+                        challenges.some(c => c.userId === req.userId && c.condition === cond && c.completed)
+                    );
+                    if (reqMet) {
+                        userData.level++;
+                        userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
+                        leveledUp = true; newLevel = userData.level;
+                    } else {
+                        userData.pointsToNextLevel = 0;
+                    }
+                } else {
+                    userData.level++;
+                    userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
+                    leveledUp = true; newLevel = userData.level;
+                }
+            }
+
+            const updatedUser = Object.assign({}, users[uidx], { balances, userData });
+            users[uidx] = updatedUser;
+            await writeJSON('users', users);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -total);
+
+            const updatedProducts = products.map(p => {
+                const line = items.find(i => i.productId === p.id);
+                return line ? Object.assign({}, p, { stock: Math.max(0, p.stock - line.quantity) }) : p;
+            });
+            await writeJSON('products', updatedProducts);
+
+            const purchases      = await readJSON('purchases');
+            const orderNumericId = nextId(purchases);
+            const order = {
+                id:        orderNumericId,
+                orderId:   'ORD-' + String(100000 + orderNumericId),
+                userId:    req.userId,
+                items,
+                subtotal, promoCode: promo.code, discount: promo.discount,
+                taxRate, tax, shippingMethod, shippingCost, total,
+                pointsEarned, coinsEarned,
+                address: {
+                    fullName: address.fullName, street: address.street, street2: address.street2,
+                    city: address.city, state: address.state, zip: address.zip, country: address.country
+                },
+                paymentMethod: { brand: paymentMethod.brand, last4: paymentMethod.last4 },
+                timestamp: Date.now(),
+                date: new Date().toLocaleDateString()
+            };
+            purchases.push(order);
+            await writeJSON('purchases', purchases);
+            await writeJSON('cart', cartRows.filter(c => c.userId !== req.userId));
+
+            return { order: Object.assign({}, order, computeOrderStatus(order)), leveledUp, newLevel, checking: next };
+        });
+        res.status(body.dryRun ? 200 : 201).json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
 });
 
 // ── Me: challenges  (specific sub-routes MUST be defined before the generic ones)
@@ -1017,7 +1240,7 @@ app.post('/api/me/reset', async (req, res) => {
     for (const store of [
         'transactions', 'payments', 'purchases', 'cart',
         'creditCards', 'creditActivity', 'loans', 'loanPayments', 'savingsGoals', 'savingsGoalActivity',
-        'scheduledTransfers'
+        'scheduledTransfers', 'addresses', 'paymentMethods'
     ]) {
         const rows = await readJSON(store);
         await writeJSON(store, rows.filter(r => r.userId !== req.userId));
@@ -1981,6 +2204,211 @@ app.delete('/api/bills/:id', async (req, res) => {
     res.json({ ok: true });
 });
 
+// ── E-Commerce: product catalog ─────────────────────────────────────────────
+// A shared (not per-user) catalog, seeded once at boot the same way
+// DEFAULT_BILLS is — read-only from the client's perspective; there's no
+// admin catalog-management UI yet, so no write routes are exposed.
+const DEFAULT_PRODUCTS = [
+    // ── Women ──
+    { id: 1,  name: 'Pink Dress Shirt',          brand: 'BRANDY',            category: 'women',       price: 45.99,  originalPrice: null,   rating: 4.0, reviewCount: 118, badge: 'New',         icon: '👚', stock: 42,  description: 'Elegant dress shirt for formal occasions.' },
+    { id: 2,  name: 'Floral Wrap Dress',          brand: 'Meridian',          category: 'women',       price: 68.00,  originalPrice: null,   rating: 4.4, reviewCount: 212, badge: null,          icon: '👗', stock: 36,  description: 'Lightweight wrap dress with a floral print, perfect for warm-weather days.' },
+    { id: 3,  name: 'Cropped Denim Jacket',       brand: 'Meridian',          category: 'women',       price: 74.50,  originalPrice: null,   rating: 4.3, reviewCount: 89,  badge: 'New',         icon: '🧥', stock: 27,  description: 'Cropped denim jacket that layers over almost anything.' },
+    { id: 4,  name: 'High-Rise Yoga Leggings',    brand: 'Aurora Active',     category: 'women',       price: 42.00,  originalPrice: null,   rating: 4.7, reviewCount: 530, badge: 'Best Seller', icon: '🧘‍♀️', stock: 95, description: 'Squat-proof high-rise leggings with a four-way stretch fabric.' },
+    { id: 5,  name: 'Cashmere Blend Scarf',       brand: 'Wintermere',        category: 'women',       price: 39.99,  originalPrice: null,   rating: 4.5, reviewCount: 76,  badge: null,          icon: '🧣', stock: 58,  description: 'Soft cashmere-blend scarf for cold-weather commutes.' },
+    { id: 6,  name: 'Ankle Strap Heels',          brand: 'Meridian',          category: 'women',       price: 89.00,  originalPrice: 120.00, rating: 4.1, reviewCount: 143, badge: 'Sale',        icon: '👠', stock: 19,  description: 'Ankle-strap block heels comfortable enough for all-day wear.' },
+    // ── Men ──
+    { id: 7,  name: 'Green Cotton Sweatshirt',    brand: 'EMJOL',             category: 'men',         price: 35.99,  originalPrice: null,   rating: 4.2, reviewCount: 97,  badge: null,          icon: '👕', stock: 63,  description: 'Comfortable cotton sweatshirt perfect for winter weather.' },
+    { id: 8,  name: 'Denim Jeans',                brand: "LEVI'S",            category: 'men',         price: 65.99,  originalPrice: null,   rating: 4.1, reviewCount: 305, badge: null,          icon: '👖', stock: 71,  description: 'Classic fit denim jeans built to last.' },
+    { id: 9,  name: 'Slim Fit Chino Pants',       brand: 'Foundry',           category: 'men',         price: 54.99,  originalPrice: null,   rating: 4.2, reviewCount: 198, badge: null,          icon: '👖', stock: 48,  description: 'Slim fit chinos that go from the office to the weekend.' },
+    { id: 10, name: 'Flannel Button-Down Shirt',  brand: 'Foundry',           category: 'men',         price: 47.50,  originalPrice: null,   rating: 4.4, reviewCount: 65,  badge: 'New',         icon: '👕', stock: 34,  description: 'Brushed flannel shirt with a soft, warm feel.' },
+    { id: 11, name: 'Merino Wool Sweater',        brand: 'Northline',         category: 'men',         price: 79.99,  originalPrice: null,   rating: 4.6, reviewCount: 220, badge: null,          icon: '🧶', stock: 29,  description: 'Breathable merino wool crewneck sweater.' },
+    { id: 12, name: 'Classic Leather Belt',       brand: 'Foundry',           category: 'men',         price: 29.99,  originalPrice: null,   rating: 4.0, reviewCount: 54,  badge: null,          icon: '🎽', stock: 82,  description: 'Full-grain leather belt with a brushed metal buckle.' },
+    { id: 13, name: 'Performance Golf Polo',      brand: 'Foundry',           category: 'men',         price: 44.00,  originalPrice: 58.00,  rating: 4.3, reviewCount: 112, badge: 'Sale',        icon: '⛳', stock: 40,  description: 'Moisture-wicking polo for the course or everyday wear.' },
+    // ── Outdoors ──
+    { id: 14, name: 'Winter Jacket',              brand: 'NORTH FACE',        category: 'outdoors',    price: 179.99, originalPrice: 219.99, rating: 4.3, reviewCount: 88,  badge: 'Sale',        icon: '🧥', stock: 22,  description: 'Insulated jacket for cold weather adventures.' },
+    { id: 15, name: '2-Person Camping Tent',      brand: 'TrailPeak',         category: 'outdoors',    price: 149.99, originalPrice: null,   rating: 4.5, reviewCount: 301, badge: 'Best Seller', icon: '⛺', stock: 17,  description: 'Weatherproof 2-person tent that sets up in under 5 minutes.' },
+    { id: 16, name: 'Insulated Steel Water Bottle', brand: 'TrailPeak',       category: 'outdoors',    price: 24.99,  originalPrice: null,   rating: 4.8, reviewCount: 890, badge: null,          icon: '🧴', stock: 140, description: 'Double-wall insulated bottle that keeps drinks cold for 24 hours.' },
+    { id: 17, name: 'Trekking Poles (Pair)',      brand: 'TrailPeak',         category: 'outdoors',    price: 39.99,  originalPrice: null,   rating: 4.4, reviewCount: 76,  badge: null,          icon: '🥾', stock: 45,  description: 'Adjustable aluminum trekking poles with padded grips.' },
+    { id: 18, name: 'Compact Camp Stove',         brand: 'TrailPeak',         category: 'outdoors',    price: 54.99,  originalPrice: null,   rating: 4.3, reviewCount: 41,  badge: 'New',         icon: '🔥', stock: 24,  description: 'Foldable backpacking stove that boils water in under 3 minutes.' },
+    { id: 19, name: 'All-Weather Hiking Boots',   brand: 'TrailPeak',         category: 'outdoors',    price: 129.00, originalPrice: 159.00, rating: 4.6, reviewCount: 245, badge: 'Sale',        icon: '🥾', stock: 31,  description: 'Waterproof hiking boots with reinforced ankle support.' },
+    // ── Cooking ──
+    { id: 20, name: '10-Piece Stainless Cookware Set', brand: 'Homestead Kitchen', category: 'cooking', price: 189.99, originalPrice: null,   rating: 4.7, reviewCount: 410, badge: 'Best Seller', icon: '🍳', stock: 14,  description: 'Full stainless steel cookware set for everyday cooking.' },
+    { id: 21, name: 'Cast Iron Skillet 12"',      brand: 'Homestead Kitchen', category: 'cooking',     price: 34.99,  originalPrice: null,   rating: 4.9, reviewCount: 670, badge: null,          icon: '🥘', stock: 66,  description: 'Pre-seasoned cast iron skillet built to last generations.' },
+    { id: 22, name: "8-Inch Chef's Knife",        brand: 'Homestead Kitchen', category: 'cooking',     price: 59.99,  originalPrice: null,   rating: 4.5, reviewCount: 198, badge: null,          icon: '🔪', stock: 53,  description: 'High-carbon stainless steel chef\'s knife with a full tang.' },
+    { id: 23, name: 'Stand Mixer',                brand: 'Homestead Kitchen', category: 'cooking',     price: 249.99, originalPrice: 299.00, rating: 4.6, reviewCount: 155, badge: 'Sale',        icon: '🥣', stock: 12,  description: '5-quart stand mixer with 10 speeds and dough hook attachment.' },
+    { id: 24, name: 'Bamboo Cutting Board Set',   brand: 'Homestead Kitchen', category: 'cooking',     price: 27.99,  originalPrice: null,   rating: 4.2, reviewCount: 38,  badge: 'New',         icon: '🪵', stock: 74,  description: 'Set of 3 sustainably sourced bamboo cutting boards.' },
+    // ── Electronics ──
+    { id: 25, name: 'Wireless Headphones',        brand: 'SONY',              category: 'electronics', price: 299.99, originalPrice: 349.00, rating: 4.5, reviewCount: 512, badge: 'Sale',        icon: '🎧', stock: 26,  description: 'Premium noise-cancelling headphones.' },
+    { id: 26, name: 'Smartphone Case',            brand: 'TECH',              category: 'electronics', price: 25.99,  originalPrice: null,   rating: 3.8, reviewCount: 44,  badge: null,          icon: '📱', stock: 120, description: 'Protective case with a sleek design.' },
+    { id: 27, name: 'Smart Watch',                brand: 'APPLE',             category: 'electronics', price: 399.00, originalPrice: null,   rating: 4.9, reviewCount: 900, badge: 'Best Seller', icon: '⌚', stock: 33,  description: 'Track fitness, notifications, and health data.' },
+    { id: 28, name: 'Gaming Controller',          brand: 'XBOX',              category: 'electronics', price: 69.99,  originalPrice: null,   rating: 4.4, reviewCount: 120, badge: 'New',         icon: '🎮', stock: 57,  description: 'Wireless controller with haptic feedback.' },
+    { id: 29, name: 'Portable Bluetooth Speaker', brand: 'Voltaic',           category: 'electronics', price: 59.99,  originalPrice: null,   rating: 4.3, reviewCount: 233, badge: null,          icon: '🔊', stock: 68,  description: 'Waterproof speaker with 12-hour battery life.' },
+    // ── Accessories ──
+    { id: 30, name: 'Sport Backpack',             brand: 'NIKE',              category: 'accessories', price: 89.99,  originalPrice: null,   rating: 4.7, reviewCount: 380, badge: 'Best Seller', icon: '🎒', stock: 39,  description: 'Durable backpack with multiple compartments.' },
+    { id: 31, name: 'Running Shoes',              brand: 'ADIDAS',            category: 'accessories', price: 120.00, originalPrice: null,   rating: 4.8, reviewCount: 640, badge: 'Best Seller', icon: '👟', stock: 44,  description: 'Lightweight running shoes for maximum comfort.' },
+    { id: 32, name: 'Leather Handbag',            brand: 'COACH',             category: 'accessories', price: 185.00, originalPrice: null,   rating: 4.6, reviewCount: 96,  badge: 'New',         icon: '👜', stock: 18,  description: 'Elegant leather handbag for everyday use.' },
+    { id: 33, name: 'Sunglasses',                 brand: 'RAY-BAN',           category: 'accessories', price: 149.99, originalPrice: null,   rating: 4.0, reviewCount: 210, badge: null,          icon: '🕶️', stock: 52,  description: 'UV-protected polarised sunglasses.' }
+];
+
+async function seedDefaultProducts() {
+    const products = await readJSON('products');
+    if (!products || products.length === 0) {
+        await writeJSON('products', DEFAULT_PRODUCTS);
+    }
+}
+
+// GET /api/products — public catalog, optionally filtered
+app.get('/api/products', async (req, res) => {
+    let products = await readJSON('products');
+    const category = String(req.query.category || '').toLowerCase();
+    const onSale    = req.query.onSale === 'true';
+    const q         = String(req.query.q || '').toLowerCase().trim();
+    if (category && category !== 'all') products = products.filter(p => p.category === category);
+    if (onSale) products = products.filter(p => p.badge === 'Sale');
+    if (q) products = products.filter(p =>
+        p.name.toLowerCase().includes(q) || p.brand.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)
+    );
+    res.json(products);
+});
+
+// ── E-Commerce: shipping addresses ──────────────────────────────────────────
+app.get('/api/me/addresses', async (req, res) => {
+    const all  = await readJSON('addresses');
+    const mine = all.filter(a => a.userId === req.userId).sort((a, b) => (a.id || 0) - (b.id || 0));
+    res.json(mine);
+});
+
+app.post('/api/me/addresses', async (req, res) => {
+    const body = req.body || {};
+    const fullName = String(body.fullName || '').trim();
+    const street    = String(body.street || '').trim();
+    const city       = String(body.city || '').trim();
+    const state       = String(body.state || '').trim().toUpperCase();
+    const zip          = String(body.zip || '').trim();
+    if (!fullName) return res.status(400).json({ error: 'Full name required' });
+    if (!street)   return res.status(400).json({ error: 'Street address required' });
+    if (!city)     return res.status(400).json({ error: 'City required' });
+    if (!STATE_TAX_RATES.hasOwnProperty(state)) return res.status(400).json({ error: 'Valid US state required' });
+    if (!zip)      return res.status(400).json({ error: 'ZIP code required' });
+
+    const all = await readJSON('addresses');
+    const makeDefault = body.isDefault || !all.some(a => a.userId === req.userId);
+    const record = {
+        id: nextId(all), userId: req.userId, fullName, phone: String(body.phone || '').trim(),
+        street, street2: String(body.street2 || '').trim(), city, state, zip,
+        country: 'United States', isDefault: makeDefault, createdAt: Date.now()
+    };
+    let updated = all.concat([record]);
+    if (makeDefault) updated = updated.map(a => a.id === record.id ? a : (a.userId === req.userId ? Object.assign({}, a, { isDefault: false }) : a));
+    await writeJSON('addresses', updated);
+    res.status(201).json(record);
+});
+
+app.put('/api/me/addresses/:id', async (req, res) => {
+    const id  = Number(req.params.id);
+    const all = await readJSON('addresses');
+    const idx = all.findIndex(a => a.id === id && a.userId === req.userId);
+    if (idx === -1) return res.status(404).json({ error: 'Address not found' });
+    const body = req.body || {};
+    const patch = {};
+    ['fullName', 'phone', 'street', 'street2', 'city', 'zip'].forEach(f => {
+        if (body[f] !== undefined) patch[f] = String(body[f]).trim();
+    });
+    if (body.state !== undefined) {
+        const state = String(body.state).trim().toUpperCase();
+        if (!STATE_TAX_RATES.hasOwnProperty(state)) return res.status(400).json({ error: 'Valid US state required' });
+        patch.state = state;
+    }
+    let updated = all.map(a => a.id === id ? Object.assign({}, a, patch) : a);
+    if (body.isDefault) {
+        updated = updated.map(a => a.id === id ? Object.assign({}, a, { isDefault: true }) : (a.userId === req.userId ? Object.assign({}, a, { isDefault: false }) : a));
+    }
+    await writeJSON('addresses', updated);
+    res.json(updated.find(a => a.id === id));
+});
+
+app.delete('/api/me/addresses/:id', async (req, res) => {
+    const id  = Number(req.params.id);
+    const all = await readJSON('addresses');
+    const target = all.find(a => a.id === id && a.userId === req.userId);
+    if (!target) return res.status(404).json({ error: 'Address not found' });
+    let remaining = all.filter(a => !(a.id === id && a.userId === req.userId));
+    // Promote another address to default if the deleted one was it, so
+    // checkout always has a usable default when at least one address remains.
+    if (target.isDefault) {
+        const mineIdx = remaining.findIndex(a => a.userId === req.userId);
+        if (mineIdx !== -1) remaining[mineIdx] = Object.assign({}, remaining[mineIdx], { isDefault: true });
+    }
+    await writeJSON('addresses', remaining);
+    res.json({ ok: true });
+});
+
+// ── E-Commerce: payment methods ─────────────────────────────────────────────
+// Simulated only — no real card network integration. Charges still debit
+// the user's checking balance; the "card" selected here is stored on the
+// order for a realistic receipt/statement, matching how the rest of the app
+// keeps a single real ledger (the bank balance) under every feature.
+function detectCardBrand(number) {
+    const n = String(number || '').replace(/\D/g, '');
+    if (/^4/.test(n))  return 'visa';
+    if (/^5[1-5]/.test(n)) return 'mastercard';
+    if (/^3[47]/.test(n)) return 'amex';
+    if (/^6(?:011|5)/.test(n)) return 'discover';
+    return 'card';
+}
+
+app.get('/api/me/payment-methods', async (req, res) => {
+    const all  = await readJSON('paymentMethods');
+    const mine = all.filter(p => p.userId === req.userId).sort((a, b) => (a.id || 0) - (b.id || 0));
+    res.json(mine);
+});
+
+app.post('/api/me/payment-methods', async (req, res) => {
+    const body = req.body || {};
+    const number = String(body.cardNumber || '').replace(/\D/g, '');
+    const cardholderName = String(body.cardholderName || '').trim();
+    const expMonth = Number(body.expMonth);
+    const expYear  = Number(body.expYear);
+    if (number.length < 12 || number.length > 19) return res.status(400).json({ error: 'Enter a valid card number' });
+    if (!cardholderName) return res.status(400).json({ error: 'Cardholder name required' });
+    if (!expMonth || expMonth < 1 || expMonth > 12) return res.status(400).json({ error: 'Valid expiration month required' });
+    if (!expYear || expYear < new Date().getFullYear()) return res.status(400).json({ error: 'Card is expired' });
+
+    const all = await readJSON('paymentMethods');
+    const makeDefault = body.isDefault || !all.some(p => p.userId === req.userId);
+    const record = {
+        id: nextId(all), userId: req.userId, brand: detectCardBrand(number), last4: number.slice(-4),
+        cardholderName, expMonth, expYear, isDefault: makeDefault, createdAt: Date.now()
+    };
+    let updated = all.concat([record]);
+    if (makeDefault) updated = updated.map(p => p.id === record.id ? p : (p.userId === req.userId ? Object.assign({}, p, { isDefault: false }) : p));
+    await writeJSON('paymentMethods', updated);
+    res.status(201).json(record);
+});
+
+app.patch('/api/me/payment-methods/:id/default', async (req, res) => {
+    const id  = Number(req.params.id);
+    const all = await readJSON('paymentMethods');
+    if (!all.some(p => p.id === id && p.userId === req.userId)) return res.status(404).json({ error: 'Payment method not found' });
+    const updated = all.map(p => p.userId === req.userId ? Object.assign({}, p, { isDefault: p.id === id }) : p);
+    await writeJSON('paymentMethods', updated);
+    res.json(updated.find(p => p.id === id));
+});
+
+app.delete('/api/me/payment-methods/:id', async (req, res) => {
+    const id  = Number(req.params.id);
+    const all = await readJSON('paymentMethods');
+    const target = all.find(p => p.id === id && p.userId === req.userId);
+    if (!target) return res.status(404).json({ error: 'Payment method not found' });
+    let remaining = all.filter(p => !(p.id === id && p.userId === req.userId));
+    if (target.isDefault) {
+        const mineIdx = remaining.findIndex(p => p.userId === req.userId);
+        if (mineIdx !== -1) remaining[mineIdx] = Object.assign({}, remaining[mineIdx], { isDefault: true });
+    }
+    await writeJSON('paymentMethods', remaining);
+    res.json({ ok: true });
+});
+
 // ── Catch-all: SPA fallback ───────────────────────────────────────────────────
 app.get('/{*path}', (req, res) => {
     if (!path.extname(req.path)) {
@@ -2016,6 +2444,7 @@ async function start() {
     await initStorage();
     await seedDefaultAdmin();
     await seedDefaultBills();
+    await seedDefaultProducts();
     startScheduledTransferSweep();
     app.listen(PORT, () => {
         console.log('DigiFinWiz server running on http://localhost:' + PORT);

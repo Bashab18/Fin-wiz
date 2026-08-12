@@ -4034,6 +4034,25 @@ body {
 }
 .order-status-delivered { background:#dcfce7; color:#16a34a; }
 .order-status-processing { background:#fef3c7; color:#d97706; }
+.order-status-shipped { background:#e0e7ff; color:#4338ca; }
+.order-status-out_for_delivery { background:#dbeafe; color:#1d4ed8; }
+
+/* ============================================
+   ECOMMERCE: Checkout modal (address/payment/shipping selection)
+   ============================================ */
+.checkout-field { margin-bottom: 0.875rem; }
+.checkout-field label {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--color-gray-600, #4b5563);
+    margin-bottom: 0.3rem;
+}
+.checkout-field select.form-input {
+    width: 100%;
+    padding: 0.5rem 0.65rem;
+    font-size: 0.85rem;
+}
 
 /* ============================================
    TUTORIALS: watched state + progress bar

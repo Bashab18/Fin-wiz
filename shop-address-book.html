@@ -29,12 +29,12 @@
         <div class="shop-container">
             <div class="shop-logo">InStyl.</div>
             <nav class="shop-nav">
-                <a href="shop-all.html">Shop All</a>
-                <a href="shop-all.html">On Sale</a>
-                <a href="shop-all.html">Women</a>
-                <a href="shop-all.html">Men</a>
-                <a href="shop-all.html">Outdoors</a>
-                <a href="shop-all.html">Cooking</a>
+                <a href="ecommerce.html">Shop All</a>
+                <a href="ecommerce.html?sale=true">On Sale</a>
+                <a href="ecommerce.html?category=women">Women</a>
+                <a href="ecommerce.html?category=men">Men</a>
+                <a href="ecommerce.html?category=outdoors">Outdoors</a>
+                <a href="ecommerce.html?category=cooking">Cooking</a>
             </nav>
             <div class="shop-header-right">
                 <div class="shop-search-box"><input type="text" placeholder="Search..."></div>
@@ -107,9 +107,21 @@
     var _addresses = [];
     var _editingId = null;
 
-    function _addrId() { return 'addr_' + Date.now() + '_' + Math.random().toString(36).slice(2,6); }
-
     function _escH(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    var US_STATES = [
+        ['AL','Alabama'],['AK','Alaska'],['AZ','Arizona'],['AR','Arkansas'],['CA','California'],
+        ['CO','Colorado'],['CT','Connecticut'],['DE','Delaware'],['FL','Florida'],['GA','Georgia'],
+        ['HI','Hawaii'],['ID','Idaho'],['IL','Illinois'],['IN','Indiana'],['IA','Iowa'],
+        ['KS','Kansas'],['KY','Kentucky'],['LA','Louisiana'],['ME','Maine'],['MD','Maryland'],
+        ['MA','Massachusetts'],['MI','Michigan'],['MN','Minnesota'],['MS','Mississippi'],['MO','Missouri'],
+        ['MT','Montana'],['NE','Nebraska'],['NV','Nevada'],['NH','New Hampshire'],['NJ','New Jersey'],
+        ['NM','New Mexico'],['NY','New York'],['NC','North Carolina'],['ND','North Dakota'],['OH','Ohio'],
+        ['OK','Oklahoma'],['OR','Oregon'],['PA','Pennsylvania'],['RI','Rhode Island'],['SC','South Carolina'],
+        ['SD','South Dakota'],['TN','Tennessee'],['TX','Texas'],['UT','Utah'],['VT','Vermont'],
+        ['VA','Virginia'],['WA','Washington'],['WV','West Virginia'],['WI','Wisconsin'],['WY','Wyoming'],
+        ['DC','District of Columbia']
+    ];
 
     // Safe to splice into a single-quoted HTML attribute: JSON.stringify() a value for use as a JS
     // argument literal, then neutralize characters that could break out of the attribute or get
@@ -139,7 +151,7 @@
                 '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></button>' +
                 '</div></div>' +
                 '<div class="address-card-body">' +
-                '<h3>' + _escH(addr.name) + '</h3>' +
+                '<h3>' + _escH(addr.fullName) + '</h3>' +
                 '<p>' + _escH(addr.street) + '</p>' +
                 '<p>' + _escH(addr.city) + (addr.state ? ', ' + _escH(addr.state) : '') + ' ' + _escH(addr.zip) + '</p>' +
                 (addr.country ? '<p>' + _escH(addr.country) + '</p>' : '') +
@@ -157,17 +169,20 @@
             '<div class="form-container" style="margin-bottom:24px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:24px">' +
             '<h3 style="margin:0 0 16px;font-size:1rem;font-weight:600">' + (addr ? 'Edit' : 'Add New') + ' Address</h3>' +
             '<div class="form-row">' +
-            '<div class="form-group"><label>Full Name</label><input type="text" id="af_name" value="' + _escH(addr ? addr.name : '') + '" placeholder="Full name" required></div>' +
+            '<div class="form-group"><label>Full Name</label><input type="text" id="af_name" value="' + _escH(addr ? addr.fullName : '') + '" placeholder="Full name" required></div>' +
             '<div class="form-group"><label>Phone</label><input type="tel" id="af_phone" value="' + _escH(addr ? addr.phone : '') + '" placeholder="(555) 555-5555"></div>' +
             '</div>' +
             '<div class="form-group"><label>Street Address</label><input type="text" id="af_street" value="' + _escH(addr ? addr.street : '') + '" placeholder="123 Main St" required></div>' +
+            '<div class="form-group"><label>Apt / Suite <span style="font-weight:400;color:#94a3b8">(Optional)</span></label><input type="text" id="af_street2" value="' + _escH(addr ? addr.street2 : '') + '" placeholder="Apt 4B"></div>' +
             '<div class="form-row">' +
             '<div class="form-group"><label>City</label><input type="text" id="af_city" value="' + _escH(addr ? addr.city : '') + '" placeholder="City" required></div>' +
-            '<div class="form-group"><label>State</label><input type="text" id="af_state" value="' + _escH(addr ? addr.state : '') + '" placeholder="MA"></div>' +
+            '<div class="form-group"><label>State</label><select id="af_state" required><option value="">Select…</option>' +
+            US_STATES.map(function(s) { return '<option value="' + s[0] + '"' + (addr && addr.state === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('') +
+            '</select></div>' +
             '<div class="form-group"><label>ZIP</label><input type="text" id="af_zip" value="' + _escH(addr ? addr.zip : '') + '" placeholder="02101" required></div>' +
             '</div>' +
             '<div class="form-row">' +
-            '<div class="form-group"><label>Country</label><input type="text" id="af_country" value="' + _escH(addr ? (addr.country || 'United States') : 'United States') + '"></div>' +
+            '<div class="form-group"><label>Country</label><input type="text" id="af_country" value="United States" disabled></div>' +
             ((!addr || !addr.isDefault) ? '<div class="form-group" style="display:flex;align-items:center;gap:8px;margin-top:24px"><input type="checkbox" id="af_default"' + (addr && addr.isDefault ? ' checked' : '') + '><label for="af_default" style="margin:0">Set as default</label></div>' : '') +
             '</div>' +
             '<div class="form-actions">' +
@@ -183,75 +198,67 @@
         _editingId = null;
     }
 
-    function saveAddressForm() {
-        var name   = (document.getElementById('af_name')    || {}).value || '';
-        var street = (document.getElementById('af_street')  || {}).value || '';
-        var city   = (document.getElementById('af_city')    || {}).value || '';
-        var state  = (document.getElementById('af_state')   || {}).value || '';
-        var zip    = (document.getElementById('af_zip')     || {}).value || '';
-        var country= (document.getElementById('af_country') || {}).value || 'United States';
-        var phone  = (document.getElementById('af_phone')   || {}).value || '';
-        var setDef = !!(document.getElementById('af_default') || {}).checked;
+    function reloadAddresses() {
+        return DigifinwizDB.getAddresses().then(function(addresses) {
+            _addresses = addresses;
+            renderAddresses();
+        });
+    }
 
-        if (!name.trim() || !street.trim() || !city.trim() || !zip.trim()) {
+    function saveAddressForm() {
+        var fullName = (document.getElementById('af_name')     || {}).value || '';
+        var street   = (document.getElementById('af_street')   || {}).value || '';
+        var street2  = (document.getElementById('af_street2')  || {}).value || '';
+        var city     = (document.getElementById('af_city')     || {}).value || '';
+        var state    = (document.getElementById('af_state')    || {}).value || '';
+        var zip      = (document.getElementById('af_zip')      || {}).value || '';
+        var phone    = (document.getElementById('af_phone')    || {}).value || '';
+        var setDef   = !!(document.getElementById('af_default') || {}).checked;
+
+        if (!fullName.trim() || !street.trim() || !city.trim() || !state || !zip.trim()) {
             showShopToast('Please fill in required fields.', true);
             return;
         }
 
-        if (_editingId) {
-            var editedId = _editingId;
-            _addresses = _addresses.map(function(a) {
-                return a.id === editedId
-                    ? Object.assign({}, a, { name:name.trim(), street:street.trim(), city:city.trim(), state:state.trim(), zip:zip.trim(), country:country.trim(), phone:phone.trim() })
-                    : a;
-            });
-            if (setDef) {
-                _addresses = _addresses.map(function(a) { return Object.assign({}, a, { isDefault: a.id === editedId }); });
-            }
-        } else {
-            var newAddr = { id: _addrId(), name:name.trim(), street:street.trim(), city:city.trim(), state:state.trim(), zip:zip.trim(), country:country.trim(), phone:phone.trim(), isDefault:false };
-            _addresses.push(newAddr);
-            if (setDef || _addresses.length === 1) {
-                _addresses = _addresses.map(function(a) { return Object.assign({}, a, { isDefault: a.id === newAddr.id }); });
-            }
-        }
-
-        ShopBridge.saveAddresses(_addresses).then(function() {
+        var payload = {
+            fullName: fullName.trim(), street: street.trim(), street2: street2.trim(),
+            city: city.trim(), state: state, zip: zip.trim(), phone: phone.trim(), isDefault: setDef
+        };
+        var op = _editingId ? DigifinwizDB.updateAddress(_editingId, payload) : DigifinwizDB.createAddress(payload);
+        op.then(function() {
             cancelAddressForm();
-            renderAddresses();
+            return reloadAddresses();
+        }).then(function() {
             showShopToast('Address saved!');
-        }).catch(function() {
-            showShopToast('Error saving address.', true);
+        }).catch(function(err) {
+            showShopToast(err && err.message ? err.message : 'Error saving address.', true);
         });
     }
 
     function deleteAddress(id) {
         if (!confirm('Delete this address?')) return;
-        var wasDefault = (_addresses.find(function(a) { return a.id === id; }) || {}).isDefault;
-        _addresses = _addresses.filter(function(a) { return a.id !== id; });
-        if (wasDefault && _addresses.length > 0) _addresses[0].isDefault = true;
-        ShopBridge.saveAddresses(_addresses).then(function() {
-            renderAddresses();
+        DigifinwizDB.deleteAddress(id).then(function() {
+            return reloadAddresses();
+        }).then(function() {
             showShopToast('Address removed.');
+        }).catch(function(err) {
+            showShopToast(err && err.message ? err.message : 'Error deleting address.', true);
         });
     }
 
     function setDefaultAddress(id) {
-        _addresses = _addresses.map(function(a) {
-            return Object.assign({}, a, { isDefault: a.id === id });
-        });
-        ShopBridge.saveAddresses(_addresses).then(function() {
-            renderAddresses();
+        DigifinwizDB.updateAddress(id, { isDefault: true }).then(function() {
+            return reloadAddresses();
+        }).then(function() {
             showShopToast('Default address updated.');
+        }).catch(function(err) {
+            showShopToast(err && err.message ? err.message : 'Error updating address.', true);
         });
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-        if (typeof ShopBridge === 'undefined') return;
-        ShopBridge.getAddresses().then(function(addresses) {
-            _addresses = addresses;
-            renderAddresses();
-        }).catch(function() {
+        if (typeof DigifinwizDB === 'undefined') return;
+        reloadAddresses().catch(function() {
             document.getElementById('addressList').innerHTML =
                 '<p style="color:#ef4444;padding:20px 0;">Could not load addresses.</p>';
         });
