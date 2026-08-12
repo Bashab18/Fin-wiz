@@ -133,8 +133,11 @@
                 .catch(function(err) {
                     registerBtn.disabled    = false;
                     registerBtn.textContent = 'Create Account';
-                    // ConstraintError = username or email already exists
-                    if (err && (err.name === 'ConstraintError' || (err.message && err.message.indexOf('unique') !== -1))) {
+                    // POST /api/auth/register responds 409 with {error: 'Username
+                    // already taken'} or {error: 'Email already registered'};
+                    // db.js's _api() throws that message verbatim as err.message.
+                    var msg = err && err.message || '';
+                    if (msg === 'Username already taken' || msg === 'Email already registered') {
                         showError('That username or email is already registered. Please choose a different one.');
                     } else {
                         console.error('Registration error:', err);

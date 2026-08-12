@@ -400,7 +400,7 @@
             function openMessage(m, session) {
                 var isRead = (m.readBy||[]).indexOf(session.userId) !== -1;
                 var typeClass = TYPE_CLASS[m.type] || 'msg-type-info';
-                var typeLabel = TYPE_LABEL[m.type] || m.type;
+                var typeLabel = esc(TYPE_LABEL[m.type] || m.type);
 
                 paneEl.innerHTML =
                     '<div class="email-reading-header">' +

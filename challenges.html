@@ -460,7 +460,7 @@
         }).then(function(userData) {
             if (userData) {
                 userData.points            = (userData.points || 0) + points;
-                userData.pointsToNextLevel = (userData.pointsToNextLevel || 1000) - points;
+                userData.pointsToNextLevel = (userData.pointsToNextLevel != null ? userData.pointsToNextLevel : 1000) - points;
                 userData.challenges        = (userData.challenges || 0) + 1;
                 if (userData.pointsToNextLevel <= 0) {
                     if (userData.level === 1) {
@@ -508,10 +508,17 @@
 
     // Extract data-loading into a named function so it can be called on load AND on tab return
     function loadChallengesPage() {
-        return Promise.all([DigifinwizDB.getStats(), DigifinwizDB.getChallenges()]).then(function(results) {
+        return Promise.all([DigifinwizDB.getStats(), DigifinwizDB.getChallenges(), DigifinwizDB.getTransactions(1000)]).then(function(results) {
             var stats      = results[0];
             var challenges = results[1];
+            var txs        = results[2] || [];
             var user       = stats.user;
+
+            // /api/me/stats has no "last transaction amount" field, so
+            // buildProgressBar's transfer_amount progress bar always read 0.
+            // Use the largest single transfer made so far instead, since that's
+            // the meaningful "progress toward a single-transaction threshold".
+            stats.lastTxAmount = txs.reduce(function(m, t){ return Math.max(m, Number(t.amount) || 0); }, 0);
 
             // -- Progress header ------------------------------------------
             if (user) {
@@ -590,7 +597,13 @@
             var purchPts = stats.purchPts || 0;
             var bonusPts = completedAll.reduce(function(s, c) { return s + (c.points || 0); }, 0);
             var levelPts = user ? Math.max(0, (user.level - 1)) * 26 : 0;
-            var allPts   = [purchPts, payPts, txPts, bonusPts, txPts, levelPts];
+            // "Banking" and "Transfers" used to both read stats.txPts, so the
+            // two bars always showed identical values. Banking now shows the
+            // bonus XP earned specifically from completed banking challenges
+            // (distinct from the raw per-transfer XP the Transfers bar shows).
+            var bankingBonusPts = completedAll.filter(function(c) { return c.category === 'banking'; })
+                .reduce(function(s, c) { return s + (c.points || 0); }, 0);
+            var allPts   = [purchPts, payPts, bankingBonusPts, bonusPts, txPts, levelPts];
             var maxPts   = Math.max.apply(null, allPts) || 1;
 
             var chartIds = ['chartValEcom','chartValUtil','chartValBank','chartValBonus','chartValTransfers','chartValLevel'];
@@ -599,7 +612,10 @@
                 var heightPct = Math.max(5, Math.round((pts / maxPts) * 100));
                 if (bars[i]) {
                     var barEl = bars[i].querySelector('.bar');
-                    if (barEl) setTimeout(function(el, h){ el.style.height = h + '%'; }(barEl, heightPct), 300 + i * 80);
+                    // The IIFE was invoked immediately and its undefined return
+                    // handed to setTimeout, so the staggered-reveal animation
+                    // never actually ran — every bar snapped to height on load.
+                    if (barEl) setTimeout(function(){ barEl.style.height = heightPct + '%'; }, 300 + i * 80);
                 }
                 if (chartIds[i]) set(chartIds[i], pts + ' PTS');
             });

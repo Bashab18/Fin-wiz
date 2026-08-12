@@ -156,6 +156,7 @@
 
             var active    = challenges.filter(function(c) { return c.active !== false; });
             var completed = active.filter(function(c) { return c.completed; });
+            var remaining = active.filter(function(c) { return !c.completed; });
 
             // Stat cards
             var lvlEl  = document.getElementById('statLevel');
@@ -165,7 +166,7 @@
 
             if (lvlEl)  lvlEl.textContent  = userData.level  || 1;
             if (ptEl)   ptEl.textContent   = (userData.points || 0).toLocaleString();
-            if (chalEl) chalEl.textContent = active.length;
+            if (chalEl) chalEl.textContent = remaining.length;
             if (taskEl) taskEl.textContent = completed.length;
 
             // Progress bar
