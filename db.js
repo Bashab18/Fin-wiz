@@ -431,6 +431,23 @@ const DigifinwizDB = (() => {
         return _api('GET', '/api/me/statement?account=' + encodeURIComponent(account) + '&month=' + encodeURIComponent(month));
     }
 
+    // ── Scheduled transfers ─────────────────────────────────────────────────────
+    function getScheduledTransfers() {
+        return _api('GET', '/api/me/scheduled-transfers');
+    }
+
+    function createScheduledTransfer(data) {
+        return _api('POST', '/api/me/scheduled-transfers', data);
+    }
+
+    function toggleScheduledTransfer(id, active) {
+        return _api('PATCH', '/api/me/scheduled-transfers/' + id, { active });
+    }
+
+    function cancelScheduledTransfer(id) {
+        return _api('DELETE', '/api/me/scheduled-transfers/' + id);
+    }
+
     // ── Public API ────────────────────────────────────────────────────────────
     return {
         // Init
@@ -544,6 +561,12 @@ const DigifinwizDB = (() => {
         deleteSavingsGoal,
 
         // Statement
-        getStatement
+        getStatement,
+
+        // Scheduled transfers
+        getScheduledTransfers,
+        createScheduledTransfer,
+        toggleScheduledTransfer,
+        cancelScheduledTransfer
     };
 })();

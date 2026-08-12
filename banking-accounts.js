@@ -446,6 +446,40 @@ function loadStatementsTab() {
         monthInput.value = now.getFullYear() + '-' + mm;
         monthInput.max   = monthInput.value;
     }
+    renderStatementArchiveList();
+}
+
+// Statement archive: DigiFinWiz reconstructs statements on demand from
+// existing transaction records rather than storing generated PDFs, so this
+// is a list of the last 12 selectable months (not a list of what's actually
+// been generated before) — clicking one just pre-fills the month picker.
+function renderStatementArchiveList() {
+    var el = document.getElementById('stmtArchiveList');
+    if (!el) return;
+    var months = [];
+    var cursor = new Date();
+    cursor.setDate(1);
+    for (var i = 0; i < 12; i++) {
+        var y = cursor.getFullYear();
+        var m = String(cursor.getMonth() + 1).padStart(2, '0');
+        months.push({
+            value: y + '-' + m,
+            label: cursor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+        });
+        cursor.setMonth(cursor.getMonth() - 1);
+    }
+    el.innerHTML = '<div style="font-size:0.78rem;color:var(--color-gray-500);margin:0.75rem 0 0.4rem">Or pick a recent month:</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:0.5rem">' +
+        months.map(function(m) {
+            return '<button type="button" class="statement-archive-item" onclick="loadArchivedStatement(\'' + m.value + '\')">📄 ' + m.label + '</button>';
+        }).join('') +
+        '</div>';
+}
+
+function loadArchivedStatement(monthValue) {
+    var monthInput = document.getElementById('stmtMonth');
+    if (monthInput) monthInput.value = monthValue;
+    generateStatement();
 }
 
 function generateStatement() {
@@ -527,6 +561,234 @@ document.addEventListener('DOMContentLoaded', function() {
             showNotification('Alert preferences saved!', 'success');
         }).catch(function(err) {
             showNotification(err && err.message ? err.message : 'Could not save preferences.', 'error');
+        });
+    });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ACCOUNT / ROUTING NUMBERS (cosmetic realism — deterministic per user, not
+   stored server-side; DigiFinWiz is a simulation, there is no real bank)
+   ══════════════════════════════════════════════════════════════════════════ */
+var DIGIFINWIZ_ROUTING_NUMBER = '123456789';
+
+function fakeAccountNumber(userId, type) {
+    var typeDigit = type === 'savings' ? 2 : 1;
+    var seed = ((Number(userId) || 0) * 10) + typeDigit;
+    var base = String(1000000000 + (seed * 7919) % 900000000);
+    return typeDigit + base.slice(1);
+}
+function maskAccountNumber(num) { return '••••••' + String(num).slice(-4); }
+
+var BANK_BRANCHES = [
+    { name: 'DigiFinWiz — Downtown Branch', address: '120 Market Street, Suite 100', hours: 'Mon–Fri 9am–5pm · Sat 9am–1pm', phone: '1-800-555-0199' },
+    { name: 'DigiFinWiz — Riverside Branch', address: '48 Riverside Avenue', hours: 'Mon–Fri 9am–6pm', phone: '1-800-555-0142' },
+    { name: 'DigiFinWiz — Campus ATM', address: 'Student Union Building, Ground Floor', hours: '24/7 ATM access', phone: '—' }
+];
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DASHBOARD
+   ══════════════════════════════════════════════════════════════════════════ */
+function loadDashboardTab() {
+    if (typeof DigifinwizDB === 'undefined') return;
+    var session = (typeof DigifinwizAuth !== 'undefined' && DigifinwizAuth.getSession) ? DigifinwizAuth.getSession() : null;
+
+    Promise.all([
+        DigifinwizDB.getAllBalances(),
+        DigifinwizDB.getRecentActivity(6),
+        DigifinwizDB.getScheduledTransfers(),
+        DigifinwizDB.getSavingsGoals()
+    ]).then(function(results) {
+        renderDashAccountsSummary(results[0], session);
+        renderDashActivity(results[1]);
+        renderDashUpcomingSchedule(results[2]);
+        renderDashGoalsSummary(results[3]);
+        renderDashBranchLocator();
+    }).catch(function(err) { console.error('loadDashboardTab:', err); });
+}
+
+function renderDashAccountsSummary(balances, session) {
+    var el = document.getElementById('dashAccountsSummary');
+    if (!el) return;
+    var userId = session ? session.userId : 0;
+    var greeting = session ? ('Welcome back, ' + escBA(session.fullName || session.username) + '.') : 'Welcome back.';
+    var cards = ['checking', 'savings'].map(function(type) {
+        var bal  = balances.find(function(b) { return b.account === type; });
+        var amt  = bal ? bal.amount : 0;
+        var acct = fakeAccountNumber(userId, type);
+        return '<div style="background:var(--color-gray-50);border-radius:12px;padding:1rem 1.25rem;border:1px solid var(--color-border)">' +
+            '<div style="font-size:0.78rem;color:var(--color-gray-500);text-transform:uppercase;letter-spacing:0.03em">' + (type === 'savings' ? 'Savings' : 'Checking') + '</div>' +
+            '<div style="font-size:1.6rem;font-weight:700;margin:0.2rem 0 0.5rem">' + fmtBA(amt) + '</div>' +
+            '<div style="font-size:0.72rem;color:var(--color-gray-400);font-family:monospace">Acct ' + maskAccountNumber(acct) + ' · Routing ' + DIGIFINWIZ_ROUTING_NUMBER + '</div>' +
+            '</div>';
+    }).join('');
+    el.innerHTML =
+        '<h2 style="margin:0 0 0.25rem">🏦 ' + greeting + '</h2>' +
+        '<p style="color:var(--color-gray-500);font-size:0.85rem;margin:0 0 1rem">Here\'s your account overview.</p>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem">' + cards + '</div>';
+}
+
+function renderDashActivity(events) {
+    var list = document.getElementById('dashActivityList');
+    if (!list) return;
+    if (!events || events.length === 0) {
+        list.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem;text-align:center">No activity yet — make a transfer to get started!</p>';
+        return;
+    }
+    list.innerHTML = events.map(function(e) {
+        return '<div class="transaction-item">' +
+            '<div style="width:40px;height:40px;border-radius:50%;background:var(--color-gray-100);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">' + e.icon + '</div>' +
+            '<div class="transaction-details" style="flex:1;min-width:0">' +
+                '<div style="font-weight:600;font-size:0.875rem">' + escBA(e.label) + '</div>' +
+                '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">' + escBA(e.date) + '</div>' +
+            '</div>' +
+            '<div class="transaction-amount">' + escBA(e.detail) + '</div>' +
+            '</div>';
+    }).join('');
+}
+
+function renderDashUpcomingSchedule(schedules) {
+    var el = document.getElementById('dashUpcomingSchedule');
+    if (!el) return;
+    var upcoming = (schedules || []).filter(function(s) { return s.active; }).slice(0, 4);
+    if (upcoming.length === 0) {
+        el.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem;text-align:center">No upcoming transfers.</p>';
+        return;
+    }
+    el.innerHTML = upcoming.map(function(s) {
+        return '<div class="transaction-item">' +
+            '<div style="width:40px;height:40px;border-radius:50%;background:var(--color-gray-100);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">🔁</div>' +
+            '<div class="transaction-details" style="flex:1;min-width:0">' +
+                '<div style="font-weight:600;font-size:0.875rem">' + escBA(s.recipient) + '</div>' +
+                '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">Next ' + escBA(new Date(s.nextRunDate).toLocaleDateString()) + ' · ' + escBA(s.frequency) + '</div>' +
+            '</div>' +
+            '<div class="transaction-amount">' + fmtBA(s.amount) + '</div>' +
+            '</div>';
+    }).join('');
+}
+
+function renderDashGoalsSummary(goals) {
+    var el = document.getElementById('dashGoalsSummary');
+    if (!el) return;
+    if (!goals || goals.length === 0) {
+        el.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem;text-align:center">No goals yet.</p>';
+        return;
+    }
+    el.innerHTML = goals.slice(0, 3).map(function(g) {
+        var pct = g.target > 0 ? Math.min(100, Math.round((g.current / g.target) * 100)) : 0;
+        return '<div style="margin-bottom:0.9rem">' +
+            '<div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:0.25rem"><strong>' + escBA(g.name) + '</strong><span>' + pct + '%</span></div>' +
+            '<div style="height:6px;background:#e2e8f0;border-radius:99px;overflow:hidden">' +
+                '<div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#6366f1,#8b5cf6)"></div>' +
+            '</div>' +
+            '</div>';
+    }).join('');
+}
+
+function renderDashBranchLocator() {
+    var el = document.getElementById('dashBranchLocator');
+    if (!el) return;
+    el.innerHTML = BANK_BRANCHES.map(function(b) {
+        return '<div style="padding:0.6rem 0;border-bottom:1px solid var(--color-border)">' +
+            '<div style="font-weight:600;font-size:0.85rem">' + escBA(b.name) + '</div>' +
+            '<div style="font-size:0.75rem;color:var(--color-gray-500)">' + escBA(b.address) + '</div>' +
+            '<div style="font-size:0.72rem;color:var(--color-gray-400)">' + escBA(b.hours) + '</div>' +
+            '</div>';
+    }).join('');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SCHEDULED TRANSFERS
+   ══════════════════════════════════════════════════════════════════════════ */
+function loadScheduledTab() {
+    if (typeof DigifinwizDB === 'undefined') return;
+    var startEl = document.getElementById('schedStartDate');
+    if (startEl && !startEl.value) {
+        var now = new Date();
+        startEl.value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+        startEl.min   = startEl.value;
+    }
+    DigifinwizDB.getScheduledTransfers().then(function(schedules) {
+        renderSchedList(schedules);
+        if (typeof loadBalanceCards === 'function') loadBalanceCards();
+    }).catch(function(err) { console.error('loadScheduledTab:', err); });
+}
+
+var FREQUENCY_LABELS = { once: 'One time', weekly: 'Weekly', biweekly: 'Every 2 weeks', monthly: 'Monthly' };
+
+function renderSchedList(schedules) {
+    var list = document.getElementById('schedList');
+    if (!list) return;
+    if (!schedules || schedules.length === 0) {
+        list.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem;text-align:center">No scheduled transfers yet.</p>';
+        return;
+    }
+    list.innerHTML = schedules.map(function(s) {
+        var freqLabel = FREQUENCY_LABELS[s.frequency] || s.frequency;
+        var statusBadge = s.active
+            ? '<span style="font-size:0.7rem;color:#059669;background:#dcfce7;padding:0.15rem 0.5rem;border-radius:99px">Active</span>'
+            : '<span style="font-size:0.7rem;color:#64748b;background:#f1f5f9;padding:0.15rem 0.5rem;border-radius:99px">Paused</span>';
+        return '<div class="transaction-item">' +
+            '<div style="width:40px;height:40px;border-radius:50%;background:var(--color-gray-100);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">🔁</div>' +
+            '<div class="transaction-details" style="flex:1;min-width:0">' +
+                '<div style="font-weight:600;font-size:0.875rem">' + escBA(s.recipient) + ' ' + statusBadge + '</div>' +
+                '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">' + freqLabel + ' from ' + escBA(s.fromAccount) +
+                    (s.active ? ' · next ' + escBA(new Date(s.nextRunDate).toLocaleDateString()) : '') + '</div>' +
+            '</div>' +
+            '<div class="transaction-amount" style="margin-right:0.75rem">' + fmtBA(s.amount) + '</div>' +
+            '<div style="display:flex;gap:0.4rem;flex-shrink:0">' +
+                '<button type="button" class="btn" style="padding:0.35rem 0.6rem;font-size:0.75rem" onclick="toggleSchedule(' + s.id + ',' + !s.active + ')">' + (s.active ? 'Pause' : 'Resume') + '</button>' +
+                '<button type="button" class="btn-remove" onclick="cancelSchedule(' + s.id + ')" title="Cancel">×</button>' +
+            '</div>' +
+            '</div>';
+    }).join('');
+}
+
+function toggleSchedule(id, active) {
+    DigifinwizDB.toggleScheduledTransfer(id, active).then(function() {
+        showNotification(active ? 'Transfer resumed.' : 'Transfer paused.', 'info');
+        loadScheduledTab();
+    }).catch(function(err) {
+        showNotification(err && err.message ? err.message : 'Could not update transfer.', 'error');
+    });
+}
+
+function cancelSchedule(id) {
+    if (!confirm('Cancel this scheduled transfer?')) return;
+    DigifinwizDB.cancelScheduledTransfer(id).then(function() {
+        showNotification('Scheduled transfer cancelled.', 'info');
+        loadScheduledTab();
+    }).catch(function(err) {
+        showNotification(err && err.message ? err.message : 'Could not cancel transfer.', 'error');
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    var schedForm = document.getElementById('schedCreateForm');
+    if (schedForm) schedForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var recipient    = document.getElementById('schedRecipientName').value.trim();
+        var account      = document.getElementById('schedRecipientAccount').value.trim();
+        var startDateStr = document.getElementById('schedStartDate').value;
+        var data = {
+            recipient:   recipient,
+            account:     account,
+            fromAccount: document.getElementById('schedFromAccount').value,
+            amount:      parseFloat(document.getElementById('schedAmount').value),
+            frequency:   document.getElementById('schedFrequency').value,
+            startDate:   startDateStr ? new Date(startDateStr + 'T00:00:00').getTime() : NaN
+        };
+        if (!recipient) { showNotification('Enter a recipient name.', 'error'); return; }
+        if (!account) { showNotification('Enter a recipient account number.', 'error'); return; }
+        if (!data.amount || data.amount <= 0) { showNotification('Enter a valid amount.', 'error'); return; }
+        if (!startDateStr || isNaN(data.startDate)) { showNotification('Choose a start date.', 'error'); return; }
+        DigifinwizDB.createScheduledTransfer(data).then(function() {
+            return awardXP(15);
+        }).then(function() {
+            showNotification('Transfer scheduled! +15 XP', 'success');
+            schedForm.reset();
+            loadScheduledTab();
+        }).catch(function(err) {
+            showNotification(err && err.message ? err.message : 'Could not schedule transfer.', 'error');
         });
     });
 });

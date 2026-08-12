@@ -4653,6 +4653,32 @@ body {
 .statement-table td { padding:0.5rem 0.4rem; border-bottom:1px solid var(--color-gray-100); }
 .statement-table tbody tr:last-child td { border-bottom:none; }
 
+/* ============================================
+   BANKING: Statement archive list
+   ============================================ */
+.statement-archive-item {
+    border:1px solid var(--color-border);
+    background:var(--color-surface);
+    border-radius:var(--radius-lg, 10px);
+    padding:0.4rem 0.75rem;
+    font-size:0.8rem;
+    cursor:pointer;
+    transition:border-color 0.15s, background 0.15s;
+}
+.statement-archive-item:hover { border-color:var(--color-primary-500); background:var(--color-gray-50); }
+
+/* ============================================
+   BANKING: Dashboard tab
+   ============================================ */
+@media (max-width:900px) {
+    .dash-grid { grid-template-columns:1fr !important; }
+}
+
+/* ============================================
+   BANKING: Scheduled transfers
+   ============================================ */
+#schedList .transaction-item { flex-wrap:wrap; }
+
 @media print {
     .no-print, .navbar, .shop-header, .game-progress-bar, .sidebar, .page-tabs,
     .page-header, #balanceCardsGrid, #balanceSplitRow, .banking-section:not(.statement-paper) { display:none !important; }

@@ -55,7 +55,8 @@ function ensureLocalDataFiles() {
 
 const STORE_NAMES = [
     'users', 'transactions', 'payments', 'purchases', 'challenges', 'messages', 'cart', 'bills',
-    'creditCards', 'creditActivity', 'loans', 'loanPayments', 'savingsGoals', 'savingsGoalActivity'
+    'creditCards', 'creditActivity', 'loans', 'loanPayments', 'savingsGoals', 'savingsGoalActivity',
+    'scheduledTransfers'
 ];
 
 async function initStorage() {
@@ -197,6 +198,102 @@ async function maybeFireBalanceAlerts(user, account, current, next, delta) {
         });
     });
     await writeJSON('messages', messages);
+}
+
+// ── Scheduled / recurring transfers ─────────────────────────────────────────
+function advanceScheduleDate(current, frequency) {
+    const d = new Date(current);
+    if (frequency === 'weekly')        d.setDate(d.getDate() + 7);
+    else if (frequency === 'biweekly') d.setDate(d.getDate() + 14);
+    else if (frequency === 'monthly')  d.setMonth(d.getMonth() + 1);
+    return d.getTime();
+}
+
+// Executes a single due occurrence of one scheduled transfer, inside the same
+// per-user lock every other money-moving route uses. Re-reads fresh state
+// under the lock (rather than trusting the caller's snapshot) since another
+// occurrence of the same or a different schedule may have just run.
+async function executeOneScheduledTransfer(userId, scheduleId) {
+    await withUserLock(userId, async () => {
+        const schedules = await readJSON('scheduledTransfers');
+        const idx = schedules.findIndex(x => x.id === scheduleId);
+        if (idx === -1 || !schedules[idx].active) return;
+        const sched = schedules[idx];
+        if ((sched.nextRunDate || 0) > Date.now()) return;
+
+        const users = await readJSON('users');
+        const uidx  = users.findIndex(u => u.id === userId);
+        if (uidx === -1) return;
+        const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
+        const current   = balances[sched.fromAccount] !== undefined ? balances[sched.fromAccount] : 0;
+        const next       = parseFloat((current - sched.amount).toFixed(2));
+        const isOneTime  = sched.frequency === 'once';
+
+        if (next < 0) {
+            // Insufficient funds: skip this occurrence, notify, and try again
+            // next period (a one-time transfer just deactivates instead).
+            const messages = await readJSON('messages');
+            messages.push({
+                id: nextId(messages), senderId: 0, senderName: 'System', senderEmail: null,
+                recipientId: userId, subject: 'Scheduled transfer skipped',
+                body: 'Your scheduled transfer of ƒ' + sched.amount.toFixed(2) + ' to ' + sched.recipient +
+                      ' could not be completed — insufficient funds in ' + sched.fromAccount + '.',
+                type: 'warning', sentAt: Date.now(), readBy: []
+            });
+            await writeJSON('messages', messages);
+
+            schedules[idx] = Object.assign({}, sched, {
+                active:       !isOneTime,
+                nextRunDate:  isOneTime ? sched.nextRunDate : advanceScheduleDate(sched.nextRunDate, sched.frequency),
+                lastRunAt:    Date.now(),
+                lastRunStatus:'skipped'
+            });
+            await writeJSON('scheduledTransfers', schedules);
+            return;
+        }
+
+        balances[sched.fromAccount] = next;
+        const updatedUser = Object.assign({}, users[uidx], { balances });
+        users[uidx] = updatedUser;
+        await writeJSON('users', users);
+        await maybeFireBalanceAlerts(updatedUser, sched.fromAccount, current, next, -sched.amount);
+
+        const txs = await readJSON('transactions');
+        txs.push({
+            id: nextId(txs), userId, type: 'transfer', recipient: sched.recipient, account: sched.account,
+            fromAccount: sched.fromAccount, amount: sched.amount,
+            description: (sched.description ? sched.description + ' ' : '') + '(scheduled)',
+            date: new Date().toLocaleDateString(), timestamp: Date.now(), pointsEarned: 0
+        });
+        await writeJSON('transactions', txs);
+
+        schedules[idx] = Object.assign({}, sched, {
+            active:        !isOneTime,
+            nextRunDate:   isOneTime ? sched.nextRunDate : advanceScheduleDate(sched.nextRunDate, sched.frequency),
+            lastRunAt:     Date.now(),
+            lastRunStatus: 'completed'
+        });
+        await writeJSON('scheduledTransfers', schedules);
+    });
+}
+
+// Catches a user's scheduled transfers up to "now", running as many overdue
+// occurrences as needed (e.g. if the app wasn't opened for a while). Called
+// from every route that reads the user's balance or schedule list — so a
+// schedule executes the moment the user is looking at their account, whether
+// or not the server process happened to be running at the exact scheduled
+// moment — plus from a periodic sweep (below) while the server is up.
+async function runDueScheduledTransfers(userId) {
+    const schedules = await readJSON('scheduledTransfers');
+    const mine = schedules.filter(s => s.userId === userId && s.active);
+    for (const s of mine) {
+        let guard = 0; // hard cap so a bad schedule can't loop forever
+        while (guard++ < 24) {
+            const fresh = (await readJSON('scheduledTransfers')).find(x => x.id === s.id);
+            if (!fresh || !fresh.active || (fresh.nextRunDate || 0) > Date.now()) break;
+            await executeOneScheduledTransfer(userId, s.id);
+        }
+    }
 }
 
 // ── Challenge definitions ─────────────────────────────────────────────────────
@@ -563,7 +660,8 @@ app.delete('/api/users/:id', async (req, res) => {
     // Remove from all per-user stores
     for (const store of [
         'transactions', 'payments', 'purchases', 'challenges',
-        'creditCards', 'creditActivity', 'loans', 'loanPayments', 'savingsGoals', 'savingsGoalActivity'
+        'creditCards', 'creditActivity', 'loans', 'loanPayments', 'savingsGoals', 'savingsGoalActivity',
+        'scheduledTransfers'
     ]) {
         const rows = await readJSON(store);
         await writeJSON(store, rows.filter(r => r.userId !== id));
@@ -681,6 +779,12 @@ app.post('/api/me/password', async (req, res) => {
 
 // ── Me: balances ──────────────────────────────────────────────────────────────
 app.get('/api/me/balances', async (req, res) => {
+    // Catches up any scheduled transfers that came due since this user's
+    // balance was last checked — this endpoint is loaded on every banking
+    // page visit, so it's the most reliable point to self-correct regardless
+    // of whether the server process was actually running at the scheduled
+    // moment.
+    await runDueScheduledTransfers(req.userId);
     const users = await readJSON('users');
     const user  = users.find(u => u.id === req.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -912,7 +1016,8 @@ app.post('/api/me/challenges/reset', async (req, res) => {
 app.post('/api/me/reset', async (req, res) => {
     for (const store of [
         'transactions', 'payments', 'purchases', 'cart',
-        'creditCards', 'creditActivity', 'loans', 'loanPayments', 'savingsGoals', 'savingsGoalActivity'
+        'creditCards', 'creditActivity', 'loans', 'loanPayments', 'savingsGoals', 'savingsGoalActivity',
+        'scheduledTransfers'
     ]) {
         const rows = await readJSON(store);
         await writeJSON(store, rows.filter(r => r.userId !== req.userId));
@@ -1402,6 +1507,67 @@ app.delete('/api/me/savings-goals/:id', async (req, res) => {
     }
 });
 
+// ── Me: scheduled / recurring transfers ─────────────────────────────────────
+const SCHEDULE_FREQUENCIES = new Set(['once', 'weekly', 'biweekly', 'monthly']);
+
+app.get('/api/me/scheduled-transfers', async (req, res) => {
+    await runDueScheduledTransfers(req.userId);
+    const schedules = await readJSON('scheduledTransfers');
+    const mine = schedules.filter(s => s.userId === req.userId).sort((a, b) => (a.nextRunDate || 0) - (b.nextRunDate || 0));
+    res.json(mine);
+});
+
+app.post('/api/me/scheduled-transfers', async (req, res) => {
+    const body = req.body || {};
+    const fromAccount = body.fromAccount === 'savings' ? 'savings' : 'checking';
+    const recipient    = String(body.recipient || '').trim();
+    const account       = String(body.account || '').trim();
+    const amount         = Number(body.amount);
+    const frequency       = body.frequency;
+    const startDate         = Number(body.startDate);
+
+    if (!recipient) return res.status(400).json({ error: 'Recipient name required' });
+    if (!account)   return res.status(400).json({ error: 'Recipient account number required' });
+    if (!amount || amount <= 0) return res.status(400).json({ error: 'Valid amount required' });
+    if (!SCHEDULE_FREQUENCIES.has(frequency)) return res.status(400).json({ error: 'Invalid frequency' });
+    if (!startDate || isNaN(startDate)) return res.status(400).json({ error: 'Valid start date required' });
+
+    const schedules = await readJSON('scheduledTransfers');
+    const record = {
+        id: nextId(schedules), userId: req.userId, fromAccount, recipient, account, amount,
+        description: String(body.description || '').trim(), frequency,
+        nextRunDate: startDate, active: true, createdAt: Date.now(), lastRunAt: null, lastRunStatus: null
+    };
+    schedules.push(record);
+    await writeJSON('scheduledTransfers', schedules);
+
+    // A transfer scheduled for right now (or the past) should execute
+    // immediately rather than waiting for the next time this user's balance
+    // or schedule list happens to be read.
+    await runDueScheduledTransfers(req.userId);
+    const fresh = (await readJSON('scheduledTransfers')).find(s => s.id === record.id);
+    res.status(201).json(fresh || record);
+});
+
+app.patch('/api/me/scheduled-transfers/:id', async (req, res) => {
+    const id = Number(req.params.id);
+    const schedules = await readJSON('scheduledTransfers');
+    const idx = schedules.findIndex(s => s.id === id && s.userId === req.userId);
+    if (idx === -1) return res.status(404).json({ error: 'Scheduled transfer not found' });
+    const patch = {};
+    if (req.body && req.body.active !== undefined) patch.active = !!req.body.active;
+    schedules[idx] = Object.assign({}, schedules[idx], patch);
+    await writeJSON('scheduledTransfers', schedules);
+    res.json(schedules[idx]);
+});
+
+app.delete('/api/me/scheduled-transfers/:id', async (req, res) => {
+    const id = Number(req.params.id);
+    const schedules = await readJSON('scheduledTransfers');
+    await writeJSON('scheduledTransfers', schedules.filter(s => !(s.id === id && s.userId === req.userId)));
+    res.json({ ok: true });
+});
+
 // ── Me: account statement ────────────────────────────────────────────────────
 // Reconstructs a month's activity + opening/closing balance purely from
 // existing timestamped records plus the current balance — there's no stored
@@ -1524,12 +1690,18 @@ app.get('/api/me/stats', async (req, res) => {
 // ── Me: recent activity ───────────────────────────────────────────────────────
 app.get('/api/me/activity', async (req, res) => {
     const limit  = req.query.limit ? parseInt(req.query.limit, 10) : null;
-    const [allTxs, allPays, allPurchs] = await Promise.all([
-        readJSON('transactions'), readJSON('payments'), readJSON('purchases')
+    const [allTxs, allPays, allPurchs, allCreditActivity, allLoanPayments, allGoalActivity, allGoals] = await Promise.all([
+        readJSON('transactions'), readJSON('payments'), readJSON('purchases'),
+        readJSON('creditActivity'), readJSON('loanPayments'), readJSON('savingsGoalActivity'), readJSON('savingsGoals')
     ]);
     const txs    = allTxs.filter(t => t.userId === req.userId);
     const pays   = allPays.filter(p => p.userId === req.userId);
     const purchs = allPurchs.filter(p => p.userId === req.userId);
+    const cardActivity = allCreditActivity.filter(a => a.userId === req.userId);
+    const loanPays      = allLoanPayments.filter(p => p.userId === req.userId);
+    const goalActivity  = allGoalActivity.filter(a => a.userId === req.userId);
+    const goalNames     = {};
+    allGoals.forEach(g => { goalNames[g.id] = g.name; });
 
     const events = [];
     txs.forEach(t => events.push({
@@ -1559,6 +1731,36 @@ app.get('/api/me/activity', async (req, res) => {
         date:         p.date,
         pointsEarned: p.pointsEarned || 0
     }));
+    cardActivity.forEach(a => events.push({
+        type:         'creditcard',
+        icon:         '💳',
+        label:        a.type === 'payment' ? 'Credit card payment' : 'Credit card purchase (' + (a.description || 'purchase') + ')',
+        detail:       'ƒ' + Number(a.amount).toFixed(2),
+        timestamp:    a.timestamp || 0,
+        date:         a.date,
+        pointsEarned: 0
+    }));
+    loanPays.forEach(lp => events.push({
+        type:         'loan',
+        icon:         '🏠',
+        label:        'Loan payment',
+        detail:       'ƒ' + Number(lp.amount).toFixed(2),
+        timestamp:    lp.timestamp || 0,
+        date:         lp.date,
+        pointsEarned: 0
+    }));
+    goalActivity.forEach(a => {
+        const goalName = goalNames[a.goalId] || 'goal';
+        events.push({
+            type:         'savingsgoal',
+            icon:         '🎯',
+            label:        (a.type === 'withdraw' ? 'Withdrew from ' : 'Contributed to ') + goalName,
+            detail:       'ƒ' + Number(a.amount).toFixed(2),
+            timestamp:    a.timestamp || 0,
+            date:         a.date,
+            pointsEarned: 0
+        });
+    });
     events.sort((a, b) => b.timestamp - a.timestamp);
     res.json(limit ? events.slice(0, limit) : events);
 });
@@ -1796,10 +1998,25 @@ app.use((err, _req, res, _next) => {
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
+// Best-effort periodic sweep so scheduled transfers execute close to on time
+// while the server process is actually running — the authoritative
+// correctness mechanism is still runDueScheduledTransfers() being called
+// from GET /api/me/balances and the scheduled-transfers routes themselves,
+// which self-corrects regardless of server uptime (e.g. after a Render
+// free-tier dyno wakes back up from idle).
+function startScheduledTransferSweep() {
+    setInterval(() => {
+        readJSON('users')
+            .then(users => Promise.all(users.map(u => runDueScheduledTransfers(u.id).catch(() => {}))))
+            .catch(() => {});
+    }, 5 * 60 * 1000);
+}
+
 async function start() {
     await initStorage();
     await seedDefaultAdmin();
     await seedDefaultBills();
+    startScheduledTransferSweep();
     app.listen(PORT, () => {
         console.log('DigiFinWiz server running on http://localhost:' + PORT);
     });

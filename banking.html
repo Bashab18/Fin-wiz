@@ -162,8 +162,14 @@
 
             <!-- ── Page Tab Navigation ─────────────────────────────── -->
             <div class="page-tabs" style="flex-wrap:wrap">
-                <button class="page-tab-btn active" id="tab-btn-banking" onclick="switchPageTab('banking')">
-                    🏦 Banking
+                <button class="page-tab-btn active" id="tab-btn-dashboard" onclick="switchPageTab('dashboard')">
+                    🏠 Dashboard
+                </button>
+                <button class="page-tab-btn" id="tab-btn-banking" onclick="switchPageTab('banking')">
+                    🏦 Transfer
+                </button>
+                <button class="page-tab-btn" id="tab-btn-scheduled" onclick="switchPageTab('scheduled')">
+                    🔁 Scheduled
                 </button>
                 <button class="page-tab-btn" id="tab-btn-creditcard" onclick="switchPageTab('creditcard')">
                     💳 Credit Card
@@ -183,9 +189,69 @@
             </div>
 
             <!-- ═══════════════════════════════════════════════════════
+                 DASHBOARD TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel active" id="panel-dashboard">
+                <div class="banking-section full-width" id="dashAccountsSummary"></div>
+
+                <div class="dash-grid" style="display:grid;grid-template-columns:2fr 1fr;gap:1.5rem;margin-top:1.5rem">
+                    <div>
+                        <div class="banking-section full-width">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+                                <h2 style="margin:0">Recent Activity</h2>
+                                <a href="#" onclick="switchPageTab('banking');return false;" style="font-size:0.8rem;color:var(--color-primary-500);text-decoration:none;font-weight:600">Make a transfer →</a>
+                            </div>
+                            <div id="dashActivityList" class="transactions-list"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">Loading…</p></div>
+                        </div>
+
+                        <div class="banking-section full-width" style="margin-top:1.5rem">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+                                <h2 style="margin:0">🔁 Upcoming Transfers</h2>
+                                <a href="#" onclick="switchPageTab('scheduled');return false;" style="font-size:0.8rem;color:var(--color-primary-500);text-decoration:none;font-weight:600">Manage →</a>
+                            </div>
+                            <div id="dashUpcomingSchedule"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">No upcoming transfers.</p></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="banking-section full-width">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+                                <h2 style="margin:0">🎯 Goals</h2>
+                                <a href="#" onclick="switchPageTab('goals');return false;" style="font-size:0.8rem;color:var(--color-primary-500);text-decoration:none;font-weight:600">View all →</a>
+                            </div>
+                            <div id="dashGoalsSummary"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">No goals yet.</p></div>
+                        </div>
+
+                        <div class="banking-section full-width" style="margin-top:1.5rem">
+                            <h2 style="margin:0 0 0.75rem">Quick Actions</h2>
+                            <div style="display:flex;flex-direction:column;gap:0.5rem">
+                                <a href="#" onclick="switchPageTab('banking');return false;" class="btn btn-block" style="text-align:left">💸 Send Money</a>
+                                <a href="#" onclick="switchPageTab('scheduled');return false;" class="btn btn-block" style="text-align:left">🔁 Schedule a Transfer</a>
+                                <a href="utilities.html" class="btn btn-block" style="text-align:left">🧾 Pay a Bill</a>
+                                <a href="#" onclick="switchPageTab('statements');return false;" class="btn btn-block" style="text-align:left">📄 View Statements</a>
+                            </div>
+                        </div>
+
+                        <div class="banking-section full-width" style="margin-top:1.5rem">
+                            <h2 style="margin:0 0 0.75rem">🏧 Branches &amp; ATMs</h2>
+                            <div id="dashBranchLocator"></div>
+                        </div>
+
+                        <div class="banking-section full-width" style="margin-top:1.5rem">
+                            <h2 style="margin:0 0 0.75rem">❓ Support</h2>
+                            <div style="font-size:0.85rem;color:var(--color-gray-600);line-height:1.6">
+                                <p style="margin:0 0 0.5rem">Need help with your account?</p>
+                                <p style="margin:0">📞 1-800-555-0199 &nbsp;•&nbsp; ✉️ support@digifinwiz.bank<br>Mon–Fri, 8am–8pm</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div><!-- /panel-dashboard -->
+
+            <!-- ═══════════════════════════════════════════════════════
                  BANKING TAB
             ═══════════════════════════════════════════════════════ -->
-            <div class="page-tab-panel active" id="panel-banking">
+            <div class="page-tab-panel" id="panel-banking">
 
                 <!-- Challenge Tracker -->
                 <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:1.25rem;margin-bottom:1.5rem">
@@ -397,6 +463,45 @@
             </div><!-- /panel-banking -->
 
             <!-- ═══════════════════════════════════════════════════════
+                 SCHEDULED TRANSFERS TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel" id="panel-scheduled">
+                <div class="banking-section full-width">
+                    <h2>🔁 Schedule a Transfer</h2>
+                    <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1rem">Set up a one-time future transfer, or a recurring one that repeats automatically.</p>
+                    <form id="schedCreateForm">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                            <div class="form-group"><label>Recipient Name</label><input type="text" class="form-input" id="schedRecipientName" required></div>
+                            <div class="form-group"><label>Recipient Account #</label><input type="text" class="form-input" id="schedRecipientAccount" required></div>
+                            <div class="form-group">
+                                <label>From Account</label>
+                                <select class="form-input" id="schedFromAccount">
+                                    <option value="checking">Checking</option>
+                                    <option value="savings">Savings</option>
+                                </select>
+                            </div>
+                            <div class="form-group"><label>Amount (ƒ)</label><input type="number" class="form-input" id="schedAmount" min="0.01" step="0.01" required></div>
+                            <div class="form-group">
+                                <label>Frequency</label>
+                                <select class="form-input" id="schedFrequency">
+                                    <option value="once">One time</option>
+                                    <option value="weekly">Weekly</option>
+                                    <option value="biweekly">Every 2 weeks</option>
+                                    <option value="monthly">Monthly</option>
+                                </select>
+                            </div>
+                            <div class="form-group"><label>Start Date</label><input type="date" class="form-input" id="schedStartDate" required></div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="margin-top:0.5rem">Schedule Transfer</button>
+                    </form>
+                </div>
+                <div class="banking-section full-width" style="margin-top:1.5rem">
+                    <h2>Your Scheduled Transfers</h2>
+                    <div id="schedList"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">No scheduled transfers yet.</p></div>
+                </div>
+            </div><!-- /panel-scheduled -->
+
+            <!-- ═══════════════════════════════════════════════════════
                  CREDIT CARD TAB
             ═══════════════════════════════════════════════════════ -->
             <div class="page-tab-panel" id="panel-creditcard">
@@ -516,6 +621,7 @@
                         <button type="button" class="btn btn-primary" onclick="generateStatement()">Generate Statement</button>
                         <button type="button" class="btn" id="stmtPrintBtn" style="display:none" onclick="window.print()">🖨️ Print / Save as PDF</button>
                     </div>
+                    <div id="stmtArchiveList" class="statement-archive-list"></div>
                 </div>
                 <div id="stmtOutput"></div>
             </div><!-- /panel-statements -->
@@ -558,6 +664,8 @@
     // function defined in banking-accounts.js — keeps banking.js/this inline
     // script focused on the original Banking tab.
     var PAGE_TAB_LOADERS = {
+        dashboard:  'loadDashboardTab',
+        scheduled:  'loadScheduledTab',
         creditcard: 'loadCreditCardTab',
         loans:      'loadLoansTab',
         goals:      'loadGoalsTab',
@@ -566,7 +674,7 @@
     };
 
     function switchPageTab(name) {
-        ['banking', 'creditcard', 'loans', 'goals', 'statements', 'alerts'].forEach(function(t) {
+        ['dashboard', 'banking', 'scheduled', 'creditcard', 'loans', 'goals', 'statements', 'alerts'].forEach(function(t) {
             var panel = document.getElementById('panel-' + t);
             var btn   = document.getElementById('tab-btn-' + t);
             if (!panel || !btn) return;
@@ -941,7 +1049,7 @@
 
     document.addEventListener('DOMContentLoaded', function() {
         // Restore last active tab
-        switchPageTab(sessionStorage.getItem('banking_tab') || 'banking');
+        switchPageTab(sessionStorage.getItem('banking_tab') || 'dashboard');
         DigifinwizDB.init().then(function() { refreshBankingPage(); });
         // Populate DigiBank game progress bar
         DigifinwizDB.getUserData().then(function(userData) {
