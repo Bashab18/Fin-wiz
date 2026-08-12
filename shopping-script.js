@@ -25,7 +25,7 @@ class GameProgress {
     async addXP(amount) {
         this.xp      += amount;
         this.progress = this.calcProgress();
-        this.checkLevelUp();
+        await this.checkLevelUp();
         await this.save();
         this.updateDisplay();
     }
@@ -56,13 +56,25 @@ class GameProgress {
         }
     }
 
-    checkLevelUp() {
+    async checkLevelUp() {
         const xpPerLevel = 1000;
-        const newLevel   = Math.min(Math.floor(this.xp / xpPerLevel) + 1, this.maxLevel);
-        if (newLevel > this.level) {
-            this.level = newLevel;
-            this.showLevelUpNotification();
+        const rawLevel   = Math.min(Math.floor(this.xp / xpPerLevel) + 1, this.maxLevel);
+        if (rawLevel <= this.level) return;
+
+        if (this.level === 1) {
+            // Mirror the server's Level-1 gate (banking.js/utilities.js/ecommerce.js
+            // all check this before advancing past level 1): shop-only actions like
+            // browsing, saving items, or a generic form save are enough XP on their
+            // own to cross 1000 here, but shouldn't be enough to level up without the
+            // three core banking/ecommerce/utilities activities too.
+            const met = (typeof DigifinwizDB !== 'undefined' && DigifinwizDB.getLevel1Requirements)
+                ? await DigifinwizDB.getLevel1Requirements().then(function(r) { return r.allMet; }).catch(function() { return false; })
+                : false;
+            if (!met) return;
         }
+
+        this.level = rawLevel;
+        this.showLevelUpNotification();
     }
 
     updateDisplay() {
@@ -125,9 +137,16 @@ class ShoppingCart {
     }
 
     addItem(product) {
-        const existing = this.items.find(i => i.id === product.id);
+        // Matched by name, not id: cart rows round-trip through the server
+        // (which assigns its own numeric id on every add), so the client-side
+        // positional id ('product-N') this method receives never matches what
+        // comes back from ShopBridge.getCart() after a save/reload — matching
+        // by id always missed, creating a duplicate row instead of
+        // incrementing quantity. name is what ecommerce.js's cart uses too,
+        // so this also lets items added on either side of the store merge.
+        const existing = this.items.find(i => i.name === product.name);
         if (existing) {
-            existing.quantity += 1;
+            existing.quantity = (existing.quantity || 1) + 1;
         } else {
             this.items.push(Object.assign({}, product, { quantity: 1 }));
         }
@@ -152,7 +171,9 @@ class ShoppingCart {
     }
 
     updateCartCount() {
-        const count = this.items.reduce((t, i) => t + i.quantity, 0);
+        // Rows added from ecommerce.html's store have no quantity field (they're
+        // one row per unit there) — default to 1 so the sum can't go NaN.
+        const count = this.items.reduce((t, i) => t + (i.quantity || 1), 0);
         document.querySelectorAll('.shop-icon-btn.cart').forEach(btn => {
             let badge = btn.querySelector('.cart-badge');
             if (!badge && count > 0) {
@@ -168,7 +189,7 @@ class ShoppingCart {
     }
 
     getTotal() {
-        return this.items.reduce((t, i) => t + (i.price * i.quantity), 0);
+        return this.items.reduce((t, i) => t + (i.price * (i.quantity || 1)), 0);
     }
 
     showNotification(message) {
@@ -226,6 +247,10 @@ class SavedItems {
 
 // ── Dynamic renderers ─────────────────────────────────────────────────────────
 
+function _escOrderText(s) {
+    return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 async function renderOrderHistory() {
     const container = document.getElementById('ordersList');
     if (!container) return;
@@ -235,17 +260,34 @@ async function renderOrderHistory() {
             container.innerHTML = '<p style="color:#64748b;padding:30px 0;">No orders found. Start shopping to see your orders here!</p>';
             return;
         }
-        container.innerHTML = purchases.map(p => {
-            const date  = p.timestamp
+        // Real purchase records (ecommerce.js checkout) are {date, items:[{name,
+        // price, quantity}], total, pointsEarned} — this used to read
+        // p.amount/p.name/p.description/p.category, none of which exist, and
+        // showed the raw global purchase-store id as the order number.
+        const ascending = purchases.slice().sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+        const orderNumOf = new Map(ascending.map((p, idx) => [p, idx + 1]));
+        const sorted = purchases.slice().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        container.innerHTML = sorted.map(p => {
+            const date = p.timestamp
                 ? new Date(p.timestamp).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-                : 'Unknown date';
-            const total = typeof p.amount === 'number'
-                ? '$' + p.amount.toFixed(2)
-                : (p.total ? '$' + Number(p.total).toFixed(2) : 'N/A');
+                : (p.date || 'Unknown date');
+            const total = 'ƒ' + Number(p.total || 0).toFixed(2);
+            const items = Array.isArray(p.items) ? p.items : [];
+            const itemsHtml = items.length
+                ? items.map(it => {
+                    const qty = it.quantity || 1;
+                    return `<div class="product-item">
+                            <div class="product-details">
+                                <h4>${_escOrderText(it.name || 'Item')}${qty > 1 ? ' ×' + qty : ''}</h4>
+                                <p>ƒ${Number(it.price || 0).toFixed(2)} each</p>
+                            </div>
+                        </div>`;
+                }).join('')
+                : `<div class="product-item"><div class="product-details"><h4>Order items</h4></div></div>`;
             return `<div class="order-item">
                 <div class="order-header">
                     <div class="order-info">
-                        <span class="order-number">Order #${p.id || 'N/A'}</span>
+                        <span class="order-number">Order #${orderNumOf.get(p)}</span>
                         <span class="order-date">Placed on ${date}</span>
                     </div>
                     <div class="order-total">
@@ -254,14 +296,7 @@ async function renderOrderHistory() {
                     </div>
                 </div>
                 <div class="order-body">
-                    <div class="order-products">
-                        <div class="product-item">
-                            <div class="product-details">
-                                <h4>${p.name || p.description || 'Order items'}</h4>
-                                <p>${p.category || ''}</p>
-                            </div>
-                        </div>
-                    </div>
+                    <div class="order-products">${itemsHtml}</div>
                     <div class="order-status-badge delivered">Completed</div>
                 </div>
                 <div class="order-actions">
@@ -293,11 +328,15 @@ async function renderWalletData() {
                     const date   = p.timestamp ? new Date(p.timestamp).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
                     const amount = typeof p.amount === 'number' ? p.amount : Number(p.total || 0);
                     const coins  = Math.floor(amount / 10);
+                    const items  = Array.isArray(p.items) ? p.items : [];
+                    const desc   = items.length
+                        ? items.map(it => _escOrderText(it.name)).filter(Boolean).join(', ')
+                        : 'Order items';
                     return `<div class="transaction-item earned">
                         <div class="transaction-icon">+</div>
                         <div class="transaction-details">
                             <h4>Purchase Reward</h4>
-                            <p>${p.name || p.description || 'Order #' + (p.id || '')}</p>
+                            <p>${desc}</p>
                             <span class="transaction-date">${date}</span>
                         </div>
                         <div class="transaction-amount positive">+${coins} coins</div>

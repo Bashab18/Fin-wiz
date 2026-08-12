@@ -10,6 +10,16 @@ function loadCart() {
     }).catch(function(err) { console.error('loadCart:', err); });
 }
 
+// Cart rows are one-per-distinct-product with a quantity field — the same
+// shape shopping-script.js's InStyl cart uses, so the two stores share one
+// consistent cart instead of one side treating rows as one-unit-each (which
+// left shopping-script.js's quantity-summing code reading undefined and lost
+// units whenever an InStyl-added row with quantity > 1 got treated as a
+// single row here).
+function findCartRow(productName) {
+    return cart.find(function(i) { return i.name === productName; });
+}
+
 function addToCart(productName, price, btnEl) {
     // Animate the button immediately for perceived responsiveness
     if (btnEl) {
@@ -17,7 +27,13 @@ function addToCart(productName, price, btnEl) {
         btnEl.disabled = true;
         setTimeout(function() { btnEl.textContent = 'Add to Cart'; btnEl.disabled = false; }, 1500);
     }
-    DigifinwizDB.addCartItem({ name: productName, price: price }).then(function() {
+    var existing = findCartRow(productName);
+    var upsert = existing
+        ? DigifinwizDB.removeCartItem(existing.id).then(function() {
+              return DigifinwizDB.addCartItem({ name: productName, price: price, quantity: (existing.quantity || 1) + 1 });
+          })
+        : DigifinwizDB.addCartItem({ name: productName, price: price, quantity: 1 });
+    upsert.then(function() {
         return DigifinwizDB.getCart();
     }).then(function(items) {
         cart = items;
@@ -45,21 +61,27 @@ function clearCartAndReload() {
 }
 
 function decrementCartItem(productName, price) {
-    var match = cart.filter(function(i) { return i.name === productName; });
-    if (!match.length) return;
-    DigifinwizDB.removeCartItem(match[0].id).then(function() {
+    var existing = findCartRow(productName);
+    if (!existing) return;
+    var qty = existing.quantity || 1;
+    var op = qty > 1
+        ? DigifinwizDB.removeCartItem(existing.id).then(function() {
+              return DigifinwizDB.addCartItem({ name: productName, price: price, quantity: qty - 1 });
+          })
+        : DigifinwizDB.removeCartItem(existing.id);
+    op.then(function() {
         return DigifinwizDB.getCart();
     }).then(function(items) {
         cart = items;
         renderCart();
-        if (match.length === 1) showNotification(productName + ' removed from cart.', 'info');
+        if (qty <= 1) showNotification(productName + ' removed from cart.', 'info');
     }).catch(function(err) { console.error('decrementCartItem:', err); });
 }
 
 function removeAllOfItem(productName) {
-    var rows = cart.filter(function(i) { return i.name === productName; });
-    if (!rows.length) return;
-    Promise.all(rows.map(function(i) { return DigifinwizDB.removeCartItem(i.id); }))
+    var existing = findCartRow(productName);
+    if (!existing) return;
+    DigifinwizDB.removeCartItem(existing.id)
         .then(function() { return DigifinwizDB.getCart(); })
         .then(function(items) {
             cart = items;
@@ -84,7 +106,11 @@ function renderCart() {
     var cartTotal  = document.getElementById('cartTotal');
     var checkoutBtn = document.getElementById('checkoutBtn');
 
-    if (cartCount)  cartCount.textContent = cart.length;
+    // Total units, not row count — a row can represent more than one unit
+    // via its quantity field (shared cart model with shopping-script.js).
+    var unitCount = cart.reduce(function(s, i) { return s + (i.quantity || 1); }, 0);
+
+    if (cartCount)  cartCount.textContent = unitCount;
 
     if (cart.length === 0) {
         if (cartItems) cartItems.innerHTML = '<p style="color:#64748b;padding:1rem">Your cart is empty</p>';
@@ -101,31 +127,24 @@ function renderCart() {
     }
 
     if (cartItems) {
-        // Group items by name for quantity display
-        var groups = {};
-        cart.forEach(function(item) {
-            if (!groups[item.name]) groups[item.name] = { name: item.name, price: item.price, rows: [] };
-            groups[item.name].rows.push(item);
-        });
-        cartItems.innerHTML = Object.keys(groups).map(function(k) {
-            var g = groups[k];
-            var qty = g.rows.length;
-            var subtotal = (g.price * qty).toFixed(2);
+        cartItems.innerHTML = cart.map(function(item) {
+            var qty = item.quantity || 1;
+            var subtotal = (item.price * qty).toFixed(2);
             return '<div class="cart-item">' +
-                '<div style="flex:1"><strong>' + escHtml(g.name) + '</strong>' +
-                '<div class="cart-item-price">ƒ' + Number(g.price).toFixed(2) + ' each' +
+                '<div style="flex:1"><strong>' + escHtml(item.name) + '</strong>' +
+                '<div class="cart-item-price">ƒ' + Number(item.price).toFixed(2) + ' each' +
                 (qty > 1 ? ' · ƒ' + subtotal + ' total' : '') + '</div></div>' +
                 '<div class="cart-qty-controls">' +
-                '<button class="btn-qty" onclick="decrementCartItem(' + JSON.stringify(g.name) + ',' + g.price + ')">−</button>' +
+                "<button class=\"btn-qty\" onclick='decrementCartItem(" + jsAttr(item.name) + ',' + item.price + ")'>−</button>" +
                 '<span class="cart-qty-display">' + qty + '</span>' +
-                '<button class="btn-qty" onclick="addToCart(' + JSON.stringify(g.name) + ',' + g.price + ')">+</button>' +
+                "<button class=\"btn-qty\" onclick='addToCart(" + jsAttr(item.name) + ',' + item.price + ")'>+</button>" +
                 '</div>' +
-                '<button class="btn-remove" onclick="removeAllOfItem(' + JSON.stringify(g.name) + ')">×</button>' +
+                "<button class=\"btn-remove\" onclick='removeAllOfItem(" + jsAttr(item.name) + ")'>×</button>" +
                 '</div>';
         }).join('');
     }
 
-    var total = cart.reduce(function(s, i) { return s + i.price; }, 0);
+    var total = cart.reduce(function(s, i) { return s + i.price * (i.quantity || 1); }, 0);
     if (cartTotal)   cartTotal.textContent = 'ƒ' + total.toFixed(2);
     if (checkoutBtn) checkoutBtn.disabled = false;
 
@@ -134,18 +153,17 @@ function renderCart() {
     var taxEl      = document.getElementById('cartTax');
     var itemCntEl  = document.getElementById('cartItemCount');
     var itemSufEl  = document.getElementById('cartItemCountSuffix');
-    var uniqueItems = Object.keys((function(){ var g={}; cart.forEach(function(i){ g[i.name]=1; }); return g; })()).length;
     if (subtotalEl) subtotalEl.textContent = 'ƒ' + total.toFixed(2);
     if (taxEl)      taxEl.textContent      = 'ƒ' + (total * 0.05).toFixed(2);
-    if (itemCntEl)  itemCntEl.textContent  = cart.length;
-    if (itemSufEl)  itemSufEl.textContent  = cart.length === 1 ? '' : 's';
+    if (itemCntEl)  itemCntEl.textContent  = unitCount;
+    if (itemSufEl)  itemSufEl.textContent  = unitCount === 1 ? '' : 's';
 
     // Apply promo discount if active
     if (typeof updateCartWithPromo === 'function') updateCartWithPromo();
 
     // Mark in-cart products with a badge
     var inCartNames = {};
-    cart.forEach(function(i){ inCartNames[i.name] = (inCartNames[i.name]||0)+1; });
+    cart.forEach(function(i){ inCartNames[i.name] = i.quantity || 1; });
     document.querySelectorAll('.product-card').forEach(function(c) {
         var old = c.querySelector('.in-cart-badge');
         if (old) old.remove();
@@ -171,7 +189,7 @@ function renderCart() {
     var floatBtn   = document.getElementById('floatCartBtn');
     var floatCount = document.getElementById('floatCartCount');
     if (floatBtn)   floatBtn.style.display = cart.length > 0 ? '' : 'none';
-    if (floatCount) floatCount.textContent  = cart.length;
+    if (floatCount) floatCount.textContent  = unitCount;
 }
 
 function escHtml(s) {
@@ -179,15 +197,43 @@ function escHtml(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+// Safe to splice into a single-quoted HTML attribute: JSON.stringify() a value for use as a JS
+// argument literal, then neutralize characters that could break out of the attribute or get
+// decoded as an HTML entity before the JS parser ever sees them.
+function jsAttr(v) {
+    return JSON.stringify(v)
+        .replace(/&/g, '\\u0026').replace(/</g, '\\u003C').replace(/>/g, '\\u003E').replace(/'/g, '\\u0027');
+}
+
 // ── Checkout ─────────────────────────────────────────────────────────────────
+// Guards against a second checkout starting while one is still in flight
+// (double-click on Confirm Purchase, or a fast resubmit before the balance
+// deduction for the first purchase has come back).
+var checkoutInFlight = false;
+
 function checkout() {
     if (cart.length === 0) return;
 
-    var total        = cart.reduce(function(s, i) { return s + i.price; }, 0);
-    var itemCount    = cart.length;
+    var rawTotal = cart.reduce(function(s, i) { return s + i.price * (i.quantity || 1); }, 0);
+    // Apply whatever promo code is currently active on the page (declared by
+    // ecommerce.html's inline script) so the charge matches what the cart
+    // summary displays — previously the discount was display-only.
+    var promo    = (typeof window !== 'undefined' && window.activePromo) ? window.activePromo : null;
+    var discount = 0;
+    if (promo) {
+        if (promo.type === 'pct')  discount = rawTotal * (promo.value / 100);
+        if (promo.type === 'flat') discount = Math.min(promo.value, rawTotal);
+    }
+    var total        = Math.max(0, parseFloat((rawTotal - discount).toFixed(2)));
+    var itemCount    = cart.reduce(function(s, i) { return s + (i.quantity || 1); }, 0);
     var cartCopy     = cart.slice();
     var pointsEarned = itemCount * 45;
     var coinsEarned  = Math.floor(total / 10);
+
+    if (checkoutInFlight) {
+        showNotification('A checkout is already in progress. Please wait.', 'error');
+        return;
+    }
 
     DigifinwizDB.getBalance('checking').then(function(balance) {
         if (total > balance) {
@@ -203,12 +249,13 @@ function checkout() {
             balance: balance,
             newBalance: balance - total
         }, function() {
-            Promise.all([
-                DigifinwizDB.getUserData(),
-                DigifinwizDB.adjustBalance('checking', -total)
-            ]).then(function(results) {
-                var userData = results[0];
-                if (!userData) return;
+            checkoutInFlight = true;
+            // Fetch userData first and only touch the balance once we know we
+            // can record the purchase — otherwise a failed userData fetch
+            // could leave money deducted with no purchase ever recorded.
+            DigifinwizDB.getUserData().then(function(userData) {
+                if (!userData) return Promise.reject('No user data');
+                return DigifinwizDB.adjustBalance('checking', -total).then(function() {
                 userData.points            += pointsEarned;
                 userData.pointsToNextLevel -= pointsEarned;
                 userData.completedTasks    += 1;
@@ -218,8 +265,9 @@ function checkout() {
                         DigifinwizDB.setUserData(userData),
                         DigifinwizDB.addPurchase({
                             date: new Date().toLocaleDateString(),
-                            items: cartCopy.map(function(i){ return { name:i.name, price:i.price }; }),
+                            items: cartCopy.map(function(i){ return { name:i.name, price:i.price, quantity:i.quantity||1 }; }),
                             total: total,
+                            promoCode: promo ? promo.code : null,
                             pointsEarned: pointsEarned
                         })
                     ]);
@@ -242,15 +290,19 @@ function checkout() {
                     showNotification('Level up! You\'re now level ' + userData.level + '!', 'success');
                 }
                 return savePurchase();
+                });
             }).then(function() {
                 return DigifinwizDB.clearCart();
             }).then(function() {
+                checkoutInFlight = false;
                 cart = [];
                 renderCart();
                 updateBalanceLabel();
                 showNotification('Purchase complete! ' + itemCount + ' item(s) for ƒ' + total.toFixed(2) + ' — +' + pointsEarned + ' pts!', 'success');
                 // ── Challenge completion check (full context via getStats) ──
-                return Promise.all([
+                // Its own chain: a failure here must not surface as "Checkout
+                // failed", since the purchase itself already succeeded.
+                Promise.all([
                     DigifinwizDB.getStats(),
                     DigifinwizDB.getAllBalances(),
                     DigifinwizDB.getTransactions(1000)
@@ -303,8 +355,11 @@ function checkout() {
                     if (typeof refreshEcoPage === 'function') {
                         setTimeout(refreshEcoPage, 1000);
                     }
+                }).catch(function(err) {
+                    console.error('Post-checkout challenge check failed:', err);
                 });
             }).catch(function(err) {
+                checkoutInFlight = false;
                 console.error('Checkout error:', err);
                 showNotification('Checkout failed. Please try again.', 'error');
             });
@@ -324,7 +379,9 @@ function showCheckoutModal(details, onConfirm) {
     modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000';
 
     var itemRows = details.items.map(function(i) {
-        return '<div style="display:flex;justify-content:space-between;margin-bottom:0.25rem"><span>' + escHtml(i.name) + '</span><span>ƒ' + Number(i.price).toFixed(2) + '</span></div>';
+        var qty = i.quantity || 1;
+        var label = qty > 1 ? escHtml(i.name) + ' ×' + qty : escHtml(i.name);
+        return '<div style="display:flex;justify-content:space-between;margin-bottom:0.25rem"><span>' + label + '</span><span>ƒ' + (Number(i.price) * qty).toFixed(2) + '</span></div>';
     }).join('');
 
     modal.innerHTML =
@@ -348,7 +405,7 @@ function showCheckoutModal(details, onConfirm) {
 
 function updateBalanceLabel() {
     DigifinwizDB.getBalance('checking').then(function(bal) {
-        var el = document.querySelector('.balance-amount');
+        var el = document.getElementById('ecoBalance') || document.querySelector('.balance-amount');
         if (el) el.textContent = 'ƒ' + bal.toLocaleString('en-US', {minimumFractionDigits:2});
     }).catch(function(){});
 }

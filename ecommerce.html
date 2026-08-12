@@ -1082,7 +1082,7 @@
     }
 
     function updateCartWithPromo() {
-        var rawTotal = (typeof cart !== 'undefined' ? cart : []).reduce(function(s,i){ return s+i.price; }, 0);
+        var rawTotal = (typeof cart !== 'undefined' ? cart : []).reduce(function(s,i){ return s+i.price*(i.quantity||1); }, 0);
         var discount = 0;
         if (activePromo) {
             if (activePromo.type === 'pct')  discount = rawTotal * (activePromo.value / 100);

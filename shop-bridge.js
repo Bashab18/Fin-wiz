@@ -32,16 +32,20 @@ const ShopBridge = (() => {
             } catch (e) { /* fall through to localStorage */ }
         }
         return {
-            level:  parseInt(localStorage.getItem('shop_level')  || '1',  10),
-            xp:     parseInt(localStorage.getItem('shop_xp')     || '0',  10),
-            coins:  parseInt(localStorage.getItem('shop_coins')  || '0',  10)
+            level:  parseInt(localStorage.getItem(_scopedKey('shop_level'))  || '1',  10),
+            xp:     parseInt(localStorage.getItem(_scopedKey('shop_xp'))     || '0',  10),
+            coins:  parseInt(localStorage.getItem(_scopedKey('shop_coins'))  || '0',  10)
         };
     }
 
     async function saveXPData(level, xp, coins) {
-        localStorage.setItem('shop_level',  String(level));
-        localStorage.setItem('shop_xp',     String(xp));
-        localStorage.setItem('shop_coins',  String(coins));
+        // Scoped per-user like every other fallback key here — otherwise on a
+        // shared browser these numbers leak across accounts (or, once one
+        // API call fails, get written back into the wrong user's DB record
+        // the next time saveXPData succeeds).
+        localStorage.setItem(_scopedKey('shop_level'),  String(level));
+        localStorage.setItem(_scopedKey('shop_xp'),     String(xp));
+        localStorage.setItem(_scopedKey('shop_coins'),  String(coins));
         if (!isAvailable()) return;
         try {
             const userData = await DigifinwizDB.getUserData();
@@ -53,15 +57,20 @@ const ShopBridge = (() => {
     async function getCart() {
         if (isAvailable()) {
             try {
+                // A successful fetch that returns [] means the cart really is
+                // empty (e.g. right after checkout) — falling through to
+                // localStorage in that case resurrected whatever stale cart was
+                // sitting there before the last checkout. Only fall back when
+                // the DB itself is unreachable.
                 const items = await DigifinwizDB.getCart();
-                if (items && items.length > 0) return items;
-            } catch (e) { /* fall through */ }
+                return items || [];
+            } catch (e) { /* fall through to localStorage */ }
         }
-        return JSON.parse(localStorage.getItem('instyl_cart') || '[]');
+        return JSON.parse(localStorage.getItem(_scopedKey('instyl_cart')) || '[]');
     }
 
     async function saveCart(items) {
-        localStorage.setItem('instyl_cart', JSON.stringify(items));
+        localStorage.setItem(_scopedKey('instyl_cart'), JSON.stringify(items));
         if (!isAvailable()) return;
         try {
             await DigifinwizDB.clearCart();
