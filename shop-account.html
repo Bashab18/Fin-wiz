@@ -165,7 +165,7 @@
                         <h3>Wallet</h3>
                         <div class="wallet-content">
                             <label>Credit Cards</label>
-                            <p>Visa ending in 1234</p>
+                            <p id="acctPaymentMethod">—</p>
                             <a href="shop-wallet.html" class="add-link">Add new</a>
                         </div>
                     </div>
@@ -180,22 +180,33 @@
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         if (typeof ShopBridge === 'undefined') return;
+        function setEl(id, val) { var e = document.getElementById(id); if (e) e.textContent = val || '—'; }
         ShopBridge.getFullProfile().then(function(profile) {
             var fullName = (profile.fullName || '').trim();
             var parts    = fullName ? fullName.split(' ') : [];
-            function setEl(id, val) { var e = document.getElementById(id); if (e) e.textContent = val || '—'; }
             setEl('acctFirstName', parts[0] || profile.username || '');
             setEl('acctLastName',  parts.slice(1).join(' '));
             setEl('acctEmail',     profile.email);
             setEl('acctPhone',     profile.phone);
         }).catch(function(){});
-        ShopBridge.getAddresses().then(function(addresses) {
+        // The real address book (shop-address-book.html) saves through
+        // DigifinwizDB's server-backed addresses store, not ShopBridge's
+        // legacy userData.addresses/localStorage store — reading the latter
+        // here left this section stuck on "—" no matter what the user saved.
+        DigifinwizDB.init().then(function() {
+            return DigifinwizDB.getAddresses();
+        }).then(function(addresses) {
             var addr = addresses.find(function(a) { return a.isDefault; }) || addresses[0];
             if (!addr) return;
-            function setEl(id, val) { var e = document.getElementById(id); if (e) e.textContent = val || '—'; }
             setEl('acctAddrStreet',    addr.street || '');
             setEl('acctAddrCityState', [addr.city, addr.state].filter(Boolean).join(', '));
             setEl('acctAddrZip',       addr.zip || '');
+        }).catch(function(){});
+        DigifinwizDB.init().then(function() {
+            return DigifinwizDB.getPaymentMethods();
+        }).then(function(methods) {
+            var pm = methods.find(function(m) { return m.isDefault; }) || methods[0];
+            setEl('acctPaymentMethod', pm ? (pm.brand.charAt(0).toUpperCase() + pm.brand.slice(1) + ' ending in ' + pm.last4) : 'No card on file');
         }).catch(function(){});
     });
     </script>

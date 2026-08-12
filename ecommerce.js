@@ -20,6 +20,20 @@ function findCartRow(productName) {
     return cart.find(function(i) { return i.name === productName; });
 }
 
+// Cart rows are updated via a non-atomic remove-then-add against the
+// server (no single "set quantity" endpoint), so two rapid calls for the
+// same product — e.g. double-clicking the cart's "+" — can both read the
+// same pre-update quantity and each create their own new row, splitting
+// one product across two rows with the wrong combined total. Serialize
+// per-product-name so the second call always sees the first's result.
+var cartOpQueue = {};
+function withCartOpLock(productName, fn) {
+    var prev = cartOpQueue[productName] || Promise.resolve();
+    var next = prev.then(fn, fn);
+    cartOpQueue[productName] = next;
+    return next;
+}
+
 function addToCart(productName, price, btnEl) {
     // Animate the button immediately for perceived responsiveness
     if (btnEl) {
@@ -27,20 +41,22 @@ function addToCart(productName, price, btnEl) {
         btnEl.disabled = true;
         setTimeout(function() { btnEl.textContent = 'Add to Cart'; btnEl.disabled = false; }, 1500);
     }
-    var existing = findCartRow(productName);
-    var upsert = existing
-        ? DigifinwizDB.removeCartItem(existing.id).then(function() {
-              return DigifinwizDB.addCartItem({ name: productName, price: price, quantity: (existing.quantity || 1) + 1 });
-          })
-        : DigifinwizDB.addCartItem({ name: productName, price: price, quantity: 1 });
-    upsert.then(function() {
-        return DigifinwizDB.getCart();
-    }).then(function(items) {
-        cart = items;
-        renderCart();
-        scrollToCart();
-        showNotification(productName + ' added to cart!', 'success');
-    }).catch(function(err) { console.error('addToCart:', err); });
+    withCartOpLock(productName, function() {
+        var existing = findCartRow(productName);
+        var upsert = existing
+            ? DigifinwizDB.removeCartItem(existing.id).then(function() {
+                  return DigifinwizDB.addCartItem({ name: productName, price: price, quantity: (existing.quantity || 1) + 1 });
+              })
+            : DigifinwizDB.addCartItem({ name: productName, price: price, quantity: 1 });
+        return upsert.then(function() {
+            return DigifinwizDB.getCart();
+        }).then(function(items) {
+            cart = items;
+            renderCart();
+            scrollToCart();
+            showNotification(productName + ' added to cart!', 'success');
+        }).catch(function(err) { console.error('addToCart:', err); });
+    });
 }
 
 function removeFromCart(dbId, productName) {
@@ -61,34 +77,38 @@ function clearCartAndReload() {
 }
 
 function decrementCartItem(productName, price) {
-    var existing = findCartRow(productName);
-    if (!existing) return;
-    var qty = existing.quantity || 1;
-    var op = qty > 1
-        ? DigifinwizDB.removeCartItem(existing.id).then(function() {
-              return DigifinwizDB.addCartItem({ name: productName, price: price, quantity: qty - 1 });
-          })
-        : DigifinwizDB.removeCartItem(existing.id);
-    op.then(function() {
-        return DigifinwizDB.getCart();
-    }).then(function(items) {
-        cart = items;
-        renderCart();
-        if (qty <= 1) showNotification(productName + ' removed from cart.', 'info');
-    }).catch(function(err) { console.error('decrementCartItem:', err); });
+    withCartOpLock(productName, function() {
+        var existing = findCartRow(productName);
+        if (!existing) return;
+        var qty = existing.quantity || 1;
+        var op = qty > 1
+            ? DigifinwizDB.removeCartItem(existing.id).then(function() {
+                  return DigifinwizDB.addCartItem({ name: productName, price: price, quantity: qty - 1 });
+              })
+            : DigifinwizDB.removeCartItem(existing.id);
+        return op.then(function() {
+            return DigifinwizDB.getCart();
+        }).then(function(items) {
+            cart = items;
+            renderCart();
+            if (qty <= 1) showNotification(productName + ' removed from cart.', 'info');
+        }).catch(function(err) { console.error('decrementCartItem:', err); });
+    });
 }
 
 function removeAllOfItem(productName) {
-    var existing = findCartRow(productName);
-    if (!existing) return;
-    DigifinwizDB.removeCartItem(existing.id)
-        .then(function() { return DigifinwizDB.getCart(); })
-        .then(function(items) {
-            cart = items;
-            renderCart();
-            showNotification(productName + ' removed from cart.', 'info');
-        })
-        .catch(function(err) { console.error('removeAllOfItem:', err); });
+    withCartOpLock(productName, function() {
+        var existing = findCartRow(productName);
+        if (!existing) return;
+        return DigifinwizDB.removeCartItem(existing.id)
+            .then(function() { return DigifinwizDB.getCart(); })
+            .then(function(items) {
+                cart = items;
+                renderCart();
+                showNotification(productName + ' removed from cart.', 'info');
+            })
+            .catch(function(err) { console.error('removeAllOfItem:', err); });
+    });
 }
 
 // ── Scroll to cart ────────────────────────────────────────────────────────────
@@ -144,8 +164,13 @@ function renderCart() {
         }).join('');
     }
 
+    // Estimated only — the real tax is charged-address-based and computed
+    // authoritatively at checkout (server.js STATE_TAX_RATES), but the Total
+    // row must at least agree with the Subtotal + Tax rows shown right above
+    // it, so it includes this same 5% estimate.
     var total = cart.reduce(function(s, i) { return s + i.price * (i.quantity || 1); }, 0);
-    if (cartTotal)   cartTotal.textContent = 'ƒ' + total.toFixed(2);
+    var estTax = total * 0.05;
+    if (cartTotal)   cartTotal.textContent = 'ƒ' + (total + estTax).toFixed(2);
     if (checkoutBtn) checkoutBtn.disabled = false;
 
     // Populate cart breakdown rows
@@ -154,7 +179,7 @@ function renderCart() {
     var itemCntEl  = document.getElementById('cartItemCount');
     var itemSufEl  = document.getElementById('cartItemCountSuffix');
     if (subtotalEl) subtotalEl.textContent = 'ƒ' + total.toFixed(2);
-    if (taxEl)      taxEl.textContent      = 'ƒ' + (total * 0.05).toFixed(2);
+    if (taxEl)      taxEl.textContent      = 'ƒ' + estTax.toFixed(2);
     if (itemCntEl)  itemCntEl.textContent  = unitCount;
     if (itemSufEl)  itemSufEl.textContent  = unitCount === 1 ? '' : 's';
 
@@ -230,12 +255,14 @@ function checkout() {
         var paymentMethods = results[1];
         if (addresses.length === 0) {
             showNotification('Add a shipping address before checking out.', 'error');
-            window.location.href = 'shop-address-book.html';
+            // Give the toast a moment to actually paint before navigation
+            // unloads the page — an immediate redirect destroys it unseen.
+            setTimeout(function() { window.location.href = 'shop-address-book.html'; }, 1200);
             return;
         }
         if (paymentMethods.length === 0) {
             showNotification('Add a payment method before checking out.', 'error');
-            window.location.href = 'shop-wallet.html';
+            setTimeout(function() { window.location.href = 'shop-wallet.html'; }, 1200);
             return;
         }
         openCheckoutModal(addresses, paymentMethods);
@@ -291,12 +318,17 @@ function openCheckoutModal(addresses, paymentMethods) {
 }
 
 function currentCheckoutSelection() {
-    var promoInput = document.getElementById('promoCodeInput');
+    // Send the promo the user actually clicked "Apply" on (window.activePromo,
+    // set by ecommerce.html's applyPromoCode), not whatever text happens to
+    // still be sitting in the input — otherwise a typed-but-never-applied
+    // code gets silently honored, and clearing the input after applying a
+    // code leaves the displayed discount in place while charging full price.
+    var appliedCode = (typeof activePromo !== 'undefined' && activePromo) ? activePromo.code : undefined;
     return {
         addressId:       parseInt(document.getElementById('checkoutAddressSelect').value, 10),
         paymentMethodId: parseInt(document.getElementById('checkoutPaymentSelect').value, 10),
         shippingMethod:  document.getElementById('checkoutShippingSelect').value,
-        promoCode:       promoInput && promoInput.value.trim() ? promoInput.value.trim() : undefined
+        promoCode:       appliedCode
     };
 }
 

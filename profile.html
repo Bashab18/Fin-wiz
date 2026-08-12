@@ -52,8 +52,10 @@
     <div class="container">
         <aside class="sidebar">
             <div class="user-profile">
-                <div class="avatar">
+                <div class="avatar" style="position:relative">
                     <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect fill='%23667eea' width='80' height='80'/%3E%3Ctext x='50%25' y='50%25' font-size='32' fill='white' text-anchor='middle' dy='.3em'%3EJD%3C/text%3E%3C/svg%3E" alt="Jane Doe">
+                    <button type="button" id="avatarUploadBtn" title="Change avatar" style="position:absolute;bottom:-2px;right:-2px;width:26px;height:26px;border-radius:50%;border:2px solid #fff;background:#667eea;color:#fff;cursor:pointer;font-size:0.75rem;line-height:1;display:flex;align-items:center;justify-content:center;padding:0">&#9998;</button>
+                    <input type="file" id="avatarFileInput" accept="image/*" style="display:none">
                 </div>
                 <h3>Jane Doe</h3>
                 <p class="username">@janeDoee123</p>
@@ -72,11 +74,11 @@
                     <span>Utilities<sup class="nav-badge" id="sidebarBadgeUtilities" style="display:none">0</sup></span>
                     <span class="arrow">&#8594;</span>
                 </a>
-                <a href="account-balances.html" class="nav-item">
+                <a href="profile.html#balances" class="nav-item">
                     <span>View account balances</span>
                     <span class="arrow">&#8594;</span>
                 </a>
-                <a href="account-progress.html" class="nav-item">
+                <a href="profile.html#progress" class="nav-item">
                     <span>View account progress</span>
                     <span class="arrow">&#8594;</span>
                 </a>
@@ -497,11 +499,19 @@
                 return DigifinwizDB.getUserById(session.userId).then(function(user) {
                     if (!user) return;
                     function fv(id,val){ var el=document.getElementById(id); if(el&&val!=null) el.value=val; }
+                    function ft(id,v)  { var el=document.getElementById(id); if(el) el.checked=v; }
                     fv('prof-fullname', user.fullName);
                     fv('prof-username', user.username);
                     fv('prof-email',    user.email);
                     var unEl = document.getElementById('prof-username');
                     if (unEl) { unEl.readOnly=true; unEl.style.background='#f1f5f9'; unEl.title='Username cannot be changed'; }
+                    var prefs = user.prefs || {};
+                    ft('notif-email',      prefs.notifEmail     !==false);
+                    ft('notif-challenge',  prefs.notifChallenge !==false);
+                    ft('notif-bills',      prefs.notifBills     !==false);
+                    ft('notif-achieve',    prefs.notifAchieve   !==false);
+                    ft('priv-leaderboard', prefs.privLeaderboard!==false);
+                    ft('priv-share',       prefs.privShare===true);
                 });
             } else {
                 return DigifinwizDB.getProfileData().then(function(prof) {
@@ -534,6 +544,14 @@
                     if (ne) ne.textContent = fullName;
                     var nameEl = document.querySelector('.user-profile h3');
                     if (nameEl) nameEl.textContent = fullName;
+                    // Keep the cached session in sync — without this, every
+                    // other page's first paint (auth.js's _injectSessionUI,
+                    // which runs from the session snapshot before any fetch
+                    // completes) kept showing the pre-rename name/initials
+                    // until the next full login.
+                    if (typeof DigifinwizAuth !== 'undefined' && DigifinwizAuth.updateSession) {
+                        DigifinwizAuth.updateSession({ fullName: fullName });
+                    }
                 }).catch(function() { showNotification('Save failed. Please try again.', 'error'); });
             } else {
                 var data = {
@@ -579,19 +597,67 @@
 
         // ── Preferences toggles ───────────────────────────────────────────
         function savePrefs() {
-            if (session && session.userId) return;
             function gt(id){ var el=document.getElementById(id); return el?el.checked:false; }
+            var prefs = {
+                notifEmail:gt('notif-email'), notifChallenge:gt('notif-challenge'),
+                notifBills:gt('notif-bills'), notifAchieve:gt('notif-achieve'),
+                privLeaderboard:gt('priv-leaderboard'), privShare:gt('priv-share')
+            };
+            if (session && session.userId) {
+                DigifinwizDB.updateUser(session.userId, { prefs: prefs })
+                    .then(function(){ showNotification('Preferences saved!','success'); })
+                    .catch(function(){ showNotification('Save failed. Please try again.','error'); });
+                return;
+            }
             DigifinwizDB.getProfileData().then(function(ex){
-                return DigifinwizDB.setProfileData(Object.assign({},ex||{},{
-                    notifEmail:gt('notif-email'), notifChallenge:gt('notif-challenge'),
-                    notifBills:gt('notif-bills'), notifAchieve:gt('notif-achieve'),
-                    privLeaderboard:gt('priv-leaderboard'), privShare:gt('priv-share')
-                }));
+                return DigifinwizDB.setProfileData(Object.assign({},ex||{},prefs));
             }).then(function(){ showNotification('Preferences saved!','success'); });
         }
         ['notif-email','notif-challenge','notif-bills','notif-achieve','priv-leaderboard','priv-share'].forEach(function(id){
             var el=document.getElementById(id); if(el) el.addEventListener('change',savePrefs);
         });
+
+        // ── Avatar upload ─────────────────────────────────────────────────
+        var avatarBtn   = document.getElementById('avatarUploadBtn');
+        var avatarInput = document.getElementById('avatarFileInput');
+        if (avatarBtn && avatarInput) {
+            avatarBtn.addEventListener('click', function() { avatarInput.click(); });
+            avatarInput.addEventListener('change', function() {
+                var file = avatarInput.files && avatarInput.files[0];
+                avatarInput.value = '';
+                if (!file) return;
+                if (!file.type || file.type.indexOf('image/') !== 0) {
+                    showNotification('Please choose an image file.', 'error'); return;
+                }
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    var img = new Image();
+                    img.onload = function() {
+                        // Resize/compress to a small square so the stored data URI
+                        // stays well under the server's size cap regardless of the
+                        // original photo's resolution.
+                        var size = 160;
+                        var canvas = document.createElement('canvas');
+                        canvas.width = size; canvas.height = size;
+                        var ctx = canvas.getContext('2d');
+                        var side = Math.min(img.width, img.height);
+                        var sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+                        ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+                        var dataUri = canvas.toDataURL('image/jpeg', 0.82);
+                        DigifinwizDB.getProfileData().then(function(ex) {
+                            return DigifinwizDB.setProfileData(Object.assign({}, ex||{}, { avatarDataUri: dataUri }));
+                        }).then(function() {
+                            document.querySelectorAll('.user-profile .avatar img').forEach(function(im){ im.src = dataUri; });
+                            showNotification('Avatar updated!', 'success');
+                        }).catch(function() { showNotification('Avatar upload failed. Please try again.', 'error'); });
+                    };
+                    img.onerror = function() { showNotification('Could not read that image.', 'error'); };
+                    img.src = e.target.result;
+                };
+                reader.onerror = function() { showNotification('Could not read that file.', 'error'); };
+                reader.readAsDataURL(file);
+            });
+        }
 
         // ── Information tab ───────────────────────────────────────────────
         var displayName = session ? (session.fullName || session.username || 'Jane Doe') : 'Jane Doe';

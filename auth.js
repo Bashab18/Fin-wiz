@@ -41,6 +41,22 @@ const DigifinwizAuth = (() => {
         localStorage.removeItem('username');
     }
 
+    // Merges a partial update (e.g. a fullName change from the profile page)
+    // into the cached session and re-persists it to wherever it already
+    // lives. Without this, the sidebar identity (name + avatar initials)
+    // painted from the session snapshot on every page's first render stays
+    // on the pre-rename value until the next full login, even though the
+    // server-side record was updated immediately.
+    function updateSession(patch) {
+        var s = getSession();
+        if (!s) return;
+        var updated = Object.assign({}, s, patch);
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(updated));
+        if (localStorage.getItem(SESSION_KEY)) {
+            localStorage.setItem(SESSION_KEY, JSON.stringify(updated));
+        }
+    }
+
     function clearSession() {
         sessionStorage.removeItem(SESSION_KEY);
         localStorage.removeItem(SESSION_KEY);
@@ -165,6 +181,7 @@ const DigifinwizAuth = (() => {
     return {
         getSession,
         setSession,
+        updateSession,
         clearSession,
         isAdmin,
         isLoggedIn,

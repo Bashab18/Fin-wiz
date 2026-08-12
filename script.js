@@ -216,7 +216,10 @@ document.addEventListener('DOMContentLoaded', function() {
             window.inboxRead = function(id) {
                 DigifinwizDB.markMessageRead(id, session.userId).then(function() {
                     return DigifinwizDB.getMessagesForUser(session.userId);
-                }).then(render).catch(console.error);
+                }).then(function(messages) {
+                    render(messages);
+                    updateSidebarBadges();
+                }).catch(console.error);
             };
         }).catch(console.error);
     })();
@@ -262,7 +265,12 @@ document.addEventListener('DOMContentLoaded', function() {
         content.style.maxHeight = content.scrollHeight + 'px';
     });
 
-    // Initialize IndexedDB, seed default user data if needed, then update UI
+    // Initialize IndexedDB, seed default user data if needed, then update UI.
+    // updateSidebarBadges() doesn't depend on userData at all (it does its
+    // own fetches) — it used to run only after this chain succeeded, so a
+    // failed/slow getUserData() call left the badges on their static HTML
+    // placeholder (a hardcoded "5" for Ecommerce) instead of real counts.
+    updateSidebarBadges();
     DigifinwizDB.init().then(() => {
         return DigifinwizDB.getUserData();
     }).then(data => {
@@ -280,7 +288,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return data;
     }).then(data => {
         updateUIWithData(data);
-        updateSidebarBadges();
     }).catch(err => {
         console.error('DigifinwizDB init error:', err);
     });
@@ -330,37 +337,6 @@ function showVideoModal(videoCard) {
     });
 }
 
-// Function to update progress - now uses IndexedDB
-function updateProgress(points) {
-    DigifinwizDB.getUserData().then(data => {
-        if (!data) return;
-        data.points += points;
-        data.pointsToNextLevel -= points;
-
-        if (data.pointsToNextLevel <= 0) {
-            if (data.level === 1) {
-                return DigifinwizDB.getLevel1Requirements().then(function(req) {
-                    if (req.allMet) {
-                        data.level++;
-                        data.pointsToNextLevel = 1000;
-                        showNotification(`Congratulations! You leveled up to level ${data.level}!`, 'success');
-                    } else {
-                        data.pointsToNextLevel = 0;
-                    }
-                    return DigifinwizDB.setUserData(data).then(() => { updateUIWithData(data); });
-                });
-            }
-            data.level++;
-            data.pointsToNextLevel = 1000;
-            showNotification(`Congratulations! You leveled up to level ${data.level}!`, 'success');
-        }
-
-        return DigifinwizDB.setUserData(data).then(() => {
-            updateUIWithData(data);
-        });
-    }).catch(err => console.error('updateProgress error:', err));
-}
-
 // Function to update UI with data object
 function updateUIWithData(data) {
     if (!data) return;
@@ -385,8 +361,15 @@ function updateUIWithData(data) {
         var un = document.querySelector('.user-profile .username');
         var avatar = document.querySelector('.user-profile .avatar img');
         if (h3 && prof.fullName) h3.textContent = prof.fullName;
-        if (un && prof.username) un.textContent = prof.username;
-        if (avatar && prof.fullName) {
+        // '@' + username matches the convention auth.js's initial session-based
+        // paint and profile.html's markup both use — this used to render the
+        // bare username, which then got overwritten again with the '@'
+        // version the next time _injectSessionUI ran, flashing between the two.
+        if (un && prof.username) un.textContent = '@' + prof.username;
+        if (avatar && prof.avatarDataUri) {
+            avatar.src = prof.avatarDataUri;
+            if (prof.fullName) avatar.alt = prof.fullName;
+        } else if (avatar && prof.fullName) {
             var parts = prof.fullName.trim().split(' ');
             var initials = (parts[0] ? parts[0][0] : '?') + (parts[1] ? parts[1][0] : '');
             avatar.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect fill='%23667eea' width='80' height='80'/%3E%3Ctext x='50%25' y='50%25' font-size='32' fill='white' text-anchor='middle' dy='.3em'%3E" + encodeURIComponent(initials) + "%3C/text%3E%3C/svg%3E";
@@ -395,15 +378,32 @@ function updateUIWithData(data) {
     }).catch(function(){});
 }
 
-// Update sidebar nav-badge counts based on incomplete challenges per category
+// Update sidebar nav-badge counts based on incomplete challenges plus unread
+// system-message alerts per category (banking/ecommerce/utilities) — so the
+// badge reflects both "things to do" and "things that need your attention".
 function updateSidebarBadges() {
     if (typeof DigifinwizDB === 'undefined' || !DigifinwizDB.getChallenges) return;
-    DigifinwizDB.getChallenges().then(function(challenges) {
+    // Admins aren't scoped to one user — getChallengesForUser returns every
+    // participant's challenges deduped by title for them, so a badge here
+    // would show counts that are true for nobody. Same guard loadInbox() uses.
+    var session = (typeof DigifinwizAuth !== 'undefined' && DigifinwizAuth.getSession) ? DigifinwizAuth.getSession() : null;
+    if (!session || !session.loggedIn || session.role !== 'participant') return;
+    var challengesP = DigifinwizDB.getChallenges().catch(function(){ return []; });
+    var messagesP   = DigifinwizDB.getMessagesForUser ? DigifinwizDB.getMessagesForUser().catch(function(){ return []; }) : Promise.resolve([]);
+    Promise.all([challengesP, messagesP]).then(function(results) {
+        var challenges = results[0], messages = results[1];
         var active = challenges.filter(function(c){ return c.active && !c.completed; });
         var byCategory = { ecommerce: 0, banking: 0, utilities: 0 };
         active.forEach(function(c) {
             if (byCategory.hasOwnProperty(c.category)) byCategory[c.category]++;
         });
+
+        if (session.userId) {
+            messages.forEach(function(m) {
+                var isUnread = (m.readBy || []).indexOf(session.userId) === -1;
+                if (isUnread && byCategory.hasOwnProperty(m.category)) byCategory[m.category]++;
+            });
+        }
 
         var ecoBadge = document.getElementById('sidebarBadgeEcommerce');
         var bankBadge = document.getElementById('sidebarBadgeBanking');
@@ -425,10 +425,4 @@ function updateSidebarBadges() {
 }
 
 // Legacy updateUI - reads from IndexedDB
-function updateUI() {
-    DigifinwizDB.getUserData().then(data => {
-        updateUIWithData(data);
-    }).catch(err => console.error('updateUI error:', err));
-}
-
 console.log('Digifinwiz app loaded successfully!');

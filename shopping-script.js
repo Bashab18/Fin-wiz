@@ -26,13 +26,13 @@ class GameProgress {
         this.xp      += amount;
         this.progress = this.calcProgress();
         await this.checkLevelUp();
-        await this.save();
+        await this.save(amount);
         this.updateDisplay();
     }
 
     async addCoins(amount) {
         this.coins += amount;
-        await this.save();
+        await this.save(0);
         this.updateDisplay();
     }
 
@@ -46,9 +46,9 @@ class GameProgress {
         return false;
     }
 
-    async save() {
+    async save(xpDelta) {
         if (typeof ShopBridge !== 'undefined') {
-            await ShopBridge.saveXPData(this.level, this.xp, this.coins);
+            await ShopBridge.saveXPData(this.level, this.xp, this.coins, xpDelta || 0);
         } else {
             localStorage.setItem('shop_level',  this.level);
             localStorage.setItem('shop_xp',     this.xp);

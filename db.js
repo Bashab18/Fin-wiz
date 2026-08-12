@@ -128,6 +128,55 @@ const DigifinwizDB = (() => {
         return _api('PUT', '/api/me/data', data);
     }
 
+    // Canonical point-award routine — every earning flow in the app (banking
+    // transfers/bill pay, ecommerce checkout, shop pages) should route XP
+    // gains through this so points/pointsToNextLevel/level stay mutually
+    // consistent. A caller that instead computes its own running "total XP"
+    // and writes it straight to userData.points (as the shop pages used to)
+    // silently diverges from this model — pointsToNextLevel never moves,
+    // so the two fields disagree about how close the user is to leveling
+    // up, and the absolute overwrite can clobber points earned elsewhere
+    // (e.g. a checkout in another tab) between this call's read and write.
+    // extraPatch (optional) is merged into the same read-modify-write, for
+    // a caller that also needs to update an unrelated field (e.g. coins)
+    // atomically alongside the XP award.
+    function awardPoints(amount, extraPatch) {
+        return getUserData().then(function(userData) {
+            userData = Object.assign(
+                { level: 1, points: 0, pointsToNextLevel: 1000, challenges: 0, completedTasks: 0, coins: 0 },
+                userData || {}, extraPatch || {}
+            );
+            userData.points = (userData.points || 0) + amount;
+            userData.pointsToNextLevel = (userData.pointsToNextLevel != null ? userData.pointsToNextLevel : 1000) - amount;
+            var leveledUp = false;
+            function finish() {
+                return setUserData(userData).then(function() {
+                    return { userData: userData, leveledUp: leveledUp, newLevel: userData.level };
+                });
+            }
+            if (userData.pointsToNextLevel > 0) return finish();
+            // Level 1 -> 2 is gated behind having done at least one activity
+            // in each of banking/ecommerce/utilities — same rule the rest of
+            // the app enforces, so a shop-only user can't skip it.
+            if (userData.level === 1) {
+                return getLevel1Requirements().then(function(req) {
+                    if (req.allMet) {
+                        userData.level++;
+                        userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
+                        leveledUp = true;
+                    } else {
+                        userData.pointsToNextLevel = 0;
+                    }
+                    return finish();
+                });
+            }
+            userData.level++;
+            userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
+            leveledUp = true;
+            return finish();
+        });
+    }
+
     // ── Profile ───────────────────────────────────────────────────────────────
     function getProfileData() {
         return _api('GET', '/api/me/profile');
@@ -157,11 +206,11 @@ const DigifinwizDB = (() => {
     }
 
     function setBalance(account, amount) {
-        // Compute delta = desired – current, then apply atomically
-        return getBalance(account).then(current => {
-            const delta = parseFloat((amount - current).toFixed(10));
-            return adjustBalance(account, delta);
-        });
+        // Server computes current->target atomically in one locked request —
+        // computing the delta here from a separate GET left a window where
+        // another write (a scheduled transfer executing, a second admin tab)
+        // could land between the read and the write and get silently undone.
+        return _api('POST', '/api/me/balances/' + account + '/set', { amount }).then(r => r.amount);
     }
 
     // ── Transactions ──────────────────────────────────────────────────────────
@@ -354,15 +403,7 @@ const DigifinwizDB = (() => {
     }
 
     function sendSystemMessage(opts) {
-        // No auth headers needed — plain fetch
-        return fetch((window.API_BASE_URL || '') + '/api/admin/messages/system', {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify(opts)
-        }).then(res => {
-            if (!res.ok) throw new Error(res.statusText);
-            return res.json();
-        });
+        return _api('POST', '/api/admin/messages/system', opts);
     }
 
     function getAllSentMessages() {
@@ -552,6 +593,7 @@ const DigifinwizDB = (() => {
         // Session data
         getUserData,
         setUserData,
+        awardPoints,
         getProfileData,
         setProfileData,
         changePassword,
