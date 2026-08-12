@@ -822,7 +822,7 @@
                 var descEl    = document.getElementById('featuredChallengeDesc');
                 var rewardsEl = document.getElementById('featuredChallengeRewards');
                 var cardEl    = document.getElementById('featuredChallengeCard');
-                if (titleEl) titleEl.textContent = featured.completed ? '&#9989; ' + featured.title : featured.title;
+                if (titleEl) titleEl.textContent = featured.completed ? '✅ ' + featured.title : featured.title;
                 if (descEl)  descEl.textContent  = featured.description || 'Complete this challenge to earn bonus XP and florins.';
                 if (rewardsEl) rewardsEl.innerHTML = '<span class="badge badge-points">+' + (featured.points || 0) + ' XP</span>' +
                     (featured.florins ? '<span class="badge badge-florins">-&#402;' + featured.florins + '</span>' : '');

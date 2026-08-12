@@ -111,6 +111,14 @@
 
     function _escH(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+    // Safe to splice into a single-quoted HTML attribute: JSON.stringify() a value for use as a JS
+    // argument literal, then neutralize characters that could break out of the attribute or get
+    // decoded as an HTML entity before the JS parser ever sees them.
+    function _jsAttr(v) {
+        return JSON.stringify(v)
+            .replace(/&/g, '\\u0026').replace(/</g, '\\u003C').replace(/>/g, '\\u003E').replace(/'/g, '\\u0027');
+    }
+
     function renderAddresses() {
         var el = document.getElementById('addressList');
         if (!el) return;
@@ -123,11 +131,11 @@
                 '<div class="address-card-header">' +
                 (addr.isDefault
                     ? '<span class="default-badge">Default</span>'
-                    : '<button class="btn-link" onclick="setDefaultAddress(' + JSON.stringify(addr.id) + ')">Set as Default</button>') +
+                    : "<button class=\"btn-link\" onclick='setDefaultAddress(" + _jsAttr(addr.id) + ")'>Set as Default</button>") +
                 '<div class="address-actions">' +
-                '<button class="btn-icon" title="Edit" onclick="showAddressForm(' + JSON.stringify(addr.id) + ')">' +
+                "<button class=\"btn-icon\" title=\"Edit\" onclick='showAddressForm(" + _jsAttr(addr.id) + ")'>" +
                 '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>' +
-                '<button class="btn-icon" title="Delete" onclick="deleteAddress(' + JSON.stringify(addr.id) + ')">' +
+                "<button class=\"btn-icon\" title=\"Delete\" onclick='deleteAddress(" + _jsAttr(addr.id) + ")'>" +
                 '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></button>' +
                 '</div></div>' +
                 '<div class="address-card-body">' +
@@ -191,25 +199,20 @@
         }
 
         if (_editingId) {
+            var editedId = _editingId;
             _addresses = _addresses.map(function(a) {
-                return a.id === _editingId
+                return a.id === editedId
                     ? Object.assign({}, a, { name:name.trim(), street:street.trim(), city:city.trim(), state:state.trim(), zip:zip.trim(), country:country.trim(), phone:phone.trim() })
                     : a;
             });
+            if (setDef) {
+                _addresses = _addresses.map(function(a) { return Object.assign({}, a, { isDefault: a.id === editedId }); });
+            }
         } else {
             var newAddr = { id: _addrId(), name:name.trim(), street:street.trim(), city:city.trim(), state:state.trim(), zip:zip.trim(), country:country.trim(), phone:phone.trim(), isDefault:false };
             _addresses.push(newAddr);
-            if (setDef || _addresses.length === 1) setDef = true;
-            if (setDef) newAddr.isDefault = true;
-        }
-
-        if (setDef && !_editingId) {
-            _addresses = _addresses.map(function(a) {
-                return Object.assign({}, a, { isDefault: a.isDefault && a.id !== _addrId });
-            });
-            var last = _addresses[_addresses.length - 1];
-            if (last) {
-                _addresses = _addresses.map(function(a) { return Object.assign({}, a, { isDefault: a.id === last.id }); });
+            if (setDef || _addresses.length === 1) {
+                _addresses = _addresses.map(function(a) { return Object.assign({}, a, { isDefault: a.id === newAddr.id }); });
             }
         }
 

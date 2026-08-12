@@ -119,6 +119,19 @@ function nextId(arr) {
     return Math.max(...arr.map(r => r.id || 0)) + 1;
 }
 
+// Serializes async work per user id so two concurrent requests (e.g. a
+// double-submitted transfer, or two open tabs) can't both read the same
+// stale balance before either one's write commits.
+const userLocks = new Map();
+function withUserLock(userId, fn) {
+    const prev = userLocks.get(userId) || Promise.resolve();
+    const next = prev.then(fn, fn).finally(() => {
+        if (userLocks.get(userId) === next) userLocks.delete(userId);
+    });
+    userLocks.set(userId, next);
+    return next;
+}
+
 // ── Password hashing (prototype-level djb2 XOR, not cryptographic) ────────────
 function simpleHash(str) {
     let h = 5381;
@@ -316,14 +329,16 @@ async function checkAndCompleteChallengesForUser(userId, context) {
     );
     await writeJSON('challenges', updatedChallenges);
 
-    // Award XP + update userData
-    const bonusXP  = completed.reduce((s, c) => s + (c.points || 0), 0);
+    // Award XP + florins + update userData
+    const bonusXP      = completed.reduce((s, c) => s + (c.points || 0), 0);
+    const bonusFlorins = completed.reduce((s, c) => s + (c.florins || 0), 0);
     let leveledUp  = false;
     let newLevel   = 0;
 
     const userData             = Object.assign({}, DEFAULT_USER_DATA, user.userData || {});
     userData.challenges        = (userData.challenges || 0) + completed.length;
     userData.points            = (userData.points || 0) + bonusXP;
+    userData.coins              = (userData.coins || 0) + bonusFlorins;
     userData.pointsToNextLevel = (userData.pointsToNextLevel !== undefined ? userData.pointsToNextLevel : 1000) - bonusXP;
 
     if (userData.pointsToNextLevel <= 0) {
@@ -478,7 +493,12 @@ app.put('/api/users/:id', async (req, res) => {
     const users = await readJSON('users');
     const idx   = users.findIndex(u => u.id === id);
     if (idx === -1) return res.status(404).json({ error: 'User not found' });
-    users[idx] = Object.assign({}, users[idx], req.body, { id });
+    const patch = Object.assign({}, req.body);
+    // Lowercased to match login's lowercase comparison — otherwise saving
+    // "Jane@Email.com" here would make email/username login stop matching.
+    if (patch.email    !== undefined) patch.email    = String(patch.email).toLowerCase();
+    if (patch.username !== undefined) patch.username = String(patch.username).toLowerCase();
+    users[idx] = Object.assign({}, users[idx], patch, { id });
     await writeJSON('users', users);
     res.json(users[idx]);
 });
@@ -575,11 +595,31 @@ app.put('/api/me/profile', async (req, res) => {
     const { fullName, username, email } = req.body || {};
     const patch = {};
     if (fullName !== undefined) patch.fullName = fullName;
-    if (username  !== undefined) patch.username = username;
-    if (email     !== undefined) patch.email    = email;
+    // Lowercased to match login's lowercase comparison (server.js login handler) —
+    // otherwise saving "Jane@Email.com" here would make email login stop matching.
+    if (username  !== undefined) patch.username = username.toLowerCase();
+    if (email     !== undefined) patch.email    = email.toLowerCase();
     users[idx] = Object.assign({}, users[idx], patch);
     await writeJSON('users', users);
     res.json({ fullName: users[idx].fullName, username: users[idx].username, email: users[idx].email });
+});
+
+// Verifies the current password server-side and updates the hash — the client
+// never has (or needs) access to the password-hashing function.
+app.post('/api/me/password', async (req, res) => {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+        return res.status(400).json({ error: 'currentPassword and newPassword required' });
+    }
+    const users = await readJSON('users');
+    const idx   = users.findIndex(u => u.id === req.userId);
+    if (idx === -1) return res.status(404).json({ error: 'User not found' });
+    if (users[idx].passwordHash !== simpleHash(currentPassword)) {
+        return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+    users[idx] = Object.assign({}, users[idx], { passwordHash: simpleHash(newPassword) });
+    await writeJSON('users', users);
+    res.json({ ok: true });
 });
 
 // ── Me: balances ──────────────────────────────────────────────────────────────
@@ -603,15 +643,28 @@ app.get('/api/me/balances/:account', async (req, res) => {
 app.post('/api/me/balances/adjust', async (req, res) => {
     const { account, delta } = req.body || {};
     if (!account || delta === undefined) return res.status(400).json({ error: 'account and delta required' });
-    const users = await readJSON('users');
-    const idx   = users.findIndex(u => u.id === req.userId);
-    if (idx === -1) return res.status(404).json({ error: 'User not found' });
-    const balances    = Object.assign({}, DEFAULT_BALANCES, users[idx].balances || {});
-    const current     = balances[account] !== undefined ? balances[account] : 0;
-    balances[account] = parseFloat((current + Number(delta)).toFixed(2));
-    users[idx]        = Object.assign({}, users[idx], { balances });
-    await writeJSON('users', users);
-    res.json({ account, amount: balances[account] });
+    try {
+        // Locked so two concurrent adjustments for the same user (e.g. a
+        // double-submitted transfer, or two tabs) are applied one at a time
+        // against the up-to-date balance instead of both reading the same
+        // stale value and driving it past zero.
+        const result = await withUserLock(req.userId, async () => {
+            const users = await readJSON('users');
+            const idx   = users.findIndex(u => u.id === req.userId);
+            if (idx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
+            const balances = Object.assign({}, DEFAULT_BALANCES, users[idx].balances || {});
+            const current  = balances[account] !== undefined ? balances[account] : 0;
+            const next     = parseFloat((current + Number(delta)).toFixed(2));
+            if (next < 0) { const e = new Error('Insufficient funds'); e.status = 409; throw e; }
+            balances[account] = next;
+            users[idx]        = Object.assign({}, users[idx], { balances });
+            await writeJSON('users', users);
+            return { account, amount: balances[account] };
+        });
+        res.json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
 });
 
 // ── Me: transactions ──────────────────────────────────────────────────────────
@@ -637,6 +690,12 @@ app.post('/api/me/transactions', async (req, res) => {
     res.status(201).json(record);
 });
 
+app.delete('/api/me/transactions', async (req, res) => {
+    const all = await readJSON('transactions');
+    await writeJSON('transactions', all.filter(t => t.userId !== req.userId));
+    res.json({ ok: true });
+});
+
 // ── Me: payments ──────────────────────────────────────────────────────────────
 app.get('/api/me/payments', async (req, res) => {
     const limit    = req.query.limit ? parseInt(req.query.limit, 10) : null;
@@ -660,6 +719,12 @@ app.post('/api/me/payments', async (req, res) => {
     res.status(201).json(record);
 });
 
+app.delete('/api/me/payments', async (req, res) => {
+    const all = await readJSON('payments');
+    await writeJSON('payments', all.filter(p => p.userId !== req.userId));
+    res.json({ ok: true });
+});
+
 // ── Me: purchases ─────────────────────────────────────────────────────────────
 app.get('/api/me/purchases', async (req, res) => {
     const limit    = req.query.limit ? parseInt(req.query.limit, 10) : null;
@@ -679,6 +744,12 @@ app.post('/api/me/purchases', async (req, res) => {
     all.push(record);
     await writeJSON('purchases', all);
     res.status(201).json(record);
+});
+
+app.delete('/api/me/purchases', async (req, res) => {
+    const all = await readJSON('purchases');
+    await writeJSON('purchases', all.filter(p => p.userId !== req.userId));
+    res.json({ ok: true });
 });
 
 // ── Me: cart ──────────────────────────────────────────────────────────────────
@@ -757,6 +828,44 @@ app.post('/api/me/challenges/purge', async (req, res) => {
     const purged  = mine.filter(c => !keepIds.has(c.id)).length;
     await writeJSON('challenges', [...others, ...mine.filter(c => keepIds.has(c.id))]);
     res.json({ purged });
+});
+
+// Wipes and re-seeds only the caller's own challenges. Scoped to req.userId
+// (like every other /api/me/* route) so a participant can self-service reset
+// their challenges without needing the admin-only DELETE /api/admin/challenges,
+// which would otherwise wipe every user's challenges.
+app.post('/api/me/challenges/reset', async (req, res) => {
+    const all    = await readJSON('challenges');
+    const others = all.filter(c => c.userId !== req.userId);
+    await writeJSON('challenges', others);
+    await seedChallengesForUser(req.userId);
+    res.json({ ok: true });
+});
+
+// Resets the caller's own progress in one request: clears their transactions,
+// payments, purchases and cart, resets their balances and userData to
+// defaults, and re-seeds their challenges. Scoped to req.userId so this can't
+// affect any other user.
+app.post('/api/me/reset', async (req, res) => {
+    for (const store of ['transactions', 'payments', 'purchases', 'cart']) {
+        const rows = await readJSON(store);
+        await writeJSON(store, rows.filter(r => r.userId !== req.userId));
+    }
+
+    const users = await readJSON('users');
+    const idx   = users.findIndex(u => u.id === req.userId);
+    if (idx === -1) return res.status(404).json({ error: 'User not found' });
+    users[idx] = Object.assign({}, users[idx], {
+        userData: Object.assign({}, DEFAULT_USER_DATA),
+        balances: Object.assign({}, DEFAULT_BALANCES)
+    });
+    await writeJSON('users', users);
+
+    const challenges = await readJSON('challenges');
+    await writeJSON('challenges', challenges.filter(c => c.userId !== req.userId));
+    await seedChallengesForUser(req.userId);
+
+    res.json({ ok: true });
 });
 
 app.get('/api/me/challenges', async (req, res) => {
@@ -964,11 +1073,61 @@ app.patch('/api/admin/challenges/:id', async (req, res) => {
     res.json(all[idx]);
 });
 
+// DELETE /api/admin/challenges/:id — delete a single challenge regardless of owner
+app.delete('/api/admin/challenges/:id', async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const id  = Number(req.params.id);
+    const all = await readJSON('challenges');
+    await writeJSON('challenges', all.filter(c => c.id !== id));
+    res.json({ ok: true });
+});
+
 // DELETE /api/admin/challenges — wipe ALL challenges (admin only)
 app.delete('/api/admin/challenges', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     await writeJSON('challenges', []);
     res.json({ ok: true });
+});
+
+// POST /api/admin/challenges — create a new challenge definition and push a
+// live instance of it to every approved participant. Challenges are stored
+// per-user (not as shared templates), so a challenge the admin "creates"
+// here must be seeded out the same way ALL_DEFAULT_CHALLENGES are —
+// otherwise it would only ever exist under the admin's own account.
+app.post('/api/admin/challenges', async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const {
+        title, description, category, active, points, florins,
+        condition, conditionValue, customField, customOperator,
+        extraConditions, conditionLogic
+    } = req.body || {};
+    if (!title) return res.status(400).json({ error: 'title required' });
+
+    const users        = await readJSON('users');
+    const participants = users.filter(u => u.role === 'participant' && u.status === 'approved');
+    const challenges   = await readJSON('challenges');
+    let id      = nextId(challenges);
+    const now   = Date.now();
+    const created = participants.map(u => ({
+        id:              id++,
+        userId:          u.id,
+        title,
+        description:     description || '',
+        category:        category || 'general',
+        active:          active !== false,
+        completed:       false,
+        createdAt:       now,
+        points:          points || 0,
+        florins:         florins || 0,
+        condition:       condition || 'manual',
+        conditionValue:  conditionValue !== undefined ? conditionValue : null,
+        customField:     customField || null,
+        customOperator:  customOperator || null,
+        extraConditions: Array.isArray(extraConditions) ? extraConditions : [],
+        conditionLogic:  conditionLogic || 'all'
+    }));
+    await writeJSON('challenges', challenges.concat(created));
+    res.status(201).json(created);
 });
 
 // POST /api/admin/challenges/seed — seed default challenges for every approved participant

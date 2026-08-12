@@ -21,7 +21,8 @@ document.addEventListener('DOMContentLoaded', function() {
         progressBar.style.width = '0%';
         DigifinwizDB.getUserData().then(function(data) {
             if (!data) return;
-            var pct = Math.max(0, Math.min(100, Math.round(((1000 - (data.pointsToNextLevel || 1000)) / 1000) * 100)));
+            var pToNext = data.pointsToNextLevel != null ? data.pointsToNextLevel : 1000;
+            var pct = Math.max(0, Math.min(100, Math.round(((1000 - pToNext) / 1000) * 100)));
             setTimeout(function() { progressBar.style.width = pct + '%'; }, 300);
         }).catch(function() {});
     }
@@ -280,7 +281,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }).then(data => {
         updateUIWithData(data);
         updateSidebarBadges();
-        updateChallengeStats();
     }).catch(err => {
         console.error('DigifinwizDB init error:', err);
     });
@@ -365,14 +365,12 @@ function updateProgress(points) {
 function updateUIWithData(data) {
     if (!data) return;
 
-    // Update stat cards if they exist
-    const statNumbers = document.querySelectorAll('.stat-number');
-    if (statNumbers.length > 0) {
-        statNumbers[0].textContent = data.level;
-        statNumbers[1].textContent = data.points.toLocaleString();
-        // statNumbers[2] = challenges completed — updated dynamically by updateChallengeStats()
-        statNumbers[3].textContent = data.completedTasks;
-    }
+    // index.html's own inline script is the sole writer of the 4 stat cards
+    // (.stat-number, the only page that has them) — it fetches userData and
+    // challenges together so "Active Challenges"/"Completed Tasks" stay
+    // consistent. This used to also write here from a second, independent
+    // fetch with different semantics, so the two writers raced and the
+    // cards flickered between different values depending on which resolved last.
 
     // Update progress header
     const progressHeader = document.querySelector('.progress-header h1');
@@ -393,25 +391,6 @@ function updateUIWithData(data) {
             var initials = (parts[0] ? parts[0][0] : '?') + (parts[1] ? parts[1][0] : '');
             avatar.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect fill='%23667eea' width='80' height='80'/%3E%3Ctext x='50%25' y='50%25' font-size='32' fill='white' text-anchor='middle' dy='.3em'%3E" + encodeURIComponent(initials) + "%3C/text%3E%3C/svg%3E";
             avatar.alt = prof.fullName;
-        }
-    }).catch(function(){});
-}
-
-// Fetch challenge counts from DB and update the "Active Challenges" stat card
-function updateChallengeStats() {
-    if (typeof DigifinwizDB === 'undefined' || !DigifinwizDB.getChallenges) return;
-    DigifinwizDB.getChallenges().then(function(challenges) {
-        var active = challenges.filter(function(c){ return c.active; });
-        var incomplete = active.filter(function(c){ return !c.completed; });
-
-        var statNumbers = document.querySelectorAll('.stat-number');
-        if (statNumbers.length > 2) {
-            statNumbers[2].textContent = incomplete.length;
-        }
-
-        var statLabels = document.querySelectorAll('.stat-label');
-        if (statLabels.length > 2) {
-            statLabels[2].textContent = 'Active Challenges';
         }
     }).catch(function(){});
 }

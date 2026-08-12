@@ -561,13 +561,11 @@
             if (np.length < 6) { showNotification('New password needs at least 6 characters.', 'error'); return; }
             if (np !== cf)     { showNotification('Passwords do not match.', 'error'); return; }
             if (session && session.userId) {
-                DigifinwizDB.getUserById(session.userId).then(function(user) {
-                    if (!user) { showNotification('User not found.', 'error'); return; }
-                    if (user.passwordHash !== DigifinwizDB.simpleHash(cur)) { showNotification('Current password is incorrect.', 'error'); return; }
-                    return DigifinwizDB.updateUser(session.userId, { passwordHash: DigifinwizDB.simpleHash(np) }).then(function() {
-                        showNotification('Password updated!', 'success'); sf.reset();
-                    });
-                }).catch(function() { showNotification('Update failed.', 'error'); });
+                DigifinwizDB.changePassword(cur, np).then(function() {
+                    showNotification('Password updated!', 'success'); sf.reset();
+                }).catch(function(err) {
+                    showNotification(err && err.message === 'Current password is incorrect' ? 'Current password is incorrect.' : 'Update failed.', 'error');
+                });
             } else {
                 DigifinwizDB.getProfileData().then(function(prof) {
                     var stored = prof && prof.password;
@@ -606,7 +604,7 @@
             return Promise.all([
                 DigifinwizDB.getBalance('checking'),
                 DigifinwizDB.getBalance('savings'),
-                DigifinwizDB.getPurchases(8),
+                DigifinwizDB.getPurchases(), // unlimited — expense/net-worth totals below need every purchase, not just the newest 8
                 DigifinwizDB.getRecentActivity ? DigifinwizDB.getRecentActivity(8) : Promise.resolve([]),
                 DigifinwizDB.getTransactions ? DigifinwizDB.getTransactions(100) : Promise.resolve([]),
                 DigifinwizDB.getPayments ? DigifinwizDB.getPayments(100) : Promise.resolve([])
@@ -712,7 +710,12 @@
             updateBadges(user, stats);
 
             // ── Financial Health Score ─────────────────────────────────────
-            computeHealthScore(user, stats);
+            // /api/me/stats has no completedChallenges field — count it from
+            // the challenges list instead.
+            DigifinwizDB.getChallenges().then(function(challenges) {
+                var completedCount = challenges.filter(function(c){ return c.active && c.completed; }).length;
+                computeHealthScore(user, stats, completedCount);
+            }).catch(function(){ computeHealthScore(user, stats, 0); });
         });
 
         DigifinwizDB.getRecentActivity(8).then(function(events){ buildTimeline(events); });
@@ -744,7 +747,7 @@
             if (section) { var h2=section.querySelector('h2'); if(h2) h2.textContent='Completed Challenges ('+done.length+'/'+active.length+')'; }
         }).catch(function(err){ console.error('loadChallenges progress:', err); });
 
-        function computeHealthScore(user, stats) {
+        function computeHealthScore(user, stats, completedChallenges) {
             // Score components (each out of stated max, then normalised to 100):
             // 1. Activity variety (0-25): made at least 1 transfer + 1 payment + 1 purchase = 25
             // 2. Engagement depth (0-25): total activities (capped at 10) → 2.5 pts each
@@ -758,7 +761,7 @@
             var totalActs    = Math.min(stats.txCount + stats.payCount + stats.purchCount, 10);
             var engageScore  = Math.round((totalActs / 10) * 25);
 
-            var chalScore    = Math.round(Math.min(stats.completedChallenges || 0, 5) / 5 * 25);
+            var chalScore    = Math.round(Math.min(completedChallenges || 0, 5) / 5 * 25);
 
             var levelScore   = Math.round(Math.min(user.level, 5) / 5 * 25);
 
@@ -845,22 +848,12 @@
 
     function resetProgress() {
         if (!confirm('Reset ALL progress? This clears transactions, bills, challenges, and resets balances.')) return;
+        // Single self-scoped server request — atomic from the client's point of
+        // view, and can't accidentally touch another user's data (unlike the
+        // old client-side sequence, which also referenced a DEFAULT_BALANCES
+        // export that doesn't exist and crashed partway through every time).
         DigifinwizDB.init().then(function() {
-            return DigifinwizDB.setUserData({level:1,points:0,pointsToNextLevel:1000,challenges:0,completedTasks:0});
-        }).then(function() {
-            return Promise.all([
-                DigifinwizDB.clearStore('transactions'), DigifinwizDB.clearStore('payments'),
-                DigifinwizDB.clearStore('purchaseHistory'), DigifinwizDB.clearStore('cart'),
-                DigifinwizDB.setBalance('checking', DigifinwizDB.DEFAULT_BALANCES.checking),
-                DigifinwizDB.setBalance('savings',  DigifinwizDB.DEFAULT_BALANCES.savings)
-            ]);
-        }).then(function() {
-            var session = DigifinwizAuth.getSession();
-            if (session && session.userId) {
-                return DigifinwizDB.clearStore('challenges').then(function() { return DigifinwizDB.seedChallengesForUser(session.userId); });
-            } else {
-                return DigifinwizDB.clearStore('challenges').then(function() { return DigifinwizDB.seedDefaultChallenges(); });
-            }
+            return DigifinwizDB.resetMyProgress();
         }).then(function() {
             showNotification('Progress reset! Challenges have been refreshed.', 'success');
             setTimeout(function(){ window.location.href='index.html'; }, 1500);
@@ -869,12 +862,12 @@
 
     function resetChallengesOnly() {
         if (!confirm('Reset all challenges back to incomplete? Your transactions and XP will be kept.')) return;
-        var session = DigifinwizAuth.getSession();
+        // Self-scoped: only resets the current user's own challenges. The old
+        // clearStore('challenges') call mapped to the admin-only bulk-delete
+        // route, so this either 403'd for participants or wiped every user's
+        // challenges when run by an admin.
         DigifinwizDB.init().then(function() {
-            return DigifinwizDB.clearStore('challenges');
-        }).then(function() {
-            if (session && session.userId) { return DigifinwizDB.seedChallengesForUser(session.userId); }
-            else { return DigifinwizDB.seedDefaultChallenges(); }
+            return DigifinwizDB.resetMyChallenges();
         }).then(function() {
             showNotification('Challenges reset! All challenges are now active again.', 'success');
         }).catch(function() { showNotification('Challenge reset failed.', 'error'); });

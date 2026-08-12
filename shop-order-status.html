@@ -106,7 +106,11 @@
         if (ageMin < 60)        return { label: 'Processing',  cls: 'processing',  step: 1 };
         if (ageMin < 720)       return { label: 'Shipped',      cls: 'shipped',     step: 2 };
         if (ageMin < 4320)      return { label: 'In Transit',   cls: 'in-transit',  step: 3 };
-        return                         { label: 'Delivered',    cls: 'delivered',   step: 4 };
+        // step 5, not 4: _buildTimeline marks index < step as "completed" and
+        // index === step as "active" (in progress). The Delivered step is
+        // index 4, so it needs step > 4 to ever read as completed instead of
+        // being permanently stuck showing "In progress".
+        return                         { label: 'Delivered',    cls: 'delivered',   step: 5 };
     }
 
     function _buildTimeline(step) {

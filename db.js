@@ -49,7 +49,7 @@ const DigifinwizDB = (() => {
 
     // ── Init / health ─────────────────────────────────────────────────────────
     function init() {
-        return fetch('/api/health').then(() => {}).catch(() => {});
+        return fetch((window.API_BASE_URL || '') + '/api/health').then(() => {}).catch(() => {});
     }
 
     // Backward-compat alias
@@ -135,6 +135,12 @@ const DigifinwizDB = (() => {
 
     function setProfileData(data) {
         return _api('PUT', '/api/me/profile', data);
+    }
+
+    // Verifies currentPassword server-side and updates the hash — the client
+    // never has (or needs) access to the password-hashing function itself.
+    function changePassword(currentPassword, newPassword) {
+        return _api('POST', '/api/me/password', { currentPassword, newPassword });
     }
 
     // ── Balances ──────────────────────────────────────────────────────────────
@@ -244,9 +250,29 @@ const DigifinwizDB = (() => {
         return _api('DELETE', '/api/me/challenges/' + id);
     }
 
-    // Wipe all challenges (admin)
+    // Admin-scoped variant — deletes any participant's challenge regardless of owner
+    function adminDeleteChallenge(id) {
+        return _api('DELETE', '/api/admin/challenges/' + id);
+    }
+
+    // Admin-scoped variant — creates a new challenge and pushes a live
+    // instance of it to every approved participant, rather than writing it
+    // under the admin's own account like addChallenge()/POST /api/me/challenges would.
+    function adminCreateChallenge(c) {
+        return _api('POST', '/api/admin/challenges', c);
+    }
+
+    // Dispatches to the right self-scoped bulk-delete route per store name.
+    // Previously every name except 'challenges' silently resolved without
+    // deleting anything, so "Clear Transactions", "Clear Purchases" and the
+    // import flow's overwrite step all reported success while leaving the
+    // old records in place (or, for purchases, duplicating on re-import).
     function clearStore(storeName) {
-        if (storeName === 'challenges') return _api('DELETE', '/api/admin/challenges');
+        if (storeName === 'challenges')   return _api('DELETE', '/api/admin/challenges');
+        if (storeName === 'transactions') return _api('DELETE', '/api/me/transactions');
+        if (storeName === 'payments')     return _api('DELETE', '/api/me/payments');
+        if (storeName === 'purchaseHistory' || storeName === 'purchases') return _api('DELETE', '/api/me/purchases');
+        if (storeName === 'cart')         return _api('DELETE', '/api/me/cart');
         return Promise.resolve();
     }
 
@@ -272,6 +298,18 @@ const DigifinwizDB = (() => {
         return _api('POST', '/api/me/challenges/purge');
     }
 
+    // Self-service reset — scoped to the caller, unlike clearStore('challenges')
+    // which maps to the admin-only DELETE /api/admin/challenges (wipes everyone).
+    function resetMyChallenges() {
+        return _api('POST', '/api/me/challenges/reset');
+    }
+
+    // Clears the caller's own transactions/payments/purchases/cart, resets
+    // their balances + userData to defaults, and re-seeds their challenges.
+    function resetMyProgress() {
+        return _api('POST', '/api/me/reset');
+    }
+
     function seedChallengesForUser(userId) {
         return _api('POST', '/api/users/' + userId + '/seed-challenges');
     }
@@ -292,7 +330,7 @@ const DigifinwizDB = (() => {
 
     function sendSystemMessage(opts) {
         // No auth headers needed — plain fetch
-        return fetch('/api/admin/messages/system', {
+        return fetch((window.API_BASE_URL || '') + '/api/admin/messages/system', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
             body:    JSON.stringify(opts)
@@ -348,6 +386,7 @@ const DigifinwizDB = (() => {
         setUserData,
         getProfileData,
         setProfileData,
+        changePassword,
 
         // Balances
         getBalance,
@@ -383,6 +422,8 @@ const DigifinwizDB = (() => {
         updateChallenge,
         adminUpdateChallenge,
         deleteChallenge,
+        adminDeleteChallenge,
+        adminCreateChallenge,
         clearStore,
         seedDefaultChallenges,
         reseedMissingChallenges,
@@ -390,6 +431,8 @@ const DigifinwizDB = (() => {
         getLevel1Requirements,
         purgeDuplicateChallenges,
         seedChallengesForUser,
+        resetMyChallenges,
+        resetMyProgress,
 
         // Messages
         getMessagesForUser,

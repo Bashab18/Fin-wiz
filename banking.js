@@ -64,8 +64,18 @@ function updateBalanceDisplay() {
 }
 
 // ── Form submit ────────────────────────────────────────────────────────────
+// Guards against submitting a second transfer while the first is still
+// in flight (e.g. a double-click on Confirm, or resubmitting the form
+// before the previous request's balance deduction has come back).
+var transferInFlight = false;
+
 document.getElementById('transferForm').addEventListener('submit', function(e) {
     e.preventDefault();
+
+    if (transferInFlight) {
+        showNotification('A transfer is already in progress. Please wait.', 'error');
+        return;
+    }
 
     var fromAccount    = document.getElementById('fromAccount').value;
     var fromLabel      = document.getElementById('fromAccount').options[document.getElementById('fromAccount').selectedIndex].text;
@@ -94,59 +104,63 @@ document.getElementById('transferForm').addEventListener('submit', function(e) {
             newBalance: newBalance
         }, function() {
             // Confirmed — process transfer
+            transferInFlight = true;
             var pointsEarned = 45;
-            Promise.all([
-                DigifinwizDB.getUserData(),
-                DigifinwizDB.adjustBalance(fromAccount, -amount)
-            ]).then(function(results) {
-                var userData = results[0];
+            // Fetch userData first and only touch the balance once we know we can
+            // record the transfer — otherwise a failed userData fetch could leave
+            // money deducted with no transaction ever recorded.
+            DigifinwizDB.getUserData().then(function(userData) {
                 if (!userData) return Promise.reject('No user data');
+                return DigifinwizDB.adjustBalance(fromAccount, -amount).then(function() {
+                    userData.points            += pointsEarned;
+                    userData.pointsToNextLevel -= pointsEarned;
+                    userData.completedTasks    += 1;
 
-                userData.points            += pointsEarned;
-                userData.pointsToNextLevel -= pointsEarned;
-                userData.completedTasks    += 1;
-
-                var saveTx = function() {
-                    return Promise.all([
-                        DigifinwizDB.setUserData(userData),
-                        DigifinwizDB.addTransaction({
-                            type: 'transfer',
-                            recipient: recipientName,
-                            account: recipientAcct,
-                            fromAccount: fromAccount,
-                            amount: amount,
-                            description: description,
-                            date: new Date().toLocaleDateString(),
-                            pointsEarned: pointsEarned
-                        })
-                    ]);
-                };
-                if (userData.pointsToNextLevel <= 0) {
-                    if (userData.level === 1) {
-                        return DigifinwizDB.getLevel1Requirements().then(function(req) {
-                            if (req.allMet) {
-                                userData.level++;
-                                userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
-                                showNotification('Level up! You\'re now level ' + userData.level + '!', 'success');
-                            } else {
-                                userData.pointsToNextLevel = 0;
-                            }
-                            return saveTx();
-                        });
+                    var saveTx = function() {
+                        return Promise.all([
+                            DigifinwizDB.setUserData(userData),
+                            DigifinwizDB.addTransaction({
+                                type: 'transfer',
+                                recipient: recipientName,
+                                account: recipientAcct,
+                                fromAccount: fromAccount,
+                                amount: amount,
+                                description: description,
+                                date: new Date().toLocaleDateString(),
+                                pointsEarned: pointsEarned
+                            })
+                        ]);
+                    };
+                    if (userData.pointsToNextLevel <= 0) {
+                        if (userData.level === 1) {
+                            return DigifinwizDB.getLevel1Requirements().then(function(req) {
+                                if (req.allMet) {
+                                    userData.level++;
+                                    userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
+                                    showNotification('Level up! You\'re now level ' + userData.level + '!', 'success');
+                                } else {
+                                    userData.pointsToNextLevel = 0;
+                                }
+                                return saveTx();
+                            });
+                        }
+                        userData.level++;
+                        userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
+                        showNotification('Level up! You\'re now level ' + userData.level + '!', 'success');
                     }
-                    userData.level++;
-                    userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
-                    showNotification('Level up! You\'re now level ' + userData.level + '!', 'success');
-                }
-                return saveTx();
+                    return saveTx();
+                });
             }).then(function() {
+                transferInFlight = false;
                 showNotification('Transfer of ƒ' + amount.toFixed(2) + ' to ' + recipientName + ' sent! +' + pointsEarned + ' pts', 'success');
                 showTransferReceipt({ recipient: recipientName, account: recipientAcct, fromLabel: fromLabel, amount: amount, pointsEarned: pointsEarned });
                 updateTransactionsList(typeof currentTxFilter !== 'undefined' ? currentTxFilter : 'all');
                 updateBalanceDisplay();
                 document.getElementById('transferForm').reset();
                 // ── Challenge completion check (full context via getStats) ──
-                return Promise.all([
+                // Its own chain: a failure here must not surface as "Transfer
+                // failed", since the transfer itself already succeeded.
+                Promise.all([
                     DigifinwizDB.getStats(),
                     DigifinwizDB.getAllBalances(),
                     DigifinwizDB.getTransactions(1000)
@@ -199,8 +213,11 @@ document.getElementById('transferForm').addEventListener('submit', function(e) {
                     if (typeof refreshBankingPage === 'function') {
                         setTimeout(refreshBankingPage, 1000);
                     }
+                }).catch(function(err) {
+                    console.error('Post-transfer challenge check failed:', err);
                 });
             }).catch(function(err) {
+                transferInFlight = false;
                 console.error('Transfer error:', err);
                 showNotification('Transfer failed. Please try again.', 'error');
             });
