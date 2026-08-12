@@ -65,8 +65,18 @@ const DigifinwizAuth = (() => {
     // ── Auth guard ───────────────────────────────────────────────────────
     // Runs synchronously on script load.
     function runGuard() {
-        const page = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
-        const publicPages = ['login.html', 'register.html'];
+        // Normalized to the bare page name (no .html, no trailing slash): a
+        // static host can serve or redirect these pages without the .html
+        // extension (e.g. Netlify's "Pretty URLs" turns /register.html into
+        // /register), and an exact 'register.html' match against that path
+        // fails — falling through to the "protected page, no session" branch
+        // below and bouncing an anonymous visitor straight back to
+        // login.html, which is exactly what registering via the "Sign up
+        // here" link looked like.
+        const segments = window.location.pathname.split('/').filter(Boolean);
+        const lastSegment = (segments[segments.length - 1] || 'index.html').toLowerCase();
+        const page = lastSegment.replace(/\.html$/, '');
+        const publicPages = ['login', 'register'];
         const isPublicPage = publicPages.indexOf(page) !== -1;
 
         if (isPublicPage) {
@@ -86,7 +96,7 @@ const DigifinwizAuth = (() => {
         }
 
         // Admin-only pages
-        if (page === 'admin.html' && s.role !== 'admin') {
+        if (page === 'admin' && s.role !== 'admin') {
             window.location.replace('index.html');
             return;
         }
