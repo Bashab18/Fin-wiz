@@ -38,19 +38,32 @@ const ShopBridge = (() => {
         };
     }
 
-    async function saveXPData(level, xp, coins) {
+    async function saveXPData(level, xp, coins, xpDelta) {
         // Scoped per-user like every other fallback key here — otherwise on a
         // shared browser these numbers leak across accounts (or, once one
         // API call fails, get written back into the wrong user's DB record
-        // the next time saveXPData succeeds).
+        // the next time saveXPData succeeds). level/xp are this page's own
+        // local display cache only (see GameProgress) — the server write
+        // below never sets them as an absolute overwrite.
         localStorage.setItem(_scopedKey('shop_level'),  String(level));
         localStorage.setItem(_scopedKey('shop_xp'),     String(xp));
         localStorage.setItem(_scopedKey('shop_coins'),  String(coins));
         if (!isAvailable()) return;
         try {
-            const userData = await DigifinwizDB.getUserData();
-            const updated  = Object.assign({}, userData || {}, { level, points: xp, coins });
-            await DigifinwizDB.setUserData(updated);
+            if (xpDelta) {
+                // Canonical delta-based increment (DigifinwizDB.awardPoints)
+                // keeps userData.points/pointsToNextLevel/level mutually
+                // consistent with every other earning flow in the app, and
+                // reads the current server value right before writing —
+                // unlike setting points to this page's own absolute xp
+                // counter, it can't clobber points earned elsewhere (e.g. a
+                // checkout completed in another tab) in between.
+                await DigifinwizDB.awardPoints(xpDelta, { coins });
+            } else {
+                const userData = await DigifinwizDB.getUserData();
+                const updated  = Object.assign({}, userData || {}, { coins });
+                await DigifinwizDB.setUserData(updated);
+            }
         } catch (e) { /* silent — localStorage already updated */ }
     }
 

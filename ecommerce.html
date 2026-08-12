@@ -375,7 +375,13 @@
         sessionStorage.setItem('eco_page_tab', name);
     }
 
-    function escHE(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }
+    function escHE(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;') : ''; }
+    // Total units in an order, not line-item count — a "3 items purchased"
+    // order can be 3 units of one product, and the server's own
+    // purchase_items challenge condition (ecommerce.js's lastItemCount)
+    // already sums quantities, so display must match or the progress bar
+    // and the completion toast disagree.
+    function sumQty(items) { return items ? items.reduce(function(s,i){ return s + (i.quantity || 1); }, 0) : 0; }
 
     // ── Product catalog rendering ────────────────────────────────────────────
     // Pastel gradient palette cycled by product id — the catalog now comes
@@ -536,7 +542,7 @@
             (p.rating ? '<div class="quick-view-rating">' + stars + ' <span style="color:#94a3b8;font-size:0.8rem">(' + p.rating + ')</span></div>' : '') +
             '<div class="quick-view-desc">'   + escHE(p.desc)  + '</div>' +
             '<div class="quick-view-price">ƒ' + Number(p.price).toFixed(2) + '</div>' +
-            '<button class="btn btn-primary btn-block" onclick="' + (p.addFn || '') + ';document.getElementById(\'quickViewModal\').remove()">Add to Cart</button>' +
+            '<button class="btn btn-primary btn-block" onclick=\'' + (p.addFn || '') + ';document.getElementById("quickViewModal").remove()\'>Add to Cart</button>' +
             '</div>';
         document.body.appendChild(overlay);
         overlay.addEventListener('click', function(e){ if (e.target === overlay) overlay.remove(); });
@@ -610,8 +616,8 @@
                 return;
             }
             var totalSpent = purchases.reduce(function(s,p){ return s+(p.total||0); }, 0);
-            var totalItems = purchases.reduce(function(s,p){ return s+(p.items?p.items.length:0); }, 0);
-            var maxItems = purchases.reduce(function(mx,p){ return Math.max(mx, p.items ? p.items.length : 0); }, 0);
+            var totalItems = purchases.reduce(function(s,p){ return s+sumQty(p.items); }, 0);
+            var maxItems = purchases.reduce(function(mx,p){ return Math.max(mx, sumQty(p.items)); }, 0);
             container.innerHTML = ecom.map(function(c) {
                 var pct = 0;
                 var progressLabel = '';
@@ -680,7 +686,7 @@
                 return;
             }
             container.innerHTML = purchases.map(function(p, idx) {
-                var itemCount = p.items ? p.items.length : 0;
+                var itemCount = sumQty(p.items);
                 var icon      = getOrderIcon(p.items);
                 var orderNum  = p.orderId || ('ORD-' + String(purchases.length - idx).padStart(4, '0'));
                 var itemNames = p.items ? p.items.map(function(i){ return escHE(i.name); }).join(', ') : '—';
@@ -709,7 +715,7 @@
         DigifinwizDB.getPurchases(1000).then(function(purchases) {
             var totalSpent = purchases.reduce(function(s,p){ return s+(p.total||0); }, 0);
             var totalXp = purchases.reduce(function(s,p){ return s+(p.pointsEarned||0); }, 0);
-            var totalItems = purchases.reduce(function(s,p){ return s+(p.items?p.items.length:0); }, 0);
+            var totalItems = purchases.reduce(function(s,p){ return s+sumQty(p.items); }, 0);
             var set = function(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; };
 
             set('ecoOrderCount', purchases.length);
@@ -736,7 +742,7 @@
                 var last = purchases[0];
                 var rowEl = document.getElementById('ecoRecentRow');
                 if (rowEl) rowEl.style.display = '';
-                var lastItemCount = last.items ? last.items.length : 0;
+                var lastItemCount = sumQty(last.items);
                 var lastItemNames = last.items ? last.items.map(function(i){ return escHE(i.name); }).join(', ') : '—';
                 set('ecoRecentItems', lastItemCount + ' item' + (lastItemCount !== 1 ? 's' : '') + ' purchased');
                 var recentNamesEl = document.getElementById('ecoRecentItemNames');
@@ -973,7 +979,10 @@
             if (activePromo.type === 'pct')  discount = rawTotal * (activePromo.value / 100);
             if (activePromo.type === 'flat') discount = Math.min(activePromo.value, rawTotal);
         }
-        var finalTotal = Math.max(0, rawTotal - discount);
+        // Keep the same estimated-tax convention as renderCart() so Total
+        // still equals Subtotal + Tax − Discount on screen after a promo apply.
+        var estTax = rawTotal * 0.05;
+        var finalTotal = Math.max(0, rawTotal + estTax - discount);
         var totalEl = document.getElementById('cartTotal');
         if (totalEl) totalEl.textContent = 'ƒ' + finalTotal.toFixed(2);
         var discRow = document.getElementById('promoDiscountRow');

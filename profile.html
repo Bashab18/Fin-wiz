@@ -544,6 +544,14 @@
                     if (ne) ne.textContent = fullName;
                     var nameEl = document.querySelector('.user-profile h3');
                     if (nameEl) nameEl.textContent = fullName;
+                    // Keep the cached session in sync — without this, every
+                    // other page's first paint (auth.js's _injectSessionUI,
+                    // which runs from the session snapshot before any fetch
+                    // completes) kept showing the pre-rename name/initials
+                    // until the next full login.
+                    if (typeof DigifinwizAuth !== 'undefined' && DigifinwizAuth.updateSession) {
+                        DigifinwizAuth.updateSession({ fullName: fullName });
+                    }
                 }).catch(function() { showNotification('Save failed. Please try again.', 'error'); });
             } else {
                 var data = {

@@ -123,16 +123,18 @@ function nextId(arr) {
     return Math.max(...arr.map(r => r.id || 0)) + 1;
 }
 
-// Serializes async work per user id so two concurrent requests (e.g. a
-// double-submitted transfer, or two open tabs) can't both read the same
-// stale balance before either one's write commits.
-const userLocks = new Map();
+// Serializes all money-mutating work application-wide (not just per user).
+// The JSON-file stores (users, products, purchases, ...) are shared arrays
+// that get fully read, mutated, and rewritten on every request — a per-user
+// lock alone still lets two DIFFERENT users' requests interleave on the same
+// shared array (e.g. both read stock 1, both pass the check, both decrement
+// it) and lose one write. A single global chain makes every withUserLock
+// call run one at a time, which is the only way to guarantee no lost writes
+// against a full-array-rewrite store without a real database transaction.
+let globalLock = Promise.resolve();
 function withUserLock(userId, fn) {
-    const prev = userLocks.get(userId) || Promise.resolve();
-    const next = prev.then(fn, fn).finally(() => {
-        if (userLocks.get(userId) === next) userLocks.delete(userId);
-    });
-    userLocks.set(userId, next);
+    const next = globalLock.then(fn, fn);
+    globalLock = next;
     return next;
 }
 
@@ -728,22 +730,43 @@ app.get('/api/users/:id', async (req, res) => {
     res.json(user);
 });
 
+// Non-admin callers may only touch their own record, and only the
+// profile-level fields listed here — never role, status, balances, or
+// passwordHash. Admins may patch any field on any user (this is how the
+// admin panel edits userData/balances).
+const SELF_EDITABLE_USER_FIELDS = ['fullName', 'email', 'username', 'prefs', 'avatarDataUri'];
 app.put('/api/users/:id', async (req, res) => {
-    const id    = Number(req.params.id);
-    const users = await readJSON('users');
-    const idx   = users.findIndex(u => u.id === id);
-    if (idx === -1) return res.status(404).json({ error: 'User not found' });
-    const patch = Object.assign({}, req.body);
-    // Lowercased to match login's lowercase comparison — otherwise saving
-    // "Jane@Email.com" here would make email/username login stop matching.
-    if (patch.email    !== undefined) patch.email    = String(patch.email).toLowerCase();
-    if (patch.username !== undefined) patch.username = String(patch.username).toLowerCase();
-    users[idx] = Object.assign({}, users[idx], patch, { id });
-    await writeJSON('users', users);
-    res.json(users[idx]);
+    const id      = Number(req.params.id);
+    const isAdmin = req.userRole === 'admin';
+    if (!isAdmin && req.userId !== id) return res.status(403).json({ error: 'Forbidden' });
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const users = await readJSON('users');
+            const idx   = users.findIndex(u => u.id === id);
+            if (idx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
+            const body  = req.body || {};
+            const patch = {};
+            if (isAdmin) {
+                Object.assign(patch, body);
+            } else {
+                SELF_EDITABLE_USER_FIELDS.forEach(f => { if (body[f] !== undefined) patch[f] = body[f]; });
+            }
+            // Lowercased to match login's lowercase comparison — otherwise saving
+            // "Jane@Email.com" here would make email/username login stop matching.
+            if (patch.email    !== undefined) patch.email    = String(patch.email).toLowerCase();
+            if (patch.username !== undefined) patch.username = String(patch.username).toLowerCase();
+            users[idx] = Object.assign({}, users[idx], patch, { id });
+            await writeJSON('users', users);
+            return users[idx];
+        });
+        res.json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
 });
 
 app.delete('/api/users/:id', async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const id = Number(req.params.id);
 
     // Remove from all per-user stores
@@ -774,6 +797,7 @@ app.delete('/api/users/:id', async (req, res) => {
 });
 
 app.post('/api/users/:id/approve', async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const id    = Number(req.params.id);
     const users = await readJSON('users');
     const idx   = users.findIndex(u => u.id === id);
@@ -785,6 +809,7 @@ app.post('/api/users/:id/approve', async (req, res) => {
 });
 
 app.post('/api/users/:id/reject', async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const id    = Number(req.params.id);
     const users = await readJSON('users');
     const idx   = users.findIndex(u => u.id === id);
@@ -904,6 +929,8 @@ app.get('/api/me/balances/:account', async (req, res) => {
 app.post('/api/me/balances/adjust', async (req, res) => {
     const { account, delta } = req.body || {};
     if (!account || delta === undefined) return res.status(400).json({ error: 'account and delta required' });
+    const signedDelta = Number(delta);
+    if (!Number.isFinite(signedDelta)) return res.status(400).json({ error: 'delta must be a finite number' });
     try {
         // Locked so two concurrent adjustments for the same user (e.g. a
         // double-submitted transfer, or two tabs) are applied one at a time
@@ -915,7 +942,6 @@ app.post('/api/me/balances/adjust', async (req, res) => {
             if (idx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
             const balances = Object.assign({}, DEFAULT_BALANCES, users[idx].balances || {});
             const current  = balances[account] !== undefined ? balances[account] : 0;
-            const signedDelta = Number(delta);
             const next     = parseFloat((current + signedDelta).toFixed(2));
             if (next < 0) { const e = new Error('Insufficient funds'); e.status = 409; throw e; }
             balances[account] = next;
@@ -927,6 +953,36 @@ app.post('/api/me/balances/adjust', async (req, res) => {
             // one endpoint, so it's the single choke point for alert checks.
             await maybeFireBalanceAlerts(updatedUser, account, current, next, signedDelta, 'banking');
             return { account, amount: balances[account] };
+        });
+        res.json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+// Sets a balance to an exact target amount atomically — unlike computing a
+// delta client-side (GET current, subtract, POST /adjust), the read and
+// write here happen inside the same locked critical section, so nothing can
+// change the balance between "read current" and "apply" (e.g. a scheduled
+// transfer executing, or a second admin tab saving at the same moment).
+app.post('/api/me/balances/:account/set', async (req, res) => {
+    const account = req.params.account;
+    const amount  = Number(req.body && req.body.amount);
+    if (!Number.isFinite(amount) || amount < 0) return res.status(400).json({ error: 'amount must be a non-negative finite number' });
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const users = await readJSON('users');
+            const idx   = users.findIndex(u => u.id === req.userId);
+            if (idx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
+            const balances = Object.assign({}, DEFAULT_BALANCES, users[idx].balances || {});
+            const current  = balances[account] !== undefined ? balances[account] : 0;
+            const next     = parseFloat(amount.toFixed(2));
+            balances[account] = next;
+            const updatedUser = Object.assign({}, users[idx], { balances });
+            users[idx] = updatedUser;
+            await writeJSON('users', users);
+            await maybeFireBalanceAlerts(updatedUser, account, current, next, next - current, 'banking');
+            return { account, amount: next };
         });
         res.json(result);
     } catch (err) {
@@ -1034,7 +1090,9 @@ app.get('/api/me/purchases', async (req, res) => {
     const all      = await readJSON('purchases');
     let filtered   = all.filter(p => p.userId === req.userId);
     filtered.sort((a, b) => (b.id || 0) - (a.id || 0));
-    filtered = await notifyOrderStatusForUser(req.userId, filtered);
+    // Locked so two concurrent GETs (two open tabs) can't both observe the
+    // dedup flag as unset and each push a duplicate shipped/delivered message.
+    filtered = await withUserLock(req.userId, () => notifyOrderStatusForUser(req.userId, filtered));
     filtered = filtered.map(p => Object.assign({}, p, computeOrderStatus(p)));
     res.json(limit ? filtered.slice(0, limit) : filtered);
 });
@@ -1783,7 +1841,7 @@ app.post('/api/me/savings-goals/:id/withdraw', async (req, res) => {
             });
             await writeJSON('savingsGoalActivity', activity);
 
-            return { goal: goals[idx], checking: next };
+            return { goal: goals[idx], checking: next, withdrawn: wAmt };
         });
         res.status(201).json(result);
     } catch (err) {
@@ -2086,7 +2144,8 @@ app.get('/api/me/activity', async (req, res) => {
 
 // ── Admin messages — system (no auth required, must be before auth-gated routes)
 app.post('/api/admin/messages/system', async (req, res) => {
-    const { subject, body, recipientId, type } = req.body || {};
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const { subject, body, recipientId, type, category } = req.body || {};
     if (!subject || !body) return res.status(400).json({ error: 'subject and body required' });
     const messages = await readJSON('messages');
     const record   = {
@@ -2098,6 +2157,7 @@ app.post('/api/admin/messages/system', async (req, res) => {
         subject:     subject.trim(),
         body:        body.trim(),
         type:        type || 'info',
+        category:    category || 'system',
         sentAt:      Date.now(),
         readBy:      []
     };
@@ -2107,12 +2167,20 @@ app.post('/api/admin/messages/system', async (req, res) => {
 });
 
 // ── Admin messages ────────────────────────────────────────────────────────────
+// senderId 0 = auto-generated system alerts (private per-user notifications
+// like "Bill overdue" or "Low balance alert") — these are NOT things an
+// admin "sent" and must not appear in the admin-authored Sent Messages log,
+// which would otherwise leak every participant's private inbox contents.
+// Pass ?includeSystem=1 to audit everything.
 app.get('/api/admin/messages', async (req, res) => {
-    res.json(await readJSON('messages'));
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const all = await readJSON('messages');
+    res.json(req.query.includeSystem ? all : all.filter(m => m.senderId !== 0));
 });
 
 app.post('/api/admin/messages', async (req, res) => {
-    const { subject, body, recipientId, type, senderEmail } = req.body || {};
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const { subject, body, recipientId, type, senderEmail, category } = req.body || {};
     if (!subject || !body) return res.status(400).json({ error: 'subject and body required' });
     const messages = await readJSON('messages');
     const users    = await readJSON('users');
@@ -2126,6 +2194,7 @@ app.post('/api/admin/messages', async (req, res) => {
         subject:     subject.trim(),
         body:        body.trim(),
         type:        type || 'info',
+        category:    category || 'system',
         sentAt:      Date.now(),
         readBy:      []
     };
@@ -2135,6 +2204,7 @@ app.post('/api/admin/messages', async (req, res) => {
 });
 
 app.delete('/api/admin/messages/:id', async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const id  = Number(req.params.id);
     const all = await readJSON('messages');
     await writeJSON('messages', all.filter(m => m.id !== id));
@@ -2144,23 +2214,36 @@ app.delete('/api/admin/messages/:id', async (req, res) => {
 // ── Admin: challenge management ───────────────────────────────────────────────
 
 // PATCH /api/admin/challenges/:id — update any challenge regardless of owner
+// The admin "All Challenges" table is a cross-user view deduped by title
+// (getChallengesForUser, one row per title), so :id there is just one
+// arbitrary participant's copy — patching only that row would silently
+// change the challenge for one random user while everyone else's copy of
+// the "same" challenge stayed on the old title/points/condition. Template
+// fields (everything except completed/completedAt, which are per-user
+// progress, not part of the definition) are fanned out to every row that
+// shares the target's title, matching how POST (create) already pushes a
+// new challenge to every participant.
 app.patch('/api/admin/challenges/:id', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const id  = Number(req.params.id);
     const all = await readJSON('challenges');
-    const idx = all.findIndex(c => c.id === id);
-    if (idx === -1) return res.status(404).json({ error: 'Challenge not found' });
-    all[idx] = Object.assign({}, all[idx], req.body, { id });
-    await writeJSON('challenges', all);
-    res.json(all[idx]);
+    const target = all.find(c => c.id === id);
+    if (!target) return res.status(404).json({ error: 'Challenge not found' });
+    const { completed, completedAt, id: _ignoredId, userId: _ignoredUserId, ...templatePatch } = req.body || {};
+    const updated = all.map(c => c.title === target.title ? Object.assign({}, c, templatePatch) : c);
+    await writeJSON('challenges', updated);
+    res.json(updated.find(c => c.id === id));
 });
 
-// DELETE /api/admin/challenges/:id — delete a single challenge regardless of owner
+// DELETE /api/admin/challenges/:id — delete this challenge definition for
+// every participant who has it (matched by title — see PATCH above).
 app.delete('/api/admin/challenges/:id', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const id  = Number(req.params.id);
     const all = await readJSON('challenges');
-    await writeJSON('challenges', all.filter(c => c.id !== id));
+    const target = all.find(c => c.id === id);
+    if (!target) return res.status(404).json({ error: 'Challenge not found' });
+    await writeJSON('challenges', all.filter(c => c.title !== target.title));
     res.json({ ok: true });
 });
 
@@ -2421,7 +2504,9 @@ async function notifyOverdueBillsForUser(userId, cycles) {
 
 app.get('/api/me/bills', async (req, res) => {
     let cycles = await ensureCurrentBillCycles(req.userId);
-    cycles = await notifyOverdueBillsForUser(req.userId, cycles);
+    // Locked so two concurrent GETs can't both observe the dedup flag as
+    // unset and each push a duplicate overdue message.
+    cycles = await withUserLock(req.userId, () => notifyOverdueBillsForUser(req.userId, cycles));
     const enriched = cycles.map(c => Object.assign({}, c, computeBillCycleStatus(c)));
     enriched.sort((a, b) => (a.dueDate || 0) - (b.dueDate || 0));
     res.json(enriched);

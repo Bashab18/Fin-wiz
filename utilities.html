@@ -384,7 +384,7 @@
                         '<span class="autopay-label">🔄 Auto-pay</span>' +
                         '<label class="autopay-switch">' +
                             '<input type="checkbox" id="autopay-' + b.id + '" ' + (isAutopay ? 'checked' : '') +
-                                " onchange='toggleAutopay(" + jsAttr(b.name) + ")'>" +
+                                " onchange='toggleAutopay(" + b.id + ',' + jsAttr(b.name) + ")'>" +
                             '<span class="autopay-slider"></span>' +
                         '</label>' +
                     '</div>';
@@ -393,9 +393,9 @@
                 var savedNote = notes[b.name] || '';
                 var noteHtml  =
                     '<div class="bill-note-wrap">' +
-                        '<button id="billNote-btn-' + b.id + "\" class=\"bill-note-btn\" onclick='toggleBillNote(" + jsAttr(b.name) + ")'>📝 " + (savedNote ? 'Edit note' : 'Add note') + '</button>' +
+                        '<button id="billNote-btn-' + b.id + "\" class=\"bill-note-btn\" onclick='toggleBillNote(" + b.id + ',' + jsAttr(b.name) + ")'>📝 " + (savedNote ? 'Edit note' : 'Add note') + '</button>' +
                         '<textarea id="billNote-area-' + b.id + '" class="bill-note-area" rows="2" placeholder="Personal reminder…" ' +
-                            "onblur='saveBillNote(" + jsAttr(b.name) + ")'>" + '</textarea>' +
+                            "onblur='saveBillNote(" + b.id + ',' + jsAttr(b.name) + ")'>" + '</textarea>' +
                         '<div id="billNote-disp-' + b.id + '" class="bill-note-display" style="' + (savedNote ? '' : 'display:none') + '">' + escHU(savedNote) + '</div>' +
                     '</div>';
                 // Savings estimator (auto-pay saves ~4%)
@@ -580,11 +580,11 @@
     }
 
     /* ── Auto-pay toggle ───────────────────────────────────────────────── */
-    function toggleAutopay(billName) {
+    function toggleAutopay(id, billName) {
         var autopay = JSON.parse(localStorage.getItem('digifinwiz_autopay') || '{}');
         autopay[billName] = !autopay[billName];
         localStorage.setItem('digifinwiz_autopay', JSON.stringify(autopay));
-        var toggle = document.getElementById('autopay-' + billName);
+        var toggle = document.getElementById('autopay-' + id);
         if (toggle) toggle.checked = !!autopay[billName];
         if (autopay[billName]) {
             showNotification('🔄 Auto-pay enabled for ' + billName, 'success');
@@ -712,10 +712,10 @@
     }
 
     /* ── Bill personal notes ──────────────────────────────────────────── */
-    function toggleBillNote(billName) {
-        var area = document.getElementById('billNote-area-' + billName);
-        var disp = document.getElementById('billNote-disp-' + billName);
-        var btn  = document.getElementById('billNote-btn-' + billName);
+    function toggleBillNote(id, billName) {
+        var area = document.getElementById('billNote-area-' + id);
+        var disp = document.getElementById('billNote-disp-' + id);
+        var btn  = document.getElementById('billNote-btn-' + id);
         if (!area) return;
         var notes    = JSON.parse(localStorage.getItem('digifinwiz_bill_notes') || '{}');
         var existing = notes[billName] || '';
@@ -730,10 +730,10 @@
         }
     }
 
-    function saveBillNote(billName) {
-        var area = document.getElementById('billNote-area-' + billName);
-        var disp = document.getElementById('billNote-disp-' + billName);
-        var btn  = document.getElementById('billNote-btn-' + billName);
+    function saveBillNote(id, billName) {
+        var area = document.getElementById('billNote-area-' + id);
+        var disp = document.getElementById('billNote-disp-' + id);
+        var btn  = document.getElementById('billNote-btn-' + id);
         if (!area) return;
         var notes = JSON.parse(localStorage.getItem('digifinwiz_bill_notes') || '{}');
         var val   = area.value.trim();

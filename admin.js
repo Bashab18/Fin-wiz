@@ -912,11 +912,12 @@ document.addEventListener('DOMContentLoaded', function () {
                         : (c.condition === 'manual'
                             ? '<span class="pill" style="background:#f1f5f9;color:#64748b">Manual</span>'
                             : '<span class="pill pill-amber">⏳ Pending</span>');
-                    const markBtn = done
-                        ? '<button class="btn" style="padding:3px 8px;font-size:var(--text-xs);margin-right:2px" onclick="adminResetChallenge(' + c.id + ')" title="Reset completion">↺</button>'
-                        : (c.condition === 'manual'
-                            ? '<button class="btn" style="padding:3px 8px;font-size:var(--text-xs);margin-right:2px;color:#10b981" onclick="adminMarkComplete(' + c.id + ')" title="Mark complete">✓</button>'
-                            : '');
+                    // No mark-complete/reset button here: this table is deduped
+                    // one-row-per-title across every participant (see
+                    // getChallengesForUser), so "complete" has no single user
+                    // to apply to — that action lives in the per-participant
+                    // management drawer (mgmtMarkChalComplete/Incomplete),
+                    // which has the real target user in scope.
                     return '<tr' + (done ? ' style="opacity:0.7"' : '') + '>' +
                         '<td style="color:var(--color-text-muted)">' + (i + 1) + '</td>' +
                         '<td style="max-width:180px"><strong>' + escHtml(c.title) + '</strong>' +
@@ -927,7 +928,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         '<td style="font-size:var(--text-xs);color:var(--color-text-muted);cursor:help" title="' + escHtml(condFullSummary(c)) + '">' + escHtml(condLabel(c)) + '</td>' +
                         '<td>' + progressCell + '</td>' +
                         '<td style="white-space:nowrap">' +
-                            markBtn +
                             '<button class="btn" style="padding:3px 8px;font-size:var(--text-xs);margin-right:2px" ' +
                                 'onclick="adminEditChallenge(' + c.id + ')">✏️</button>' +
                             '<button class="btn" style="padding:3px 8px;font-size:var(--text-xs);margin-right:2px" ' +
@@ -1066,19 +1066,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }).catch(() => showToast('Delete failed.', 'error'));
     };
 
-    window.adminMarkComplete = function (id) {
-        DigifinwizDB.adminUpdateChallenge(id, { completed: true, completedAt: Date.now() })
-            .then(() => { showToast('Challenge marked complete!', 'success'); reloadChallengesTable(); })
-            .catch(() => showToast('Update failed.', 'error'));
-    };
-
-    window.adminResetChallenge = function (id) {
-        if (!confirm('Reset this challenge back to incomplete?')) return;
-        DigifinwizDB.adminUpdateChallenge(id, { completed: false, completedAt: null })
-            .then(() => { showToast('Challenge reset.', 'info'); reloadChallengesTable(); })
-            .catch(() => showToast('Reset failed.', 'error'));
-    };
-
     window.adminReseedChallenges = function () {
         const btn = document.getElementById('reseedBtn');
         if (btn) { btn.disabled = true; btn.textContent = 'Adding…'; }
@@ -1097,7 +1084,7 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     window.adminResetAllChallenges = function () {
-        if (!confirm('This will DELETE all challenges and re-seed the 24 default ones from scratch.\n\nAll completed state will be lost. Continue?')) return;
+        if (!confirm('This will DELETE all challenges and re-seed the 23 default ones from scratch.\n\nAll completed state will be lost. Continue?')) return;
         DigifinwizDB.clearStore('challenges').then(() => {
             return DigifinwizDB.seedDefaultChallenges();
         }).then(() => {
@@ -1468,8 +1455,11 @@ document.addEventListener('DOMContentLoaded', function () {
         // Switch to the messaging section
         var msgBtn = document.querySelector('[data-page="messaging"]');
         if (msgBtn) msgBtn.click();
-        // Pre-select the user in the recipient dropdown (after the page renders)
-        setTimeout(function() {
+        // Re-run (idempotent) and wait for the real recipient-list fetch to
+        // resolve before selecting — a fixed setTimeout here raced the fetch
+        // on a slow connection and silently left the recipient on the first
+        // option ("All Users"), broadcasting instead of messaging one user.
+        loadMessagingPage().then(function() {
             var select = document.getElementById('msg-recipient');
             if (select) {
                 select.value = id;
@@ -1477,12 +1467,12 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             var composeForm = document.getElementById('msg-recipient');
             if (composeForm) composeForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 150);
+        });
     };
 
     // ── MESSAGING ────────────────────────────────────────────────────────────
     function loadMessagingPage() {
-        DigifinwizDB.getAllUsers().then(function(users) {
+        var usersLoaded = DigifinwizDB.getAllUsers().then(function(users) {
             var select = document.getElementById('msg-recipient');
             if (!select) return;
             select.innerHTML = '<option value="all">📢 All Users (Broadcast)</option>';
@@ -1496,6 +1486,7 @@ document.addEventListener('DOMContentLoaded', function () {
                  });
         });
         reloadMsgTable();
+        return usersLoaded;
     }
 
     function reloadMsgTable() {
@@ -1512,7 +1503,7 @@ document.addEventListener('DOMContentLoaded', function () {
             var TYPE_LABEL = { announcement: '📣 Announcement', warning: '⚠️ Warning', info: 'ℹ️ Info', email: '✉️ Email' };
             tbody.innerHTML = msgs.map(function(m) {
                 var pill      = TYPE_PILL[m.type]  || 'pill-blue';
-                var label     = TYPE_LABEL[m.type] || m.type;
+                var label     = TYPE_LABEL[m.type] || escHtml(m.type);
                 var date      = new Date(m.sentAt).toLocaleString();
                 var recipient = m.recipientId === 'all'
                     ? '<span class="pill pill-amber">All Users</span>'

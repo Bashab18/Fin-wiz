@@ -7,6 +7,23 @@
 function escBA(s) { return s ? String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : ''; }
 function fmtBA(n) { return 'ƒ' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
+// Guards every money-moving action on this page against a double-click or
+// fast resubmit while the previous request is still in flight — the
+// server's per-request lock serializes writes, but doesn't stop the second
+// click from succeeding too and moving money twice. Shared across all
+// actions here (not per-form) since a user only ever works one form at a
+// time on this page.
+var bankingActionInFlight = false;
+function withBankingActionLock(fn) {
+    if (bankingActionInFlight) {
+        showNotification('Please wait for the previous action to finish.', 'error');
+        return;
+    }
+    bankingActionInFlight = true;
+    var result = fn();
+    Promise.resolve(result).then(function() { bankingActionInFlight = false; }, function() { bankingActionInFlight = false; });
+}
+
 // Awards XP using the same rules every other earning flow on this site
 // already implements (banking transfers, bill payments, ecommerce checkout):
 // add points, level up once XP crosses 1000, with the level-1→2 transition
@@ -85,13 +102,15 @@ function renderCCTierGrid() {
 }
 
 function openCreditCard(tier) {
-    DigifinwizDB.openCreditCard(tier).then(function() {
-        return awardXP(30);
-    }).then(function() {
-        showNotification('Credit card opened! +30 XP', 'success');
-        loadCreditCardTab();
-    }).catch(function(err) {
-        showNotification(err && err.message ? err.message : 'Could not open card. Please try again.', 'error');
+    withBankingActionLock(function() {
+        return DigifinwizDB.openCreditCard(tier).then(function() {
+            return awardXP(30);
+        }).then(function() {
+            showNotification('Credit card opened! +30 XP', 'success');
+            loadCreditCardTab();
+        }).catch(function(err) {
+            showNotification(err && err.message ? err.message : 'Could not open card. Please try again.', 'error');
+        });
     });
 }
 
@@ -150,14 +169,16 @@ document.addEventListener('DOMContentLoaded', function() {
         var amt  = parseFloat(document.getElementById('ccPurchaseAmount').value);
         var desc = document.getElementById('ccPurchaseDesc').value.trim();
         if (!amt || amt <= 0) { showNotification('Enter a valid amount.', 'error'); return; }
-        DigifinwizDB.creditCardPurchase(amt, desc).then(function() {
-            return awardXP(10);
-        }).then(function() {
-            showNotification('Charged ' + fmtBA(amt) + ' to your card. +10 XP', 'success');
-            ccPurchaseForm.reset();
-            loadCreditCardTab();
-        }).catch(function(err) {
-            showNotification(err && err.message ? err.message : 'Purchase failed.', 'error');
+        withBankingActionLock(function() {
+            return DigifinwizDB.creditCardPurchase(amt, desc).then(function() {
+                return awardXP(10);
+            }).then(function() {
+                showNotification('Charged ' + fmtBA(amt) + ' to your card. +10 XP', 'success');
+                ccPurchaseForm.reset();
+                loadCreditCardTab();
+            }).catch(function(err) {
+                showNotification(err && err.message ? err.message : 'Purchase failed.', 'error');
+            });
         });
     });
 
@@ -166,15 +187,21 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         var amt = parseFloat(document.getElementById('ccPaymentAmount').value);
         if (!amt || amt <= 0) { showNotification('Enter a valid amount.', 'error'); return; }
-        DigifinwizDB.creditCardPayment(amt).then(function() {
-            return awardXP(25);
-        }).then(function() {
-            showNotification('Payment of ' + fmtBA(amt) + ' applied. +25 XP', 'success');
-            ccPaymentForm.reset();
-            loadCreditCardTab();
-            if (typeof loadBalanceCards === 'function') loadBalanceCards();
-        }).catch(function(err) {
-            showNotification(err && err.message ? err.message : 'Payment failed.', 'error');
+        withBankingActionLock(function() {
+            return DigifinwizDB.creditCardPayment(amt).then(function(result) {
+                // The server caps the payment at the card's outstanding
+                // balance, so the amount actually applied can be less than
+                // what was typed — show the real figure, not the request.
+                var applied = (result && result.activity && result.activity.amount != null) ? result.activity.amount : amt;
+                return awardXP(25).then(function() { return applied; });
+            }).then(function(applied) {
+                showNotification('Payment of ' + fmtBA(applied) + ' applied. +25 XP', 'success');
+                ccPaymentForm.reset();
+                loadCreditCardTab();
+                if (typeof loadBalanceCards === 'function') loadBalanceCards();
+            }).catch(function(err) {
+                showNotification(err && err.message ? err.message : 'Payment failed.', 'error');
+            });
         });
     });
 });
@@ -303,14 +330,16 @@ document.addEventListener('DOMContentLoaded', function() {
         var amt  = parseFloat(document.getElementById('loanAmount').value);
         var term = parseInt(document.getElementById('loanTerm').value, 10);
         if (!amt || amt < 500 || amt > 20000) { showNotification('Loan amount must be between ƒ500 and ƒ20,000.', 'error'); return; }
-        DigifinwizDB.applyForLoan(amt, term).then(function() {
-            return awardXP(30);
-        }).then(function() {
-            showNotification('Loan approved! ' + fmtBA(amt) + ' deposited to checking. +30 XP', 'success');
-            loadLoansTab();
-            if (typeof loadBalanceCards === 'function') loadBalanceCards();
-        }).catch(function(err) {
-            showNotification(err && err.message ? err.message : 'Loan application failed.', 'error');
+        withBankingActionLock(function() {
+            return DigifinwizDB.applyForLoan(amt, term).then(function() {
+                return awardXP(30);
+            }).then(function() {
+                showNotification('Loan approved! ' + fmtBA(amt) + ' deposited to checking. +30 XP', 'success');
+                loadLoansTab();
+                if (typeof loadBalanceCards === 'function') loadBalanceCards();
+            }).catch(function(err) {
+                showNotification(err && err.message ? err.message : 'Loan application failed.', 'error');
+            });
         });
     });
 
@@ -319,17 +348,22 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         var amt = parseFloat(document.getElementById('loanPaymentAmount').value);
         if (!amt || amt <= 0) { showNotification('Enter a valid amount.', 'error'); return; }
-        DigifinwizDB.makeLoanPayment(amt).then(function(result) {
-            return awardXP(25).then(function() { return result; });
-        }).then(function(result) {
-            var msg = 'Payment of ' + fmtBA(amt) + ' applied. +25 XP';
-            if (result && result.loan && result.loan.paidOff) msg = '🎉 Loan paid off! ' + msg;
-            showNotification(msg, 'success');
-            loanPaymentForm.reset();
-            loadLoansTab();
-            if (typeof loadBalanceCards === 'function') loadBalanceCards();
-        }).catch(function(err) {
-            showNotification(err && err.message ? err.message : 'Payment failed.', 'error');
+        withBankingActionLock(function() {
+            return DigifinwizDB.makeLoanPayment(amt).then(function(result) {
+                return awardXP(25).then(function() { return result; });
+            }).then(function(result) {
+                // Server caps the payment at the remaining loan balance —
+                // show what was actually applied, not the typed amount.
+                var applied = (result && result.payment && result.payment.amount != null) ? result.payment.amount : amt;
+                var msg = 'Payment of ' + fmtBA(applied) + ' applied. +25 XP';
+                if (result && result.loan && result.loan.paidOff) msg = '🎉 Loan paid off! ' + msg;
+                showNotification(msg, 'success');
+                loanPaymentForm.reset();
+                loadLoansTab();
+                if (typeof loadBalanceCards === 'function') loadBalanceCards();
+            }).catch(function(err) {
+                showNotification(err && err.message ? err.message : 'Payment failed.', 'error');
+            });
         });
     });
 });
@@ -374,20 +408,22 @@ function contributeGoal(id) {
     var input = document.getElementById('goalAmt-' + id);
     var amt   = input ? parseFloat(input.value) : NaN;
     if (!amt || amt <= 0) { showNotification('Enter a valid amount.', 'error'); return; }
-    DigifinwizDB.contributeSavingsGoal(id, amt).then(function(result) {
-        if (result && result.justCompleted) {
-            return awardXP(20).then(function() { return awardXP(75); }).then(function() {
-                showNotification('🏆 Goal reached! ' + fmtBA(amt) + ' added. +20 XP, +75 bonus XP!', 'success');
+    withBankingActionLock(function() {
+        return DigifinwizDB.contributeSavingsGoal(id, amt).then(function(result) {
+            if (result && result.justCompleted) {
+                return awardXP(20).then(function() { return awardXP(75); }).then(function() {
+                    showNotification('🏆 Goal reached! ' + fmtBA(amt) + ' added. +20 XP, +75 bonus XP!', 'success');
+                });
+            }
+            return awardXP(20).then(function() {
+                showNotification(fmtBA(amt) + ' added to your goal. +20 XP', 'success');
             });
-        }
-        return awardXP(20).then(function() {
-            showNotification(fmtBA(amt) + ' added to your goal. +20 XP', 'success');
+        }).then(function() {
+            loadGoalsTab();
+            if (typeof loadBalanceCards === 'function') loadBalanceCards();
+        }).catch(function(err) {
+            showNotification(err && err.message ? err.message : 'Contribution failed.', 'error');
         });
-    }).then(function() {
-        loadGoalsTab();
-        if (typeof loadBalanceCards === 'function') loadBalanceCards();
-    }).catch(function(err) {
-        showNotification(err && err.message ? err.message : 'Contribution failed.', 'error');
     });
 }
 
@@ -395,12 +431,17 @@ function withdrawGoal(id) {
     var input = document.getElementById('goalAmt-' + id);
     var amt   = input ? parseFloat(input.value) : NaN;
     if (!amt || amt <= 0) { showNotification('Enter a valid amount.', 'error'); return; }
-    DigifinwizDB.withdrawSavingsGoal(id, amt).then(function() {
-        showNotification(fmtBA(amt) + ' moved back to checking.', 'info');
-        loadGoalsTab();
-        if (typeof loadBalanceCards === 'function') loadBalanceCards();
-    }).catch(function(err) {
-        showNotification(err && err.message ? err.message : 'Withdrawal failed.', 'error');
+    withBankingActionLock(function() {
+        return DigifinwizDB.withdrawSavingsGoal(id, amt).then(function(result) {
+            // Server caps the withdrawal at the goal's saved balance — show
+            // what actually moved, not the typed amount.
+            var applied = (result && result.withdrawn != null) ? result.withdrawn : amt;
+            showNotification(fmtBA(applied) + ' moved back to checking.', 'info');
+            loadGoalsTab();
+            if (typeof loadBalanceCards === 'function') loadBalanceCards();
+        }).catch(function(err) {
+            showNotification(err && err.message ? err.message : 'Withdrawal failed.', 'error');
+        });
     });
 }
 
@@ -423,14 +464,16 @@ document.addEventListener('DOMContentLoaded', function() {
         var target = parseFloat(document.getElementById('goalTarget').value);
         if (!name) { showNotification('Enter a goal name.', 'error'); return; }
         if (!target || target < 10) { showNotification('Target must be at least ƒ10.', 'error'); return; }
-        DigifinwizDB.createSavingsGoal(name, target).then(function() {
-            return awardXP(20);
-        }).then(function() {
-            showNotification('Goal created! +20 XP', 'success');
-            goalCreateForm.reset();
-            loadGoalsTab();
-        }).catch(function(err) {
-            showNotification(err && err.message ? err.message : 'Could not create goal.', 'error');
+        withBankingActionLock(function() {
+            return DigifinwizDB.createSavingsGoal(name, target).then(function() {
+                return awardXP(20);
+            }).then(function() {
+                showNotification('Goal created! +20 XP', 'success');
+                goalCreateForm.reset();
+                loadGoalsTab();
+            }).catch(function(err) {
+                showNotification(err && err.message ? err.message : 'Could not create goal.', 'error');
+            });
         });
     });
 });
@@ -551,11 +594,24 @@ document.addEventListener('DOMContentLoaded', function() {
     var alertForm = document.getElementById('alertPrefsForm');
     if (alertForm) alertForm.addEventListener('submit', function(e) {
         e.preventDefault();
+        var lowBalanceEnabled   = document.getElementById('alertLowBalEnabled').checked;
+        var lowBalanceThreshold = parseFloat(document.getElementById('alertLowBalThreshold').value);
+        var largeTxEnabled      = document.getElementById('alertLargeTxEnabled').checked;
+        var largeTxThreshold    = parseFloat(document.getElementById('alertLargeTxThreshold').value);
+        // A blank/zero threshold on an enabled alert isn't "no threshold" —
+        // for large-transaction alerts it means every single transaction
+        // qualifies (amount >= 0), spamming the inbox on every debit/credit.
+        if (lowBalanceEnabled && !(lowBalanceThreshold > 0)) {
+            showNotification('Enter a low-balance threshold above ƒ0, or turn the alert off.', 'error'); return;
+        }
+        if (largeTxEnabled && !(largeTxThreshold > 0)) {
+            showNotification('Enter a large-transaction threshold above ƒ0, or turn the alert off.', 'error'); return;
+        }
         var prefs = {
-            lowBalanceEnabled:   document.getElementById('alertLowBalEnabled').checked,
-            lowBalanceThreshold: parseFloat(document.getElementById('alertLowBalThreshold').value) || 0,
-            largeTxEnabled:      document.getElementById('alertLargeTxEnabled').checked,
-            largeTxThreshold:    parseFloat(document.getElementById('alertLargeTxThreshold').value) || 0
+            lowBalanceEnabled:   lowBalanceEnabled,
+            lowBalanceThreshold: lowBalanceEnabled ? lowBalanceThreshold : 0,
+            largeTxEnabled:      largeTxEnabled,
+            largeTxThreshold:    largeTxEnabled ? largeTxThreshold : 0
         };
         DigifinwizDB.setAlertPrefs(prefs).then(function() {
             showNotification('Alert preferences saved!', 'success');
@@ -781,14 +837,19 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!account) { showNotification('Enter a recipient account number.', 'error'); return; }
         if (!data.amount || data.amount <= 0) { showNotification('Enter a valid amount.', 'error'); return; }
         if (!startDateStr || isNaN(data.startDate)) { showNotification('Choose a start date.', 'error'); return; }
-        DigifinwizDB.createScheduledTransfer(data).then(function() {
-            return awardXP(15);
-        }).then(function() {
-            showNotification('Transfer scheduled! +15 XP', 'success');
-            schedForm.reset();
-            loadScheduledTab();
-        }).catch(function(err) {
-            showNotification(err && err.message ? err.message : 'Could not schedule transfer.', 'error');
+        // A schedule dated today (or earlier) executes immediately on
+        // create (server.js), so a double-submit here doesn't just create
+        // a duplicate schedule — it can send the money twice.
+        withBankingActionLock(function() {
+            return DigifinwizDB.createScheduledTransfer(data).then(function() {
+                return awardXP(15);
+            }).then(function() {
+                showNotification('Transfer scheduled! +15 XP', 'success');
+                schedForm.reset();
+                loadScheduledTab();
+            }).catch(function(err) {
+                showNotification(err && err.message ? err.message : 'Could not schedule transfer.', 'error');
+            });
         });
     });
 });

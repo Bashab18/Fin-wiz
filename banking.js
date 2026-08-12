@@ -219,7 +219,7 @@ document.getElementById('transferForm').addEventListener('submit', function(e) {
             }).catch(function(err) {
                 transferInFlight = false;
                 console.error('Transfer error:', err);
-                showNotification('Transfer failed. Please try again.', 'error');
+                showNotification(err && err.message ? err.message : 'Transfer failed. Please try again.', 'error');
             });
         });
     }).catch(function(err) {
