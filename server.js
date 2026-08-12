@@ -53,7 +53,11 @@ function ensureLocalDataFiles() {
     });
 }
 
-const STORE_NAMES = ['users', 'transactions', 'payments', 'purchases', 'challenges', 'messages', 'cart', 'bills'];
+const STORE_NAMES = [
+    'users', 'transactions', 'payments', 'purchases', 'challenges', 'messages', 'cart', 'bills',
+    'creditCards', 'creditActivity', 'loans', 'loanPayments', 'savingsGoals', 'savingsGoalActivity',
+    'scheduledTransfers', 'products', 'addresses', 'paymentMethods', 'billCycles', 'customBills'
+];
 
 async function initStorage() {
     if (pool) {
@@ -142,8 +146,224 @@ function simpleHash(str) {
 }
 
 // ── Default data shapes ───────────────────────────────────────────────────────
-const DEFAULT_BALANCES  = { checking: 88674.00, savings: 18074.00 };
-const DEFAULT_USER_DATA = { level: 1, points: 0, pointsToNextLevel: 1000, challenges: 0, completedTasks: 0, coins: 0 };
+const DEFAULT_BALANCES     = { checking: 88674.00, savings: 18074.00 };
+const DEFAULT_USER_DATA    = { level: 1, points: 0, pointsToNextLevel: 1000, challenges: 0, completedTasks: 0, coins: 0 };
+const DEFAULT_ALERT_PREFS  = { lowBalanceEnabled: true, lowBalanceThreshold: 100, largeTxEnabled: true, largeTxThreshold: 1000 };
+
+// ── E-Commerce: US sales tax, shipping, and promo tables ───────────────────
+// Approximate combined state+average-local sales tax rates. Sales tax in the
+// US is charged based on the delivery address, not the seller's location, so
+// checkout looks this up by the shipping address's state. States with no
+// sales tax (e.g. OR, NH, MT, DE, AK) are 0. Not official rates — good enough
+// for a financial-literacy simulation, not a tax filing.
+const STATE_TAX_RATES = {
+    AL: 0.0922, AK: 0.0176, AZ: 0.0840, AR: 0.0946, CA: 0.0872, CO: 0.0777, CT: 0.0635,
+    DE: 0,      FL: 0.0705, GA: 0.0732, HI: 0.0444, ID: 0.0603, IL: 0.0886, IN: 0.0700,
+    IA: 0.0694, KS: 0.0869, KY: 0.0600, LA: 0.0955, ME: 0.0550, MD: 0.0600, MA: 0.0625,
+    MI: 0.0600, MN: 0.0778, MS: 0.0707, MO: 0.0839, MT: 0,      NE: 0.0694, NV: 0.0823,
+    NH: 0,      NJ: 0.0663, NM: 0.0768, NY: 0.0852, NC: 0.0699, ND: 0.0696, OH: 0.0723,
+    OK: 0.0895, OR: 0,      PA: 0.0634, RI: 0.0700, SC: 0.0746, SD: 0.0640, TN: 0.0955,
+    TX: 0.0820, UT: 0.0719, VT: 0.0622, VA: 0.0575, WA: 0.0923, WV: 0.0655, WI: 0.0543,
+    WY: 0.0533, DC: 0.0600
+};
+
+const SHIPPING_RATES = {
+    standard: { label: 'Standard (5-7 business days)', cost: 5.99, days: 6, freeThreshold: 75 },
+    express:  { label: 'Express (2 business days)',    cost: 14.99, days: 2, freeThreshold: null }
+};
+
+const PROMO_CODES = {
+    SAVE10:  { type: 'pct',  value: 10, label: '10% off' },
+    SAVE20:  { type: 'pct',  value: 20, label: '20% off' },
+    WELCOME: { type: 'flat', value: 15, label: 'ƒ15 off' },
+    STUDENT: { type: 'pct',  value: 5,  label: '5% student discount' }
+};
+
+function computePromoDiscount(code, subtotal) {
+    const promo = PROMO_CODES[String(code || '').toUpperCase()];
+    if (!promo) return { code: null, label: null, discount: 0 };
+    const discount = promo.type === 'pct' ? subtotal * (promo.value / 100) : Math.min(promo.value, subtotal);
+    return { code: String(code).toUpperCase(), label: promo.label, discount: parseFloat(discount.toFixed(2)) };
+}
+
+// Orders have no real fulfillment backend, so status is derived purely from
+// elapsed time since the order was placed (computed fresh on every read,
+// same idea the old client-side-only tracking page used, just centralized
+// here so every page — order history, tracking, dashboard — agrees).
+function computeOrderStatus(order) {
+    const shipInfo   = SHIPPING_RATES[order.shippingMethod] || SHIPPING_RATES.standard;
+    const totalMs     = shipInfo.days * 24 * 60 * 60 * 1000;
+    const elapsed       = Date.now() - (order.timestamp || 0);
+    const processingMs   = 60 * 60 * 1000; // 1 hour
+    const outForDeliveryMs = Math.max(processingMs, totalMs - 12 * 60 * 60 * 1000);
+
+    let status, statusLabel;
+    if (elapsed < processingMs) { status = 'processing'; statusLabel = 'Processing'; }
+    else if (elapsed < outForDeliveryMs) { status = 'shipped'; statusLabel = 'Shipped'; }
+    else if (elapsed < totalMs) { status = 'out_for_delivery'; statusLabel = 'Out for Delivery'; }
+    else { status = 'delivered'; statusLabel = 'Delivered'; }
+
+    return {
+        status, statusLabel,
+        estimatedDelivery: (order.timestamp || 0) + totalMs,
+        // "done" means this stage has been passed, not that it's the current
+        // one — e.g. the Processing step reads done once the order has moved
+        // on to Shipped. The always-true "Order Placed" step is added by the
+        // client in front of this list, since placing the order is instant.
+        trackingSteps: [
+            { key: 'processing',       label: 'Processing',       done: elapsed >= processingMs },
+            { key: 'shipped',          label: 'Shipped',          done: elapsed >= outForDeliveryMs },
+            { key: 'out_for_delivery', label: 'Out for Delivery', done: elapsed >= totalMs },
+            { key: 'delivered',        label: 'Delivered',        done: elapsed >= totalMs }
+        ]
+    };
+}
+
+// Pushes a system message into the user's own Messages inbox when a balance
+// change crosses one of their configured alert thresholds. Called from
+// POST /api/me/balances/adjust — the single choke point every
+// balance-changing action in the app (transfers, bill pay, checkout, and the
+// credit card / loan / savings-goal features) already routes through, so
+// alerts fire consistently no matter which feature moved the money.
+async function maybeFireBalanceAlerts(user, account, current, next, delta) {
+    const prefs  = Object.assign({}, DEFAULT_ALERT_PREFS, (user.userData || {}).alertPrefs || {});
+    const alerts = [];
+
+    // Edge-triggered (current was above the threshold, next isn't) so a
+    // balance that's already low doesn't re-alert on every subsequent debit.
+    if (prefs.lowBalanceEnabled && delta < 0 && current > prefs.lowBalanceThreshold && next <= prefs.lowBalanceThreshold) {
+        alerts.push({
+            subject: 'Low balance alert',
+            body: 'Your ' + account + ' account dropped to ƒ' + next.toFixed(2) + ', at or below your ' +
+                  'ƒ' + Number(prefs.lowBalanceThreshold).toFixed(2) + ' low-balance alert threshold.',
+            type: 'warning'
+        });
+    }
+    if (prefs.largeTxEnabled && Math.abs(delta) >= prefs.largeTxThreshold) {
+        alerts.push({
+            subject: 'Large transaction alert',
+            body: 'A ' + (delta < 0 ? 'debit' : 'credit') + ' of ƒ' + Math.abs(delta).toFixed(2) +
+                  ' hit your ' + account + ' account (alert threshold: ƒ' + Number(prefs.largeTxThreshold).toFixed(2) + ').',
+            type: 'warning'
+        });
+    }
+    if (alerts.length === 0) return;
+
+    const messages = await readJSON('messages');
+    const now = Date.now();
+    let id = nextId(messages);
+    alerts.forEach(a => {
+        messages.push({
+            id: id++,
+            senderId: 0,
+            senderName: 'System',
+            senderEmail: null,
+            recipientId: user.id,
+            subject: a.subject,
+            body: a.body,
+            type: a.type,
+            sentAt: now,
+            readBy: []
+        });
+    });
+    await writeJSON('messages', messages);
+}
+
+// ── Scheduled / recurring transfers ─────────────────────────────────────────
+function advanceScheduleDate(current, frequency) {
+    const d = new Date(current);
+    if (frequency === 'weekly')        d.setDate(d.getDate() + 7);
+    else if (frequency === 'biweekly') d.setDate(d.getDate() + 14);
+    else if (frequency === 'monthly')  d.setMonth(d.getMonth() + 1);
+    return d.getTime();
+}
+
+// Executes a single due occurrence of one scheduled transfer, inside the same
+// per-user lock every other money-moving route uses. Re-reads fresh state
+// under the lock (rather than trusting the caller's snapshot) since another
+// occurrence of the same or a different schedule may have just run.
+async function executeOneScheduledTransfer(userId, scheduleId) {
+    await withUserLock(userId, async () => {
+        const schedules = await readJSON('scheduledTransfers');
+        const idx = schedules.findIndex(x => x.id === scheduleId);
+        if (idx === -1 || !schedules[idx].active) return;
+        const sched = schedules[idx];
+        if ((sched.nextRunDate || 0) > Date.now()) return;
+
+        const users = await readJSON('users');
+        const uidx  = users.findIndex(u => u.id === userId);
+        if (uidx === -1) return;
+        const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
+        const current   = balances[sched.fromAccount] !== undefined ? balances[sched.fromAccount] : 0;
+        const next       = parseFloat((current - sched.amount).toFixed(2));
+        const isOneTime  = sched.frequency === 'once';
+
+        if (next < 0) {
+            // Insufficient funds: skip this occurrence, notify, and try again
+            // next period (a one-time transfer just deactivates instead).
+            const messages = await readJSON('messages');
+            messages.push({
+                id: nextId(messages), senderId: 0, senderName: 'System', senderEmail: null,
+                recipientId: userId, subject: 'Scheduled transfer skipped',
+                body: 'Your scheduled transfer of ƒ' + sched.amount.toFixed(2) + ' to ' + sched.recipient +
+                      ' could not be completed — insufficient funds in ' + sched.fromAccount + '.',
+                type: 'warning', sentAt: Date.now(), readBy: []
+            });
+            await writeJSON('messages', messages);
+
+            schedules[idx] = Object.assign({}, sched, {
+                active:       !isOneTime,
+                nextRunDate:  isOneTime ? sched.nextRunDate : advanceScheduleDate(sched.nextRunDate, sched.frequency),
+                lastRunAt:    Date.now(),
+                lastRunStatus:'skipped'
+            });
+            await writeJSON('scheduledTransfers', schedules);
+            return;
+        }
+
+        balances[sched.fromAccount] = next;
+        const updatedUser = Object.assign({}, users[uidx], { balances });
+        users[uidx] = updatedUser;
+        await writeJSON('users', users);
+        await maybeFireBalanceAlerts(updatedUser, sched.fromAccount, current, next, -sched.amount);
+
+        const txs = await readJSON('transactions');
+        txs.push({
+            id: nextId(txs), userId, type: 'transfer', recipient: sched.recipient, account: sched.account,
+            fromAccount: sched.fromAccount, amount: sched.amount,
+            description: (sched.description ? sched.description + ' ' : '') + '(scheduled)',
+            date: new Date().toLocaleDateString(), timestamp: Date.now(), pointsEarned: 0
+        });
+        await writeJSON('transactions', txs);
+
+        schedules[idx] = Object.assign({}, sched, {
+            active:        !isOneTime,
+            nextRunDate:   isOneTime ? sched.nextRunDate : advanceScheduleDate(sched.nextRunDate, sched.frequency),
+            lastRunAt:     Date.now(),
+            lastRunStatus: 'completed'
+        });
+        await writeJSON('scheduledTransfers', schedules);
+    });
+}
+
+// Catches a user's scheduled transfers up to "now", running as many overdue
+// occurrences as needed (e.g. if the app wasn't opened for a while). Called
+// from every route that reads the user's balance or schedule list — so a
+// schedule executes the moment the user is looking at their account, whether
+// or not the server process happened to be running at the exact scheduled
+// moment — plus from a periodic sweep (below) while the server is up.
+async function runDueScheduledTransfers(userId) {
+    const schedules = await readJSON('scheduledTransfers');
+    const mine = schedules.filter(s => s.userId === userId && s.active);
+    for (const s of mine) {
+        let guard = 0; // hard cap so a bad schedule can't loop forever
+        while (guard++ < 24) {
+            const fresh = (await readJSON('scheduledTransfers')).find(x => x.id === s.id);
+            if (!fresh || !fresh.active || (fresh.nextRunDate || 0) > Date.now()) break;
+            await executeOneScheduledTransfer(userId, s.id);
+        }
+    }
+}
 
 // ── Challenge definitions ─────────────────────────────────────────────────────
 const ALL_DEFAULT_CHALLENGES = [
@@ -507,7 +727,11 @@ app.delete('/api/users/:id', async (req, res) => {
     const id = Number(req.params.id);
 
     // Remove from all per-user stores
-    for (const store of ['transactions', 'payments', 'purchases', 'challenges']) {
+    for (const store of [
+        'transactions', 'payments', 'purchases', 'challenges',
+        'creditCards', 'creditActivity', 'loans', 'loanPayments', 'savingsGoals', 'savingsGoalActivity',
+        'scheduledTransfers', 'addresses', 'paymentMethods', 'billCycles', 'customBills'
+    ]) {
         const rows = await readJSON(store);
         await writeJSON(store, rows.filter(r => r.userId !== id));
     }
@@ -624,6 +848,12 @@ app.post('/api/me/password', async (req, res) => {
 
 // ── Me: balances ──────────────────────────────────────────────────────────────
 app.get('/api/me/balances', async (req, res) => {
+    // Catches up any scheduled transfers that came due since this user's
+    // balance was last checked — this endpoint is loaded on every banking
+    // page visit, so it's the most reliable point to self-correct regardless
+    // of whether the server process was actually running at the scheduled
+    // moment.
+    await runDueScheduledTransfers(req.userId);
     const users = await readJSON('users');
     const user  = users.find(u => u.id === req.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -654,11 +884,17 @@ app.post('/api/me/balances/adjust', async (req, res) => {
             if (idx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
             const balances = Object.assign({}, DEFAULT_BALANCES, users[idx].balances || {});
             const current  = balances[account] !== undefined ? balances[account] : 0;
-            const next     = parseFloat((current + Number(delta)).toFixed(2));
+            const signedDelta = Number(delta);
+            const next     = parseFloat((current + signedDelta).toFixed(2));
             if (next < 0) { const e = new Error('Insufficient funds'); e.status = 409; throw e; }
             balances[account] = next;
-            users[idx]        = Object.assign({}, users[idx], { balances });
+            const updatedUser = Object.assign({}, users[idx], { balances });
+            users[idx]        = updatedUser;
             await writeJSON('users', users);
+            // Every balance-changing action in the app (transfers, bill pay,
+            // checkout, credit card/loan/goal activity) routes through this
+            // one endpoint, so it's the single choke point for alert checks.
+            await maybeFireBalanceAlerts(updatedUser, account, current, next, signedDelta);
             return { account, amount: balances[account] };
         });
         res.json(result);
@@ -731,7 +967,16 @@ app.get('/api/me/purchases', async (req, res) => {
     const all      = await readJSON('purchases');
     let filtered   = all.filter(p => p.userId === req.userId);
     filtered.sort((a, b) => (b.id || 0) - (a.id || 0));
+    filtered = filtered.map(p => Object.assign({}, p, computeOrderStatus(p)));
     res.json(limit ? filtered.slice(0, limit) : filtered);
+});
+
+app.get('/api/me/purchases/:id', async (req, res) => {
+    const id  = Number(req.params.id);
+    const all = await readJSON('purchases');
+    const order = all.find(p => p.id === id && p.userId === req.userId);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    res.json(Object.assign({}, order, computeOrderStatus(order)));
 });
 
 app.post('/api/me/purchases', async (req, res) => {
@@ -780,6 +1025,151 @@ app.delete('/api/me/cart', async (req, res) => {
     const all = await readJSON('cart');
     await writeJSON('cart', all.filter(i => i.userId !== req.userId));
     res.json({ ok: true });
+});
+
+// ── Me: checkout ─────────────────────────────────────────────────────────────
+// Single atomic endpoint (replaces the old client-orchestrated multi-call
+// checkout) — reads the server's own cart and product catalog rather than
+// trusting client-supplied items/prices, requires a real address + payment
+// method, computes tax from the shipping address's state and shipping cost
+// from the chosen speed, then does the balance debit + stock decrement +
+// order write + cart clear inside one withUserLock so a mid-checkout failure
+// can't leave money deducted with no order recorded.
+app.post('/api/me/checkout', async (req, res) => {
+    const body = req.body || {};
+    const addressId       = Number(body.addressId);
+    const paymentMethodId = Number(body.paymentMethodId);
+    const shippingMethod  = SHIPPING_RATES.hasOwnProperty(body.shippingMethod) ? body.shippingMethod : 'standard';
+    const promoCodeInput  = body.promoCode;
+
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const [cartRows, products, addresses, paymentMethods, users] = await Promise.all([
+                readJSON('cart'), readJSON('products'), readJSON('addresses'), readJSON('paymentMethods'), readJSON('users')
+            ]);
+            const myCart = cartRows.filter(c => c.userId === req.userId);
+            if (myCart.length === 0) { const e = new Error('Cart is empty'); e.status = 400; throw e; }
+
+            const address = addresses.find(a => a.id === addressId && a.userId === req.userId);
+            if (!address) { const e = new Error('Select a shipping address'); e.status = 400; throw e; }
+            const paymentMethod = paymentMethods.find(p => p.id === paymentMethodId && p.userId === req.userId);
+            if (!paymentMethod) { const e = new Error('Select a payment method'); e.status = 400; throw e; }
+
+            // Resolve authoritative prices/stock from the catalog — never
+            // trust client-supplied cart prices.
+            const items = [];
+            for (const row of myCart) {
+                const product = products.find(p => p.name === row.name);
+                if (!product) { const e = new Error('"' + row.name + '" is no longer available'); e.status = 409; throw e; }
+                const qty = row.quantity || 1;
+                if (qty > product.stock) { const e = new Error('Only ' + product.stock + ' left of "' + product.name + '"'); e.status = 409; throw e; }
+                items.push({ productId: product.id, name: product.name, price: product.price, quantity: qty });
+            }
+
+            const subtotal       = parseFloat(items.reduce((s, i) => s + i.price * i.quantity, 0).toFixed(2));
+            const promo          = computePromoDiscount(promoCodeInput, subtotal);
+            const afterDiscount  = parseFloat((subtotal - promo.discount).toFixed(2));
+
+            const shipInfo      = SHIPPING_RATES[shippingMethod];
+            const shippingCost  = (shipInfo.freeThreshold != null && afterDiscount >= shipInfo.freeThreshold) ? 0 : shipInfo.cost;
+
+            // US sales tax is charged based on the delivery address, not the
+            // seller's location.
+            const taxRate = STATE_TAX_RATES.hasOwnProperty(address.state) ? STATE_TAX_RATES[address.state] : 0;
+            const tax     = parseFloat((afterDiscount * taxRate).toFixed(2));
+
+            const total = parseFloat((afterDiscount + tax + shippingCost).toFixed(2));
+
+            const uidx = users.findIndex(u => u.id === req.userId);
+            if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
+            const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
+            const current  = balances.checking;
+
+            const itemCount    = items.reduce((s, i) => s + i.quantity, 0);
+            const pointsEarned = itemCount * 45;
+            const coinsEarned  = Math.floor(total / 10);
+
+            // Preview mode — compute the same authoritative totals the real
+            // checkout would charge, without touching balances, stock, or
+            // writing an order. Lets the client show an accurate confirm
+            // screen without duplicating the tax/shipping/promo tables.
+            if (body.dryRun) {
+                return {
+                    items, subtotal, promoCode: promo.code, promoLabel: promo.label, discount: promo.discount,
+                    taxRate, tax, shippingMethod, shippingCost, total, itemCount, pointsEarned, coinsEarned,
+                    checking: current, sufficientFunds: total <= current
+                };
+            }
+
+            if (total > current) { const e = new Error('Insufficient funds. Available: ƒ' + current.toFixed(2)); e.status = 409; throw e; }
+            const next = parseFloat((current - total).toFixed(2));
+            balances.checking = next;
+
+            const userData = Object.assign({}, DEFAULT_USER_DATA, users[uidx].userData || {});
+            userData.points            = (userData.points || 0) + pointsEarned;
+            userData.pointsToNextLevel = (userData.pointsToNextLevel != null ? userData.pointsToNextLevel : 1000) - pointsEarned;
+            userData.completedTasks    = (userData.completedTasks || 0) + 1;
+            userData.coins              = (userData.coins || 0) + coinsEarned;
+            let leveledUp = false, newLevel = 0;
+            if (userData.pointsToNextLevel <= 0) {
+                if (userData.level === 1) {
+                    const challenges = await readJSON('challenges');
+                    const reqMet = LEVEL_1_REQUIRED_CONDITIONS.every(cond =>
+                        challenges.some(c => c.userId === req.userId && c.condition === cond && c.completed)
+                    );
+                    if (reqMet) {
+                        userData.level++;
+                        userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
+                        leveledUp = true; newLevel = userData.level;
+                    } else {
+                        userData.pointsToNextLevel = 0;
+                    }
+                } else {
+                    userData.level++;
+                    userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
+                    leveledUp = true; newLevel = userData.level;
+                }
+            }
+
+            const updatedUser = Object.assign({}, users[uidx], { balances, userData });
+            users[uidx] = updatedUser;
+            await writeJSON('users', users);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -total);
+
+            const updatedProducts = products.map(p => {
+                const line = items.find(i => i.productId === p.id);
+                return line ? Object.assign({}, p, { stock: Math.max(0, p.stock - line.quantity) }) : p;
+            });
+            await writeJSON('products', updatedProducts);
+
+            const purchases      = await readJSON('purchases');
+            const orderNumericId = nextId(purchases);
+            const order = {
+                id:        orderNumericId,
+                orderId:   'ORD-' + String(100000 + orderNumericId),
+                userId:    req.userId,
+                items,
+                subtotal, promoCode: promo.code, discount: promo.discount,
+                taxRate, tax, shippingMethod, shippingCost, total,
+                pointsEarned, coinsEarned,
+                address: {
+                    fullName: address.fullName, street: address.street, street2: address.street2,
+                    city: address.city, state: address.state, zip: address.zip, country: address.country
+                },
+                paymentMethod: { brand: paymentMethod.brand, last4: paymentMethod.last4 },
+                timestamp: Date.now(),
+                date: new Date().toLocaleDateString()
+            };
+            purchases.push(order);
+            await writeJSON('purchases', purchases);
+            await writeJSON('cart', cartRows.filter(c => c.userId !== req.userId));
+
+            return { order: Object.assign({}, order, computeOrderStatus(order)), leveledUp, newLevel, checking: next };
+        });
+        res.status(body.dryRun ? 200 : 201).json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
 });
 
 // ── Me: challenges  (specific sub-routes MUST be defined before the generic ones)
@@ -847,7 +1237,11 @@ app.post('/api/me/challenges/reset', async (req, res) => {
 // defaults, and re-seeds their challenges. Scoped to req.userId so this can't
 // affect any other user.
 app.post('/api/me/reset', async (req, res) => {
-    for (const store of ['transactions', 'payments', 'purchases', 'cart']) {
+    for (const store of [
+        'transactions', 'payments', 'purchases', 'cart',
+        'creditCards', 'creditActivity', 'loans', 'loanPayments', 'savingsGoals', 'savingsGoalActivity',
+        'scheduledTransfers', 'addresses', 'paymentMethods', 'billCycles', 'customBills'
+    ]) {
         const rows = await readJSON(store);
         await writeJSON(store, rows.filter(r => r.userId !== req.userId));
     }
@@ -923,6 +1317,562 @@ app.patch('/api/me/messages/:id', async (req, res) => {
     res.json(all[idx]);
 });
 
+// ── Me: alert preferences ───────────────────────────────────────────────────
+app.get('/api/me/alert-prefs', async (req, res) => {
+    const users = await readJSON('users');
+    const user  = users.find(u => u.id === req.userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(Object.assign({}, DEFAULT_ALERT_PREFS, (user.userData || {}).alertPrefs || {}));
+});
+
+app.put('/api/me/alert-prefs', async (req, res) => {
+    const users = await readJSON('users');
+    const idx   = users.findIndex(u => u.id === req.userId);
+    if (idx === -1) return res.status(404).json({ error: 'User not found' });
+    const body  = req.body || {};
+    const prefs = {
+        lowBalanceEnabled:   body.lowBalanceEnabled   !== undefined ? !!body.lowBalanceEnabled  : DEFAULT_ALERT_PREFS.lowBalanceEnabled,
+        lowBalanceThreshold: body.lowBalanceThreshold !== undefined ? Math.max(0, Number(body.lowBalanceThreshold) || 0) : DEFAULT_ALERT_PREFS.lowBalanceThreshold,
+        largeTxEnabled:      body.largeTxEnabled      !== undefined ? !!body.largeTxEnabled     : DEFAULT_ALERT_PREFS.largeTxEnabled,
+        largeTxThreshold:    body.largeTxThreshold    !== undefined ? Math.max(0, Number(body.largeTxThreshold) || 0) : DEFAULT_ALERT_PREFS.largeTxThreshold
+    };
+    const userData = Object.assign({}, DEFAULT_USER_DATA, users[idx].userData || {}, { alertPrefs: prefs });
+    users[idx] = Object.assign({}, users[idx], { userData });
+    await writeJSON('users', users);
+    res.json(prefs);
+});
+
+// ── Me: credit card ──────────────────────────────────────────────────────────
+const CREDIT_CARD_TIERS = {
+    starter:  { limit: 1000,  apr: 24.99 },
+    standard: { limit: 2500,  apr: 21.99 },
+    premium:  { limit: 5000,  apr: 18.99 }
+};
+
+app.get('/api/me/credit-card', async (req, res) => {
+    const cards = await readJSON('creditCards');
+    const card  = cards.find(c => c.userId === req.userId && c.active);
+    res.json(card || { active: false });
+});
+
+app.post('/api/me/credit-card/open', async (req, res) => {
+    const tier   = req.body && req.body.tier;
+    const chosen = CREDIT_CARD_TIERS[tier];
+    if (!chosen) return res.status(400).json({ error: 'Invalid card tier' });
+    try {
+        const card = await withUserLock(req.userId, async () => {
+            const cards = await readJSON('creditCards');
+            if (cards.some(c => c.userId === req.userId && c.active)) {
+                const e = new Error('You already have an active credit card'); e.status = 409; throw e;
+            }
+            const rec = {
+                id: nextId(cards), userId: req.userId, tier,
+                limit: chosen.limit, apr: chosen.apr, balance: 0,
+                active: true, openedAt: Date.now()
+            };
+            cards.push(rec);
+            await writeJSON('creditCards', cards);
+            return rec;
+        });
+        res.status(201).json(card);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+app.post('/api/me/credit-card/purchase', async (req, res) => {
+    const amt = Number(req.body && req.body.amount);
+    const description = ((req.body && req.body.description) || '').trim() || 'Card purchase';
+    if (!amt || amt <= 0) return res.status(400).json({ error: 'Valid amount required' });
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const cards = await readJSON('creditCards');
+            const idx   = cards.findIndex(c => c.userId === req.userId && c.active);
+            if (idx === -1) { const e = new Error('No active credit card'); e.status = 404; throw e; }
+            const card = cards[idx];
+            const available = parseFloat((card.limit - card.balance).toFixed(2));
+            if (amt > available) { const e = new Error('Exceeds available credit'); e.status = 409; throw e; }
+            cards[idx] = Object.assign({}, card, { balance: parseFloat((card.balance + amt).toFixed(2)) });
+            await writeJSON('creditCards', cards);
+
+            const activity = await readJSON('creditActivity');
+            const record = {
+                id: nextId(activity), userId: req.userId, type: 'purchase',
+                amount: amt, description, date: new Date().toLocaleDateString(), timestamp: Date.now()
+            };
+            activity.push(record);
+            await writeJSON('creditActivity', activity);
+            return { card: cards[idx], activity: record };
+        });
+        res.status(201).json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+app.post('/api/me/credit-card/payment', async (req, res) => {
+    const amt = Number(req.body && req.body.amount);
+    if (!amt || amt <= 0) return res.status(400).json({ error: 'Valid amount required' });
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const cards = await readJSON('creditCards');
+            const idx   = cards.findIndex(c => c.userId === req.userId && c.active);
+            if (idx === -1) { const e = new Error('No active credit card'); e.status = 404; throw e; }
+            const card = cards[idx];
+            const payAmt = Math.min(amt, card.balance);
+            if (payAmt <= 0) { const e = new Error('Card balance is already zero'); e.status = 409; throw e; }
+
+            const users = await readJSON('users');
+            const uidx  = users.findIndex(u => u.id === req.userId);
+            if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
+            const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
+            const current  = balances.checking;
+            const next     = parseFloat((current - payAmt).toFixed(2));
+            if (next < 0) { const e = new Error('Insufficient funds'); e.status = 409; throw e; }
+            balances.checking = next;
+            const updatedUser = Object.assign({}, users[uidx], { balances });
+            users[uidx] = updatedUser;
+            await writeJSON('users', users);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -payAmt);
+
+            cards[idx] = Object.assign({}, card, { balance: parseFloat((card.balance - payAmt).toFixed(2)) });
+            await writeJSON('creditCards', cards);
+
+            const activity = await readJSON('creditActivity');
+            const record = {
+                id: nextId(activity), userId: req.userId, type: 'payment',
+                amount: payAmt, description: 'Card payment', date: new Date().toLocaleDateString(), timestamp: Date.now()
+            };
+            activity.push(record);
+            await writeJSON('creditActivity', activity);
+            return { card: cards[idx], checking: next, activity: record };
+        });
+        res.status(201).json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+app.get('/api/me/credit-card/activity', async (req, res) => {
+    const activity = await readJSON('creditActivity');
+    const mine = activity.filter(a => a.userId === req.userId).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    res.json(mine);
+});
+
+// ── Me: loans ─────────────────────────────────────────────────────────────────
+const LOAN_TERMS = {
+    6:  { apr: 5.99  },
+    12: { apr: 6.99  },
+    24: { apr: 8.99  },
+    36: { apr: 10.99 },
+    60: { apr: 12.99 }
+};
+
+app.get('/api/me/loan', async (req, res) => {
+    const loans = await readJSON('loans');
+    // Most recent loan regardless of status, so the client can distinguish
+    // "never applied" from "actively repaying" from "paid off" (a strict
+    // active-only filter would make a paid-off loan look identical to never
+    // having had one, losing the payoff-celebration state).
+    const mine = loans.filter(l => l.userId === req.userId).sort((a, b) => (b.openedAt || 0) - (a.openedAt || 0));
+    res.json(mine[0] || { active: false, paidOff: false });
+});
+
+app.post('/api/me/loan/apply', async (req, res) => {
+    const amt  = Number(req.body && req.body.amount);
+    const term = Number(req.body && req.body.termMonths);
+    const termInfo = LOAN_TERMS[term];
+    if (!amt || amt < 500 || amt > 20000) return res.status(400).json({ error: 'Loan amount must be between ƒ500 and ƒ20,000' });
+    if (!termInfo) return res.status(400).json({ error: 'Invalid loan term' });
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const loans = await readJSON('loans');
+            if (loans.some(l => l.userId === req.userId && l.active)) {
+                const e = new Error('You already have an active loan'); e.status = 409; throw e;
+            }
+            // Simple (non-amortizing) interest — total interest = principal ×
+            // rate × (term in years). Easier to reason about than a real
+            // amortization schedule and still teaches the core idea that a
+            // longer term costs more in total interest.
+            const totalInterest  = parseFloat((amt * (termInfo.apr / 100) * (term / 12)).toFixed(2));
+            const totalOwed      = parseFloat((amt + totalInterest).toFixed(2));
+            const monthlyPayment = parseFloat((totalOwed / term).toFixed(2));
+            const loan = {
+                id: nextId(loans), userId: req.userId, principal: amt, apr: termInfo.apr,
+                termMonths: term, totalInterest, balance: totalOwed, monthlyPayment,
+                active: true, paidOff: false, openedAt: Date.now(), paidOffAt: null
+            };
+            loans.push(loan);
+            await writeJSON('loans', loans);
+
+            const users = await readJSON('users');
+            const uidx  = users.findIndex(u => u.id === req.userId);
+            if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
+            const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
+            const current   = balances.checking;
+            const next      = parseFloat((current + amt).toFixed(2));
+            balances.checking = next;
+            const updatedUser = Object.assign({}, users[uidx], { balances });
+            users[uidx] = updatedUser;
+            await writeJSON('users', users);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, amt);
+
+            return { loan, checking: next };
+        });
+        res.status(201).json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+app.post('/api/me/loan/payment', async (req, res) => {
+    const amt = Number(req.body && req.body.amount);
+    if (!amt || amt <= 0) return res.status(400).json({ error: 'Valid amount required' });
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const loans = await readJSON('loans');
+            const idx   = loans.findIndex(l => l.userId === req.userId && l.active);
+            if (idx === -1) { const e = new Error('No active loan'); e.status = 404; throw e; }
+            const loan = loans[idx];
+            const payAmt = Math.min(amt, loan.balance);
+            if (payAmt <= 0) { const e = new Error('Loan balance is already zero'); e.status = 409; throw e; }
+
+            const users = await readJSON('users');
+            const uidx  = users.findIndex(u => u.id === req.userId);
+            if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
+            const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
+            const current  = balances.checking;
+            const next     = parseFloat((current - payAmt).toFixed(2));
+            if (next < 0) { const e = new Error('Insufficient funds'); e.status = 409; throw e; }
+            balances.checking = next;
+            const updatedUser = Object.assign({}, users[uidx], { balances });
+            users[uidx] = updatedUser;
+            await writeJSON('users', users);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -payAmt);
+
+            const newBalance = parseFloat((loan.balance - payAmt).toFixed(2));
+            const paidOff = newBalance <= 0;
+            loans[idx] = Object.assign({}, loan, {
+                balance: Math.max(0, newBalance),
+                active: !paidOff,
+                paidOff: paidOff,
+                paidOffAt: paidOff ? Date.now() : null
+            });
+            await writeJSON('loans', loans);
+
+            const loanPayments = await readJSON('loanPayments');
+            const record = {
+                id: nextId(loanPayments), userId: req.userId, loanId: loan.id,
+                amount: payAmt, date: new Date().toLocaleDateString(), timestamp: Date.now()
+            };
+            loanPayments.push(record);
+            await writeJSON('loanPayments', loanPayments);
+
+            return { loan: loans[idx], checking: next, payment: record };
+        });
+        res.status(201).json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+app.get('/api/me/loan/payments', async (req, res) => {
+    const payments = await readJSON('loanPayments');
+    const mine = payments.filter(p => p.userId === req.userId).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    res.json(mine);
+});
+
+// ── Me: savings goals ────────────────────────────────────────────────────────
+app.get('/api/me/savings-goals', async (req, res) => {
+    const goals = await readJSON('savingsGoals');
+    const mine  = goals.filter(g => g.userId === req.userId).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    res.json(mine);
+});
+
+app.post('/api/me/savings-goals', async (req, res) => {
+    const name   = ((req.body && req.body.name) || '').trim();
+    const target = Number(req.body && req.body.target);
+    if (!name) return res.status(400).json({ error: 'Goal name required' });
+    if (!target || target < 10 || target > 1000000) return res.status(400).json({ error: 'Target must be between ƒ10 and ƒ1,000,000' });
+    const goals = await readJSON('savingsGoals');
+    const goal = {
+        id: nextId(goals), userId: req.userId, name, target,
+        current: 0, createdAt: Date.now(), completedAt: null
+    };
+    goals.push(goal);
+    await writeJSON('savingsGoals', goals);
+    res.status(201).json(goal);
+});
+
+app.post('/api/me/savings-goals/:id/contribute', async (req, res) => {
+    const id  = Number(req.params.id);
+    const amt = Number(req.body && req.body.amount);
+    if (!amt || amt <= 0) return res.status(400).json({ error: 'Valid amount required' });
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const goals = await readJSON('savingsGoals');
+            const idx   = goals.findIndex(g => g.id === id && g.userId === req.userId);
+            if (idx === -1) { const e = new Error('Goal not found'); e.status = 404; throw e; }
+            const goal = goals[idx];
+
+            const users = await readJSON('users');
+            const uidx  = users.findIndex(u => u.id === req.userId);
+            if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
+            const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
+            const current  = balances.checking;
+            const next     = parseFloat((current - amt).toFixed(2));
+            if (next < 0) { const e = new Error('Insufficient funds'); e.status = 409; throw e; }
+            balances.checking = next;
+            const updatedUser = Object.assign({}, users[uidx], { balances });
+            users[uidx] = updatedUser;
+            await writeJSON('users', users);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -amt);
+
+            const wasComplete = goal.current >= goal.target;
+            const newCurrent  = parseFloat((goal.current + amt).toFixed(2));
+            const nowComplete = newCurrent >= goal.target;
+            goals[idx] = Object.assign({}, goal, {
+                current: newCurrent,
+                completedAt: (!wasComplete && nowComplete) ? Date.now() : goal.completedAt
+            });
+            await writeJSON('savingsGoals', goals);
+
+            const activity = await readJSON('savingsGoalActivity');
+            activity.push({
+                id: nextId(activity), userId: req.userId, goalId: id, type: 'contribute',
+                amount: amt, date: new Date().toLocaleDateString(), timestamp: Date.now()
+            });
+            await writeJSON('savingsGoalActivity', activity);
+
+            return { goal: goals[idx], checking: next, justCompleted: !wasComplete && nowComplete };
+        });
+        res.status(201).json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+app.post('/api/me/savings-goals/:id/withdraw', async (req, res) => {
+    const id  = Number(req.params.id);
+    const amt = Number(req.body && req.body.amount);
+    if (!amt || amt <= 0) return res.status(400).json({ error: 'Valid amount required' });
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const goals = await readJSON('savingsGoals');
+            const idx   = goals.findIndex(g => g.id === id && g.userId === req.userId);
+            if (idx === -1) { const e = new Error('Goal not found'); e.status = 404; throw e; }
+            const goal = goals[idx];
+            const wAmt = Math.min(amt, goal.current);
+            if (wAmt <= 0) { const e = new Error('Goal balance is already zero'); e.status = 409; throw e; }
+
+            const users = await readJSON('users');
+            const uidx  = users.findIndex(u => u.id === req.userId);
+            if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
+            const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
+            const current  = balances.checking;
+            const next     = parseFloat((current + wAmt).toFixed(2));
+            balances.checking = next;
+            const updatedUser = Object.assign({}, users[uidx], { balances });
+            users[uidx] = updatedUser;
+            await writeJSON('users', users);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, wAmt);
+
+            goals[idx] = Object.assign({}, goal, { current: parseFloat((goal.current - wAmt).toFixed(2)) });
+            await writeJSON('savingsGoals', goals);
+
+            const activity = await readJSON('savingsGoalActivity');
+            activity.push({
+                id: nextId(activity), userId: req.userId, goalId: id, type: 'withdraw',
+                amount: wAmt, date: new Date().toLocaleDateString(), timestamp: Date.now()
+            });
+            await writeJSON('savingsGoalActivity', activity);
+
+            return { goal: goals[idx], checking: next };
+        });
+        res.status(201).json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+app.delete('/api/me/savings-goals/:id', async (req, res) => {
+    const id = Number(req.params.id);
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const goals = await readJSON('savingsGoals');
+            const idx   = goals.findIndex(g => g.id === id && g.userId === req.userId);
+            if (idx === -1) { const e = new Error('Goal not found'); e.status = 404; throw e; }
+            const remaining = goals[idx].current;
+
+            if (remaining > 0) {
+                const users = await readJSON('users');
+                const uidx  = users.findIndex(u => u.id === req.userId);
+                if (uidx !== -1) {
+                    const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
+                    balances.checking = parseFloat((balances.checking + remaining).toFixed(2));
+                    users[uidx] = Object.assign({}, users[uidx], { balances });
+                    await writeJSON('users', users);
+                }
+                const activity = await readJSON('savingsGoalActivity');
+                activity.push({
+                    id: nextId(activity), userId: req.userId, goalId: id, type: 'withdraw',
+                    amount: remaining, date: new Date().toLocaleDateString(), timestamp: Date.now()
+                });
+                await writeJSON('savingsGoalActivity', activity);
+            }
+
+            await writeJSON('savingsGoals', goals.filter(g => g.id !== id));
+            return { ok: true, returnedToChecking: remaining };
+        });
+        res.json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+// ── Me: scheduled / recurring transfers ─────────────────────────────────────
+const SCHEDULE_FREQUENCIES = new Set(['once', 'weekly', 'biweekly', 'monthly']);
+
+app.get('/api/me/scheduled-transfers', async (req, res) => {
+    await runDueScheduledTransfers(req.userId);
+    const schedules = await readJSON('scheduledTransfers');
+    const mine = schedules.filter(s => s.userId === req.userId).sort((a, b) => (a.nextRunDate || 0) - (b.nextRunDate || 0));
+    res.json(mine);
+});
+
+app.post('/api/me/scheduled-transfers', async (req, res) => {
+    const body = req.body || {};
+    const fromAccount = body.fromAccount === 'savings' ? 'savings' : 'checking';
+    const recipient    = String(body.recipient || '').trim();
+    const account       = String(body.account || '').trim();
+    const amount         = Number(body.amount);
+    const frequency       = body.frequency;
+    const startDate         = Number(body.startDate);
+
+    if (!recipient) return res.status(400).json({ error: 'Recipient name required' });
+    if (!account)   return res.status(400).json({ error: 'Recipient account number required' });
+    if (!amount || amount <= 0) return res.status(400).json({ error: 'Valid amount required' });
+    if (!SCHEDULE_FREQUENCIES.has(frequency)) return res.status(400).json({ error: 'Invalid frequency' });
+    if (!startDate || isNaN(startDate)) return res.status(400).json({ error: 'Valid start date required' });
+
+    const schedules = await readJSON('scheduledTransfers');
+    const record = {
+        id: nextId(schedules), userId: req.userId, fromAccount, recipient, account, amount,
+        description: String(body.description || '').trim(), frequency,
+        nextRunDate: startDate, active: true, createdAt: Date.now(), lastRunAt: null, lastRunStatus: null
+    };
+    schedules.push(record);
+    await writeJSON('scheduledTransfers', schedules);
+
+    // A transfer scheduled for right now (or the past) should execute
+    // immediately rather than waiting for the next time this user's balance
+    // or schedule list happens to be read.
+    await runDueScheduledTransfers(req.userId);
+    const fresh = (await readJSON('scheduledTransfers')).find(s => s.id === record.id);
+    res.status(201).json(fresh || record);
+});
+
+app.patch('/api/me/scheduled-transfers/:id', async (req, res) => {
+    const id = Number(req.params.id);
+    const schedules = await readJSON('scheduledTransfers');
+    const idx = schedules.findIndex(s => s.id === id && s.userId === req.userId);
+    if (idx === -1) return res.status(404).json({ error: 'Scheduled transfer not found' });
+    const patch = {};
+    if (req.body && req.body.active !== undefined) patch.active = !!req.body.active;
+    schedules[idx] = Object.assign({}, schedules[idx], patch);
+    await writeJSON('scheduledTransfers', schedules);
+    res.json(schedules[idx]);
+});
+
+app.delete('/api/me/scheduled-transfers/:id', async (req, res) => {
+    const id = Number(req.params.id);
+    const schedules = await readJSON('scheduledTransfers');
+    await writeJSON('scheduledTransfers', schedules.filter(s => !(s.id === id && s.userId === req.userId)));
+    res.json({ ok: true });
+});
+
+// ── Me: account statement ────────────────────────────────────────────────────
+// Reconstructs a month's activity + opening/closing balance purely from
+// existing timestamped records plus the current balance — there's no stored
+// historical snapshot, so: closingBalance(month) = currentBalance - (every
+// signed delta that happened AFTER the month ended); openingBalance(month) =
+// closingBalance(month) - (every signed delta that happened DURING the
+// month). Both are exact as long as every balance-affecting event for the
+// account is accounted for below. An admin-forced balance edit (which
+// bypasses /api/me/balances/adjust and every route in this file) has no
+// discrete event to reconstruct from and will not appear as a line item.
+app.get('/api/me/statement', async (req, res) => {
+    const account = req.query.account === 'savings' ? 'savings' : 'checking';
+    const monthParam = String(req.query.month || '');
+    const m = /^(\d{4})-(\d{2})$/.exec(monthParam);
+    if (!m) return res.status(400).json({ error: 'month must be in YYYY-MM format' });
+    const year = Number(m[1]);
+    const mon0 = Number(m[2]) - 1;
+    const monthStart = new Date(year, mon0, 1).getTime();
+    const monthEnd   = new Date(year, mon0 + 1, 1).getTime();
+    const now = Date.now();
+
+    const users = await readJSON('users');
+    const user  = users.find(u => u.id === req.userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const balances = Object.assign({}, DEFAULT_BALANCES, user.balances || {});
+    const currentBalance = balances[account] !== undefined ? balances[account] : 0;
+
+    const [txs, pays, purchs, creditActivity, loans, loanPayments, goalActivity] = await Promise.all([
+        readJSON('transactions'), readJSON('payments'), readJSON('purchases'),
+        readJSON('creditActivity'), readJSON('loans'), readJSON('loanPayments'), readJSON('savingsGoalActivity')
+    ]);
+
+    const events = [];
+    txs.filter(t => t.userId === req.userId && t.fromAccount === account).forEach(t => {
+        events.push({ timestamp: t.timestamp || 0, amount: -(t.amount || 0), label: 'Transfer to ' + (t.recipient || 'recipient') });
+    });
+    pays.filter(p => p.userId === req.userId && p.fromAccount === account).forEach(p => {
+        events.push({ timestamp: p.timestamp || 0, amount: -(p.amount || 0), label: (p.type || 'Bill') + ' bill payment' });
+    });
+    if (account === 'checking') {
+        purchs.filter(p => p.userId === req.userId).forEach(p => {
+            const n = p.items ? p.items.length : 0;
+            events.push({ timestamp: p.timestamp || 0, amount: -(p.total || 0), label: 'Store purchase (' + n + ' item' + (n !== 1 ? 's' : '') + ')' });
+        });
+        creditActivity.filter(a => a.userId === req.userId && a.type === 'payment').forEach(a => {
+            events.push({ timestamp: a.timestamp || 0, amount: -(a.amount || 0), label: 'Credit card payment' });
+        });
+        loanPayments.filter(lp => lp.userId === req.userId).forEach(lp => {
+            events.push({ timestamp: lp.timestamp || 0, amount: -(lp.amount || 0), label: 'Loan payment' });
+        });
+        loans.filter(l => l.userId === req.userId).forEach(l => {
+            events.push({ timestamp: l.openedAt || 0, amount: (l.principal || 0), label: 'Loan proceeds deposited' });
+        });
+        goalActivity.filter(a => a.userId === req.userId).forEach(a => {
+            events.push({
+                timestamp: a.timestamp || 0,
+                amount: a.type === 'withdraw' ? (a.amount || 0) : -(a.amount || 0),
+                label: (a.type === 'withdraw' ? 'Savings goal withdrawal' : 'Savings goal contribution')
+            });
+        });
+    }
+
+    events.forEach(e => { e.date = new Date(e.timestamp).toLocaleDateString(); });
+    events.sort((a, b) => a.timestamp - b.timestamp);
+
+    const afterMonth = events.filter(e => e.timestamp >= monthEnd);
+    const closingBalance = parseFloat((currentBalance - afterMonth.reduce((s, e) => s + e.amount, 0)).toFixed(2));
+
+    const inMonth = events.filter(e => e.timestamp >= monthStart && e.timestamp < monthEnd);
+    const openingBalance = parseFloat((closingBalance - inMonth.reduce((s, e) => s + e.amount, 0)).toFixed(2));
+    const totalDebits  = parseFloat(inMonth.filter(e => e.amount < 0).reduce((s, e) => s + e.amount, 0).toFixed(2));
+    const totalCredits = parseFloat(inMonth.filter(e => e.amount > 0).reduce((s, e) => s + e.amount, 0).toFixed(2));
+
+    res.json({
+        account, month: monthParam,
+        openingBalance, closingBalance, totalDebits, totalCredits,
+        events: inMonth,
+        isCurrentMonth: monthStart <= now && now < monthEnd,
+        generatedAt: now
+    });
+});
+
 // ── Me: stats ─────────────────────────────────────────────────────────────────
 app.get('/api/me/stats', async (req, res) => {
     const users    = await readJSON('users');
@@ -963,12 +1913,18 @@ app.get('/api/me/stats', async (req, res) => {
 // ── Me: recent activity ───────────────────────────────────────────────────────
 app.get('/api/me/activity', async (req, res) => {
     const limit  = req.query.limit ? parseInt(req.query.limit, 10) : null;
-    const [allTxs, allPays, allPurchs] = await Promise.all([
-        readJSON('transactions'), readJSON('payments'), readJSON('purchases')
+    const [allTxs, allPays, allPurchs, allCreditActivity, allLoanPayments, allGoalActivity, allGoals] = await Promise.all([
+        readJSON('transactions'), readJSON('payments'), readJSON('purchases'),
+        readJSON('creditActivity'), readJSON('loanPayments'), readJSON('savingsGoalActivity'), readJSON('savingsGoals')
     ]);
     const txs    = allTxs.filter(t => t.userId === req.userId);
     const pays   = allPays.filter(p => p.userId === req.userId);
     const purchs = allPurchs.filter(p => p.userId === req.userId);
+    const cardActivity = allCreditActivity.filter(a => a.userId === req.userId);
+    const loanPays      = allLoanPayments.filter(p => p.userId === req.userId);
+    const goalActivity  = allGoalActivity.filter(a => a.userId === req.userId);
+    const goalNames     = {};
+    allGoals.forEach(g => { goalNames[g.id] = g.name; });
 
     const events = [];
     txs.forEach(t => events.push({
@@ -998,6 +1954,36 @@ app.get('/api/me/activity', async (req, res) => {
         date:         p.date,
         pointsEarned: p.pointsEarned || 0
     }));
+    cardActivity.forEach(a => events.push({
+        type:         'creditcard',
+        icon:         '💳',
+        label:        a.type === 'payment' ? 'Credit card payment' : 'Credit card purchase (' + (a.description || 'purchase') + ')',
+        detail:       'ƒ' + Number(a.amount).toFixed(2),
+        timestamp:    a.timestamp || 0,
+        date:         a.date,
+        pointsEarned: 0
+    }));
+    loanPays.forEach(lp => events.push({
+        type:         'loan',
+        icon:         '🏠',
+        label:        'Loan payment',
+        detail:       'ƒ' + Number(lp.amount).toFixed(2),
+        timestamp:    lp.timestamp || 0,
+        date:         lp.date,
+        pointsEarned: 0
+    }));
+    goalActivity.forEach(a => {
+        const goalName = goalNames[a.goalId] || 'goal';
+        events.push({
+            type:         'savingsgoal',
+            icon:         '🎯',
+            label:        (a.type === 'withdraw' ? 'Withdrew from ' : 'Contributed to ') + goalName,
+            detail:       'ƒ' + Number(a.amount).toFixed(2),
+            timestamp:    a.timestamp || 0,
+            date:         a.date,
+            pointsEarned: 0
+        });
+    });
     events.sort((a, b) => b.timestamp - a.timestamp);
     res.json(limit ? events.slice(0, limit) : events);
 });
@@ -1166,13 +2152,22 @@ app.post('/api/admin/challenges/reseed', async (req, res) => {
 });
 
 // ── Bills API ─────────────────────────────────────────────────────────────────
+// Bill templates are shared/admin-managed (like DEFAULT_PRODUCTS). Each
+// user's actual bill for "this month" is a separate per-user 'billCycles'
+// record generated lazily from a template — see ensureCurrentBillCycles().
+// billingType 'usage' bills compute their amount from a generated meter
+// reading (baseFee + usage*ratePerUnit) instead of a fixed amount, the way
+// real electric/water/gas bills fluctuate month to month; 'flat' bills
+// (internet, phone, property tax) charge the same `amount` every cycle,
+// matching how those are typically billed as flat subscriptions/assessments
+// in the US.
 const DEFAULT_BILLS = [
-    { id: 1, name: 'Electricity',  icon: '⚡', amount: 89.50,   accountNumber: '1234560', gradient: 'linear-gradient(135deg,#fbbf24,#f59e0b)', dueDate: 'Jan 25, 2026', active: true },
-    { id: 2, name: 'Water',        icon: '💧', amount: 45.00,   accountNumber: '1234560', gradient: 'linear-gradient(135deg,#3b82f6,#2563eb)', dueDate: 'Jan 28, 2026', active: true },
-    { id: 3, name: 'Internet',     icon: '🌐', amount: 79.99,   accountNumber: '9876543', gradient: 'linear-gradient(135deg,#10b981,#059669)', dueDate: 'Feb 1, 2026',  active: true },
-    { id: 4, name: 'Property Tax', icon: '🏠', amount: 1250.00, accountNumber: '1234560', gradient: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', dueDate: 'Feb 15, 2026', active: true },
-    { id: 5, name: 'Phone',        icon: '📱', amount: 55.00,   accountNumber: '2175550123', gradient: 'linear-gradient(135deg,#ec4899,#db2777)', dueDate: 'Jan 30, 2026', active: true },
-    { id: 6, name: 'Gas',          icon: '🔥', amount: 65.75,   accountNumber: '5551234', gradient: 'linear-gradient(135deg,#f97316,#ea580c)', dueDate: 'Feb 5, 2026',  active: true }
+    { id: 1, name: 'Electricity',  icon: '⚡', category: 'electricity', billingType: 'usage', amount: 89.50,   unit: 'kWh',    ratePerUnit: 0.15,  baseFee: 8.00,  usageMin: 400,  usageMax: 900,  accountNumber: '1234560',    gradient: 'linear-gradient(135deg,#fbbf24,#f59e0b)', dueDateDay: 25, lateFeeRate: 0.05, graceDays: 5, active: true },
+    { id: 2, name: 'Water',        icon: '💧', category: 'water',       billingType: 'usage', amount: 45.00,   unit: 'gallons', ratePerUnit: 0.006, baseFee: 15.00, usageMin: 3000, usageMax: 8000, accountNumber: '1234560',    gradient: 'linear-gradient(135deg,#3b82f6,#2563eb)', dueDateDay: 28, lateFeeRate: 0.05, graceDays: 5, active: true },
+    { id: 3, name: 'Internet',     icon: '🌐', category: 'internet',    billingType: 'flat',  amount: 79.99,   unit: null,     ratePerUnit: null,  baseFee: null,  usageMin: null, usageMax: null, accountNumber: '9876543',    gradient: 'linear-gradient(135deg,#10b981,#059669)', dueDateDay: 1,  lateFeeRate: 0.05, graceDays: 5, active: true },
+    { id: 4, name: 'Property Tax', icon: '🏠', category: 'tax',         billingType: 'flat',  amount: 1250.00, unit: null,     ratePerUnit: null,  baseFee: null,  usageMin: null, usageMax: null, accountNumber: '1234560',    gradient: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', dueDateDay: 15, lateFeeRate: 0.05, graceDays: 10, active: true },
+    { id: 5, name: 'Phone',        icon: '📱', category: 'phone',       billingType: 'flat',  amount: 55.00,   unit: null,     ratePerUnit: null,  baseFee: null,  usageMin: null, usageMax: null, accountNumber: '2175550123', gradient: 'linear-gradient(135deg,#ec4899,#db2777)', dueDateDay: 30, lateFeeRate: 0.05, graceDays: 5, active: true },
+    { id: 6, name: 'Gas',          icon: '🔥', category: 'gas',         billingType: 'usage', amount: 65.75,   unit: 'therms', ratePerUnit: 1.10,  baseFee: 10.00, usageMin: 30,   usageMax: 70,   accountNumber: '5551234',    gradient: 'linear-gradient(135deg,#f97316,#ea580c)', dueDateDay: 5,  lateFeeRate: 0.05, graceDays: 5, active: true }
 ];
 
 async function seedDefaultBills() {
@@ -1218,6 +2213,473 @@ app.delete('/api/bills/:id', async (req, res) => {
     res.json({ ok: true });
 });
 
+// ── Me: bills (per-user monthly bill cycles) ────────────────────────────────
+// Bill templates (the 'bills' store, admin-managed, plus each user's own
+// 'customBills') describe a recurring bill; a 'billCycles' record is the
+// actual per-user, per-month instance of one — generated lazily on read the
+// same way scheduled transfers execute lazily, so no background job is
+// needed. An unpaid cycle carries forward (accruing late fee, never
+// silently replaced) until the user pays it; only then does the next
+// month's cycle get generated, with a freshly generated usage reading for
+// usage-based bills.
+function currentCycleMonth() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+function randomUsage(min, max) {
+    return Math.round(min + Math.random() * (max - min));
+}
+
+function computeBillAmount(def) {
+    if (def.billingType === 'usage') {
+        const usage  = randomUsage(def.usageMin, def.usageMax);
+        const amount = parseFloat(((def.baseFee || 0) + usage * def.ratePerUnit).toFixed(2));
+        return { usage, amount };
+    }
+    return { usage: null, amount: def.amount };
+}
+
+function billCycleDueDate(def, cycleMonth) {
+    const [y, m] = cycleMonth.split('-').map(Number);
+    const day = Math.min(Math.max(def.dueDateDay || 25, 1), 28);
+    return new Date(y, m - 1, day).getTime();
+}
+
+async function ensureCurrentBillCycles(userId) {
+    const [templates, customBills, cycles] = await Promise.all([
+        readJSON('bills'), readJSON('customBills'), readJSON('billCycles')
+    ]);
+    const defs = templates.filter(b => b.active !== false).map(b => Object.assign({ defKey: 'catalog:' + b.id }, b))
+        .concat(customBills.filter(b => b.userId === userId && b.active !== false).map(b => Object.assign({ defKey: 'custom:' + b.id }, b)));
+
+    const month = currentCycleMonth();
+    let all = cycles;
+    let changed = false;
+
+    for (const def of defs) {
+        const mine   = all.filter(c => c.userId === userId && c.billDefKey === def.defKey);
+        const latest = mine.reduce((a, b) => (!a || b.id > a.id) ? b : a, null);
+        const needsNew = !latest || (latest.status === 'paid' && latest.cycleMonth !== month);
+        if (!needsNew) continue;
+        const { usage, amount } = computeBillAmount(def);
+        const record = {
+            id: nextId(all), userId, billDefKey: def.defKey,
+            name: def.name, icon: def.icon, category: def.category, billingType: def.billingType,
+            unit: def.unit, ratePerUnit: def.ratePerUnit, baseFee: def.baseFee,
+            accountNumber: def.accountNumber, gradient: def.gradient,
+            usage, amount, cycleMonth: month, dueDate: billCycleDueDate(def, month),
+            lateFeeRate: def.lateFeeRate != null ? def.lateFeeRate : 0.05,
+            graceDays:   def.graceDays   != null ? def.graceDays   : 5,
+            status: 'open', createdAt: Date.now(), paidAt: null
+        };
+        all = all.concat([record]);
+        changed = true;
+    }
+    if (changed) await writeJSON('billCycles', all);
+    return all.filter(c => c.userId === userId);
+}
+
+// Overdue/late-fee status is derived purely from elapsed time since the due
+// date, recomputed fresh on every read — the same "compute on read" pattern
+// used for e-commerce order status, so nothing needs a background sweep.
+function computeBillCycleStatus(cycle) {
+    if (cycle.status === 'paid') return { overdue: false, lateFee: 0, totalDue: 0, daysUntilDue: null, daysOverdue: 0 };
+    const now      = Date.now();
+    const graceMs  = (cycle.graceDays || 0) * 24 * 60 * 60 * 1000;
+    const overdue  = now > cycle.dueDate + graceMs;
+    const dayMs    = 24 * 60 * 60 * 1000;
+    const lateFee  = overdue ? parseFloat((cycle.amount * (cycle.lateFeeRate || 0)).toFixed(2)) : 0;
+    const totalDue = parseFloat((cycle.amount + lateFee).toFixed(2));
+    return {
+        overdue, lateFee, totalDue,
+        daysUntilDue: overdue ? null : Math.max(0, Math.ceil((cycle.dueDate - now) / dayMs)),
+        daysOverdue:  overdue ? Math.floor((now - cycle.dueDate) / dayMs) : 0
+    };
+}
+
+app.get('/api/me/bills', async (req, res) => {
+    const cycles   = await ensureCurrentBillCycles(req.userId);
+    const enriched = cycles.map(c => Object.assign({}, c, computeBillCycleStatus(c)));
+    enriched.sort((a, b) => (a.dueDate || 0) - (b.dueDate || 0));
+    res.json(enriched);
+});
+
+app.post('/api/me/bills/:cycleId/pay', async (req, res) => {
+    const cycleId = Number(req.params.cycleId);
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const cycles = await readJSON('billCycles');
+            const idx    = cycles.findIndex(c => c.id === cycleId && c.userId === req.userId);
+            if (idx === -1) { const e = new Error('Bill not found'); e.status = 404; throw e; }
+            const cycle = cycles[idx];
+            if (cycle.status === 'paid') { const e = new Error('Bill is already paid'); e.status = 409; throw e; }
+
+            const statusInfo = computeBillCycleStatus(cycle);
+            const totalDue    = statusInfo.totalDue;
+
+            const users = await readJSON('users');
+            const uidx  = users.findIndex(u => u.id === req.userId);
+            if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
+            const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
+
+            let account = 'checking';
+            if (totalDue > balances[account]) {
+                if (totalDue <= balances.savings) account = 'savings';
+                else { const e = new Error('Insufficient funds in both accounts. Need ƒ' + totalDue.toFixed(2)); e.status = 409; throw e; }
+            }
+            const current = balances[account];
+            const next    = parseFloat((current - totalDue).toFixed(2));
+            balances[account] = next;
+
+            const onTime       = !statusInfo.overdue;
+            const pointsEarned = 45 + (onTime ? 15 : 0);
+            const coinsEarned  = Math.floor(totalDue / 10);
+
+            const userData = Object.assign({}, DEFAULT_USER_DATA, users[uidx].userData || {});
+            userData.points            = (userData.points || 0) + pointsEarned;
+            userData.pointsToNextLevel = (userData.pointsToNextLevel != null ? userData.pointsToNextLevel : 1000) - pointsEarned;
+            userData.completedTasks    = (userData.completedTasks || 0) + 1;
+            userData.coins              = (userData.coins || 0) + coinsEarned;
+            let leveledUp = false, newLevel = 0;
+            if (userData.pointsToNextLevel <= 0) {
+                if (userData.level === 1) {
+                    const challenges = await readJSON('challenges');
+                    const reqMet = LEVEL_1_REQUIRED_CONDITIONS.every(cond =>
+                        challenges.some(c => c.userId === req.userId && c.condition === cond && c.completed)
+                    );
+                    if (reqMet) {
+                        userData.level++;
+                        userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
+                        leveledUp = true; newLevel = userData.level;
+                    } else {
+                        userData.pointsToNextLevel = 0;
+                    }
+                } else {
+                    userData.level++;
+                    userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
+                    leveledUp = true; newLevel = userData.level;
+                }
+            }
+
+            const updatedUser = Object.assign({}, users[uidx], { balances, userData });
+            users[uidx] = updatedUser;
+            await writeJSON('users', users);
+            await maybeFireBalanceAlerts(updatedUser, account, current, next, -totalDue);
+
+            cycles[idx] = Object.assign({}, cycle, { status: 'paid', paidAt: Date.now(), paidAmount: totalDue, lateFeePaid: statusInfo.lateFee });
+            await writeJSON('billCycles', cycles);
+
+            const payments = await readJSON('payments');
+            const paymentRecord = {
+                id: nextId(payments), userId: req.userId,
+                type: cycle.name, amount: totalDue, accountNumber: cycle.accountNumber,
+                fromAccount: account, date: new Date().toLocaleDateString(), timestamp: Date.now(),
+                pointsEarned, lateFee: statusInfo.lateFee, usage: cycle.usage, unit: cycle.unit
+            };
+            payments.push(paymentRecord);
+            await writeJSON('payments', payments);
+
+            return {
+                cycle: Object.assign({}, cycles[idx], computeBillCycleStatus(cycles[idx])),
+                payment: paymentRecord, leveledUp, newLevel, account, balance: next, onTimeBonus: onTime, pointsEarned
+            };
+        });
+        res.status(201).json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+// ── Me: custom bills ─────────────────────────────────────────────────────────
+const CUSTOM_BILL_CATEGORIES = new Set(['electricity', 'water', 'gas', 'internet', 'phone', 'tax', 'other']);
+const CUSTOM_BILL_ICONS = { electricity: '⚡', water: '💧', gas: '🔥', internet: '🌐', phone: '📱', tax: '🏠', other: '🧾' };
+
+app.get('/api/me/bills/custom', async (req, res) => {
+    const all = await readJSON('customBills');
+    res.json(all.filter(b => b.userId === req.userId));
+});
+
+app.post('/api/me/bills/custom', async (req, res) => {
+    const body = req.body || {};
+    const name = String(body.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Bill name required' });
+    const category    = CUSTOM_BILL_CATEGORIES.has(body.category) ? body.category : 'other';
+    const billingType = body.billingType === 'usage' ? 'usage' : 'flat';
+    const dueDateDay  = Math.min(28, Math.max(1, parseInt(body.dueDateDay, 10) || 25));
+    const base = {
+        id: 0, userId: req.userId, name, category, icon: CUSTOM_BILL_ICONS[category],
+        billingType, accountNumber: String(body.accountNumber || '').trim(),
+        gradient: 'linear-gradient(135deg,#64748b,#475569)',
+        dueDateDay, lateFeeRate: 0.05, graceDays: 5, active: true, createdAt: Date.now()
+    };
+
+    const all = await readJSON('customBills');
+    let record;
+    if (billingType === 'usage') {
+        const unit        = String(body.unit || '').trim();
+        const ratePerUnit = Number(body.ratePerUnit);
+        const usageMin     = Number(body.usageMin);
+        const usageMax     = Number(body.usageMax);
+        if (!unit) return res.status(400).json({ error: 'Usage unit required' });
+        if (!ratePerUnit || ratePerUnit <= 0) return res.status(400).json({ error: 'Valid rate per unit required' });
+        if (!usageMin || !usageMax || usageMax <= usageMin) return res.status(400).json({ error: 'Valid usage range required (max must exceed min)' });
+        record = Object.assign({}, base, {
+            unit, ratePerUnit, baseFee: Math.max(0, Number(body.baseFee) || 0), usageMin, usageMax, amount: null
+        });
+    } else {
+        const amount = Number(body.amount);
+        if (!amount || amount <= 0) return res.status(400).json({ error: 'Valid amount required' });
+        record = Object.assign({}, base, {
+            unit: null, ratePerUnit: null, baseFee: null, usageMin: null, usageMax: null, amount
+        });
+    }
+    record.id = nextId(all);
+    all.push(record);
+    await writeJSON('customBills', all);
+    res.status(201).json(record);
+});
+
+app.put('/api/me/bills/custom/:id', async (req, res) => {
+    const id  = Number(req.params.id);
+    const all = await readJSON('customBills');
+    const idx = all.findIndex(b => b.id === id && b.userId === req.userId);
+    if (idx === -1) return res.status(404).json({ error: 'Custom bill not found' });
+    const body  = req.body || {};
+    const patch = {};
+    if (body.name !== undefined)          patch.name          = String(body.name).trim();
+    if (body.accountNumber !== undefined) patch.accountNumber = String(body.accountNumber).trim();
+    if (body.active !== undefined)        patch.active        = !!body.active;
+    if (all[idx].billingType === 'flat' && body.amount !== undefined) {
+        const amount = Number(body.amount);
+        if (!amount || amount <= 0) return res.status(400).json({ error: 'Valid amount required' });
+        patch.amount = amount;
+    }
+    if (all[idx].billingType === 'usage' && body.ratePerUnit !== undefined) {
+        const ratePerUnit = Number(body.ratePerUnit);
+        if (!ratePerUnit || ratePerUnit <= 0) return res.status(400).json({ error: 'Valid rate per unit required' });
+        patch.ratePerUnit = ratePerUnit;
+    }
+    all[idx] = Object.assign({}, all[idx], patch);
+    await writeJSON('customBills', all);
+    res.json(all[idx]);
+});
+
+app.delete('/api/me/bills/custom/:id', async (req, res) => {
+    const id  = Number(req.params.id);
+    const all = await readJSON('customBills');
+    await writeJSON('customBills', all.filter(b => !(b.id === id && b.userId === req.userId)));
+    // Drop any bill cycles this custom bill generated so it stops appearing.
+    const cycles = await readJSON('billCycles');
+    await writeJSON('billCycles', cycles.filter(c => !(c.userId === req.userId && c.billDefKey === 'custom:' + id)));
+    res.json({ ok: true });
+});
+
+// ── E-Commerce: product catalog ─────────────────────────────────────────────
+// A shared (not per-user) catalog, seeded once at boot the same way
+// DEFAULT_BILLS is — read-only from the client's perspective; there's no
+// admin catalog-management UI yet, so no write routes are exposed.
+const DEFAULT_PRODUCTS = [
+    // ── Women ──
+    { id: 1,  name: 'Pink Dress Shirt',          brand: 'BRANDY',            category: 'women',       price: 45.99,  originalPrice: null,   rating: 4.0, reviewCount: 118, badge: 'New',         icon: '👚', stock: 42,  description: 'Elegant dress shirt for formal occasions.' },
+    { id: 2,  name: 'Floral Wrap Dress',          brand: 'Meridian',          category: 'women',       price: 68.00,  originalPrice: null,   rating: 4.4, reviewCount: 212, badge: null,          icon: '👗', stock: 36,  description: 'Lightweight wrap dress with a floral print, perfect for warm-weather days.' },
+    { id: 3,  name: 'Cropped Denim Jacket',       brand: 'Meridian',          category: 'women',       price: 74.50,  originalPrice: null,   rating: 4.3, reviewCount: 89,  badge: 'New',         icon: '🧥', stock: 27,  description: 'Cropped denim jacket that layers over almost anything.' },
+    { id: 4,  name: 'High-Rise Yoga Leggings',    brand: 'Aurora Active',     category: 'women',       price: 42.00,  originalPrice: null,   rating: 4.7, reviewCount: 530, badge: 'Best Seller', icon: '🧘‍♀️', stock: 95, description: 'Squat-proof high-rise leggings with a four-way stretch fabric.' },
+    { id: 5,  name: 'Cashmere Blend Scarf',       brand: 'Wintermere',        category: 'women',       price: 39.99,  originalPrice: null,   rating: 4.5, reviewCount: 76,  badge: null,          icon: '🧣', stock: 58,  description: 'Soft cashmere-blend scarf for cold-weather commutes.' },
+    { id: 6,  name: 'Ankle Strap Heels',          brand: 'Meridian',          category: 'women',       price: 89.00,  originalPrice: 120.00, rating: 4.1, reviewCount: 143, badge: 'Sale',        icon: '👠', stock: 19,  description: 'Ankle-strap block heels comfortable enough for all-day wear.' },
+    // ── Men ──
+    { id: 7,  name: 'Green Cotton Sweatshirt',    brand: 'EMJOL',             category: 'men',         price: 35.99,  originalPrice: null,   rating: 4.2, reviewCount: 97,  badge: null,          icon: '👕', stock: 63,  description: 'Comfortable cotton sweatshirt perfect for winter weather.' },
+    { id: 8,  name: 'Denim Jeans',                brand: "LEVI'S",            category: 'men',         price: 65.99,  originalPrice: null,   rating: 4.1, reviewCount: 305, badge: null,          icon: '👖', stock: 71,  description: 'Classic fit denim jeans built to last.' },
+    { id: 9,  name: 'Slim Fit Chino Pants',       brand: 'Foundry',           category: 'men',         price: 54.99,  originalPrice: null,   rating: 4.2, reviewCount: 198, badge: null,          icon: '👖', stock: 48,  description: 'Slim fit chinos that go from the office to the weekend.' },
+    { id: 10, name: 'Flannel Button-Down Shirt',  brand: 'Foundry',           category: 'men',         price: 47.50,  originalPrice: null,   rating: 4.4, reviewCount: 65,  badge: 'New',         icon: '👕', stock: 34,  description: 'Brushed flannel shirt with a soft, warm feel.' },
+    { id: 11, name: 'Merino Wool Sweater',        brand: 'Northline',         category: 'men',         price: 79.99,  originalPrice: null,   rating: 4.6, reviewCount: 220, badge: null,          icon: '🧶', stock: 29,  description: 'Breathable merino wool crewneck sweater.' },
+    { id: 12, name: 'Classic Leather Belt',       brand: 'Foundry',           category: 'men',         price: 29.99,  originalPrice: null,   rating: 4.0, reviewCount: 54,  badge: null,          icon: '🎽', stock: 82,  description: 'Full-grain leather belt with a brushed metal buckle.' },
+    { id: 13, name: 'Performance Golf Polo',      brand: 'Foundry',           category: 'men',         price: 44.00,  originalPrice: 58.00,  rating: 4.3, reviewCount: 112, badge: 'Sale',        icon: '⛳', stock: 40,  description: 'Moisture-wicking polo for the course or everyday wear.' },
+    // ── Outdoors ──
+    { id: 14, name: 'Winter Jacket',              brand: 'NORTH FACE',        category: 'outdoors',    price: 179.99, originalPrice: 219.99, rating: 4.3, reviewCount: 88,  badge: 'Sale',        icon: '🧥', stock: 22,  description: 'Insulated jacket for cold weather adventures.' },
+    { id: 15, name: '2-Person Camping Tent',      brand: 'TrailPeak',         category: 'outdoors',    price: 149.99, originalPrice: null,   rating: 4.5, reviewCount: 301, badge: 'Best Seller', icon: '⛺', stock: 17,  description: 'Weatherproof 2-person tent that sets up in under 5 minutes.' },
+    { id: 16, name: 'Insulated Steel Water Bottle', brand: 'TrailPeak',       category: 'outdoors',    price: 24.99,  originalPrice: null,   rating: 4.8, reviewCount: 890, badge: null,          icon: '🧴', stock: 140, description: 'Double-wall insulated bottle that keeps drinks cold for 24 hours.' },
+    { id: 17, name: 'Trekking Poles (Pair)',      brand: 'TrailPeak',         category: 'outdoors',    price: 39.99,  originalPrice: null,   rating: 4.4, reviewCount: 76,  badge: null,          icon: '🥾', stock: 45,  description: 'Adjustable aluminum trekking poles with padded grips.' },
+    { id: 18, name: 'Compact Camp Stove',         brand: 'TrailPeak',         category: 'outdoors',    price: 54.99,  originalPrice: null,   rating: 4.3, reviewCount: 41,  badge: 'New',         icon: '🔥', stock: 24,  description: 'Foldable backpacking stove that boils water in under 3 minutes.' },
+    { id: 19, name: 'All-Weather Hiking Boots',   brand: 'TrailPeak',         category: 'outdoors',    price: 129.00, originalPrice: 159.00, rating: 4.6, reviewCount: 245, badge: 'Sale',        icon: '🥾', stock: 31,  description: 'Waterproof hiking boots with reinforced ankle support.' },
+    // ── Cooking ──
+    { id: 20, name: '10-Piece Stainless Cookware Set', brand: 'Homestead Kitchen', category: 'cooking', price: 189.99, originalPrice: null,   rating: 4.7, reviewCount: 410, badge: 'Best Seller', icon: '🍳', stock: 14,  description: 'Full stainless steel cookware set for everyday cooking.' },
+    { id: 21, name: 'Cast Iron Skillet 12"',      brand: 'Homestead Kitchen', category: 'cooking',     price: 34.99,  originalPrice: null,   rating: 4.9, reviewCount: 670, badge: null,          icon: '🥘', stock: 66,  description: 'Pre-seasoned cast iron skillet built to last generations.' },
+    { id: 22, name: "8-Inch Chef's Knife",        brand: 'Homestead Kitchen', category: 'cooking',     price: 59.99,  originalPrice: null,   rating: 4.5, reviewCount: 198, badge: null,          icon: '🔪', stock: 53,  description: 'High-carbon stainless steel chef\'s knife with a full tang.' },
+    { id: 23, name: 'Stand Mixer',                brand: 'Homestead Kitchen', category: 'cooking',     price: 249.99, originalPrice: 299.00, rating: 4.6, reviewCount: 155, badge: 'Sale',        icon: '🥣', stock: 12,  description: '5-quart stand mixer with 10 speeds and dough hook attachment.' },
+    { id: 24, name: 'Bamboo Cutting Board Set',   brand: 'Homestead Kitchen', category: 'cooking',     price: 27.99,  originalPrice: null,   rating: 4.2, reviewCount: 38,  badge: 'New',         icon: '🪵', stock: 74,  description: 'Set of 3 sustainably sourced bamboo cutting boards.' },
+    // ── Electronics ──
+    { id: 25, name: 'Wireless Headphones',        brand: 'SONY',              category: 'electronics', price: 299.99, originalPrice: 349.00, rating: 4.5, reviewCount: 512, badge: 'Sale',        icon: '🎧', stock: 26,  description: 'Premium noise-cancelling headphones.' },
+    { id: 26, name: 'Smartphone Case',            brand: 'TECH',              category: 'electronics', price: 25.99,  originalPrice: null,   rating: 3.8, reviewCount: 44,  badge: null,          icon: '📱', stock: 120, description: 'Protective case with a sleek design.' },
+    { id: 27, name: 'Smart Watch',                brand: 'APPLE',             category: 'electronics', price: 399.00, originalPrice: null,   rating: 4.9, reviewCount: 900, badge: 'Best Seller', icon: '⌚', stock: 33,  description: 'Track fitness, notifications, and health data.' },
+    { id: 28, name: 'Gaming Controller',          brand: 'XBOX',              category: 'electronics', price: 69.99,  originalPrice: null,   rating: 4.4, reviewCount: 120, badge: 'New',         icon: '🎮', stock: 57,  description: 'Wireless controller with haptic feedback.' },
+    { id: 29, name: 'Portable Bluetooth Speaker', brand: 'Voltaic',           category: 'electronics', price: 59.99,  originalPrice: null,   rating: 4.3, reviewCount: 233, badge: null,          icon: '🔊', stock: 68,  description: 'Waterproof speaker with 12-hour battery life.' },
+    // ── Accessories ──
+    { id: 30, name: 'Sport Backpack',             brand: 'NIKE',              category: 'accessories', price: 89.99,  originalPrice: null,   rating: 4.7, reviewCount: 380, badge: 'Best Seller', icon: '🎒', stock: 39,  description: 'Durable backpack with multiple compartments.' },
+    { id: 31, name: 'Running Shoes',              brand: 'ADIDAS',            category: 'accessories', price: 120.00, originalPrice: null,   rating: 4.8, reviewCount: 640, badge: 'Best Seller', icon: '👟', stock: 44,  description: 'Lightweight running shoes for maximum comfort.' },
+    { id: 32, name: 'Leather Handbag',            brand: 'COACH',             category: 'accessories', price: 185.00, originalPrice: null,   rating: 4.6, reviewCount: 96,  badge: 'New',         icon: '👜', stock: 18,  description: 'Elegant leather handbag for everyday use.' },
+    { id: 33, name: 'Sunglasses',                 brand: 'RAY-BAN',           category: 'accessories', price: 149.99, originalPrice: null,   rating: 4.0, reviewCount: 210, badge: null,          icon: '🕶️', stock: 52,  description: 'UV-protected polarised sunglasses.' }
+];
+
+async function seedDefaultProducts() {
+    const products = await readJSON('products');
+    if (!products || products.length === 0) {
+        await writeJSON('products', DEFAULT_PRODUCTS);
+    }
+}
+
+// GET /api/products — public catalog, optionally filtered
+app.get('/api/products', async (req, res) => {
+    let products = await readJSON('products');
+    const category = String(req.query.category || '').toLowerCase();
+    const onSale    = req.query.onSale === 'true';
+    const q         = String(req.query.q || '').toLowerCase().trim();
+    if (category && category !== 'all') products = products.filter(p => p.category === category);
+    if (onSale) products = products.filter(p => p.badge === 'Sale');
+    if (q) products = products.filter(p =>
+        p.name.toLowerCase().includes(q) || p.brand.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)
+    );
+    res.json(products);
+});
+
+// ── E-Commerce: shipping addresses ──────────────────────────────────────────
+app.get('/api/me/addresses', async (req, res) => {
+    const all  = await readJSON('addresses');
+    const mine = all.filter(a => a.userId === req.userId).sort((a, b) => (a.id || 0) - (b.id || 0));
+    res.json(mine);
+});
+
+app.post('/api/me/addresses', async (req, res) => {
+    const body = req.body || {};
+    const fullName = String(body.fullName || '').trim();
+    const street    = String(body.street || '').trim();
+    const city       = String(body.city || '').trim();
+    const state       = String(body.state || '').trim().toUpperCase();
+    const zip          = String(body.zip || '').trim();
+    if (!fullName) return res.status(400).json({ error: 'Full name required' });
+    if (!street)   return res.status(400).json({ error: 'Street address required' });
+    if (!city)     return res.status(400).json({ error: 'City required' });
+    if (!STATE_TAX_RATES.hasOwnProperty(state)) return res.status(400).json({ error: 'Valid US state required' });
+    if (!zip)      return res.status(400).json({ error: 'ZIP code required' });
+
+    const all = await readJSON('addresses');
+    const makeDefault = body.isDefault || !all.some(a => a.userId === req.userId);
+    const record = {
+        id: nextId(all), userId: req.userId, fullName, phone: String(body.phone || '').trim(),
+        street, street2: String(body.street2 || '').trim(), city, state, zip,
+        country: 'United States', isDefault: makeDefault, createdAt: Date.now()
+    };
+    let updated = all.concat([record]);
+    if (makeDefault) updated = updated.map(a => a.id === record.id ? a : (a.userId === req.userId ? Object.assign({}, a, { isDefault: false }) : a));
+    await writeJSON('addresses', updated);
+    res.status(201).json(record);
+});
+
+app.put('/api/me/addresses/:id', async (req, res) => {
+    const id  = Number(req.params.id);
+    const all = await readJSON('addresses');
+    const idx = all.findIndex(a => a.id === id && a.userId === req.userId);
+    if (idx === -1) return res.status(404).json({ error: 'Address not found' });
+    const body = req.body || {};
+    const patch = {};
+    ['fullName', 'phone', 'street', 'street2', 'city', 'zip'].forEach(f => {
+        if (body[f] !== undefined) patch[f] = String(body[f]).trim();
+    });
+    if (body.state !== undefined) {
+        const state = String(body.state).trim().toUpperCase();
+        if (!STATE_TAX_RATES.hasOwnProperty(state)) return res.status(400).json({ error: 'Valid US state required' });
+        patch.state = state;
+    }
+    let updated = all.map(a => a.id === id ? Object.assign({}, a, patch) : a);
+    if (body.isDefault) {
+        updated = updated.map(a => a.id === id ? Object.assign({}, a, { isDefault: true }) : (a.userId === req.userId ? Object.assign({}, a, { isDefault: false }) : a));
+    }
+    await writeJSON('addresses', updated);
+    res.json(updated.find(a => a.id === id));
+});
+
+app.delete('/api/me/addresses/:id', async (req, res) => {
+    const id  = Number(req.params.id);
+    const all = await readJSON('addresses');
+    const target = all.find(a => a.id === id && a.userId === req.userId);
+    if (!target) return res.status(404).json({ error: 'Address not found' });
+    let remaining = all.filter(a => !(a.id === id && a.userId === req.userId));
+    // Promote another address to default if the deleted one was it, so
+    // checkout always has a usable default when at least one address remains.
+    if (target.isDefault) {
+        const mineIdx = remaining.findIndex(a => a.userId === req.userId);
+        if (mineIdx !== -1) remaining[mineIdx] = Object.assign({}, remaining[mineIdx], { isDefault: true });
+    }
+    await writeJSON('addresses', remaining);
+    res.json({ ok: true });
+});
+
+// ── E-Commerce: payment methods ─────────────────────────────────────────────
+// Simulated only — no real card network integration. Charges still debit
+// the user's checking balance; the "card" selected here is stored on the
+// order for a realistic receipt/statement, matching how the rest of the app
+// keeps a single real ledger (the bank balance) under every feature.
+function detectCardBrand(number) {
+    const n = String(number || '').replace(/\D/g, '');
+    if (/^4/.test(n))  return 'visa';
+    if (/^5[1-5]/.test(n)) return 'mastercard';
+    if (/^3[47]/.test(n)) return 'amex';
+    if (/^6(?:011|5)/.test(n)) return 'discover';
+    return 'card';
+}
+
+app.get('/api/me/payment-methods', async (req, res) => {
+    const all  = await readJSON('paymentMethods');
+    const mine = all.filter(p => p.userId === req.userId).sort((a, b) => (a.id || 0) - (b.id || 0));
+    res.json(mine);
+});
+
+app.post('/api/me/payment-methods', async (req, res) => {
+    const body = req.body || {};
+    const number = String(body.cardNumber || '').replace(/\D/g, '');
+    const cardholderName = String(body.cardholderName || '').trim();
+    const expMonth = Number(body.expMonth);
+    const expYear  = Number(body.expYear);
+    if (number.length < 12 || number.length > 19) return res.status(400).json({ error: 'Enter a valid card number' });
+    if (!cardholderName) return res.status(400).json({ error: 'Cardholder name required' });
+    if (!expMonth || expMonth < 1 || expMonth > 12) return res.status(400).json({ error: 'Valid expiration month required' });
+    if (!expYear || expYear < new Date().getFullYear()) return res.status(400).json({ error: 'Card is expired' });
+
+    const all = await readJSON('paymentMethods');
+    const makeDefault = body.isDefault || !all.some(p => p.userId === req.userId);
+    const record = {
+        id: nextId(all), userId: req.userId, brand: detectCardBrand(number), last4: number.slice(-4),
+        cardholderName, expMonth, expYear, isDefault: makeDefault, createdAt: Date.now()
+    };
+    let updated = all.concat([record]);
+    if (makeDefault) updated = updated.map(p => p.id === record.id ? p : (p.userId === req.userId ? Object.assign({}, p, { isDefault: false }) : p));
+    await writeJSON('paymentMethods', updated);
+    res.status(201).json(record);
+});
+
+app.patch('/api/me/payment-methods/:id/default', async (req, res) => {
+    const id  = Number(req.params.id);
+    const all = await readJSON('paymentMethods');
+    if (!all.some(p => p.id === id && p.userId === req.userId)) return res.status(404).json({ error: 'Payment method not found' });
+    const updated = all.map(p => p.userId === req.userId ? Object.assign({}, p, { isDefault: p.id === id }) : p);
+    await writeJSON('paymentMethods', updated);
+    res.json(updated.find(p => p.id === id));
+});
+
+app.delete('/api/me/payment-methods/:id', async (req, res) => {
+    const id  = Number(req.params.id);
+    const all = await readJSON('paymentMethods');
+    const target = all.find(p => p.id === id && p.userId === req.userId);
+    if (!target) return res.status(404).json({ error: 'Payment method not found' });
+    let remaining = all.filter(p => !(p.id === id && p.userId === req.userId));
+    if (target.isDefault) {
+        const mineIdx = remaining.findIndex(p => p.userId === req.userId);
+        if (mineIdx !== -1) remaining[mineIdx] = Object.assign({}, remaining[mineIdx], { isDefault: true });
+    }
+    await writeJSON('paymentMethods', remaining);
+    res.json({ ok: true });
+});
+
 // ── Catch-all: SPA fallback ───────────────────────────────────────────────────
 app.get('/{*path}', (req, res) => {
     if (!path.extname(req.path)) {
@@ -1235,10 +2697,26 @@ app.use((err, _req, res, _next) => {
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
+// Best-effort periodic sweep so scheduled transfers execute close to on time
+// while the server process is actually running — the authoritative
+// correctness mechanism is still runDueScheduledTransfers() being called
+// from GET /api/me/balances and the scheduled-transfers routes themselves,
+// which self-corrects regardless of server uptime (e.g. after a Render
+// free-tier dyno wakes back up from idle).
+function startScheduledTransferSweep() {
+    setInterval(() => {
+        readJSON('users')
+            .then(users => Promise.all(users.map(u => runDueScheduledTransfers(u.id).catch(() => {}))))
+            .catch(() => {});
+    }, 5 * 60 * 1000);
+}
+
 async function start() {
     await initStorage();
     await seedDefaultAdmin();
     await seedDefaultBills();
+    await seedDefaultProducts();
+    startScheduledTransferSweep();
     app.listen(PORT, () => {
         console.log('DigiFinWiz server running on http://localhost:' + PORT);
     });

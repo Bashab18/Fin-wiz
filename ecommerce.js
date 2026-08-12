@@ -207,200 +207,215 @@ function jsAttr(v) {
 
 // ── Checkout ─────────────────────────────────────────────────────────────────
 // Guards against a second checkout starting while one is still in flight
-// (double-click on Confirm Purchase, or a fast resubmit before the balance
-// deduction for the first purchase has come back).
+// (double-click on Confirm Purchase, or a fast resubmit before the previous
+// checkout's response has come back).
 var checkoutInFlight = false;
+
+var SHIPPING_METHOD_LABELS = {
+    standard: 'Standard (5-7 business days) — ƒ5.99, free over ƒ75',
+    express:  'Express (2 business days) — ƒ14.99'
+};
 
 function checkout() {
     if (cart.length === 0) return;
-
-    var rawTotal = cart.reduce(function(s, i) { return s + i.price * (i.quantity || 1); }, 0);
-    // Apply whatever promo code is currently active on the page (declared by
-    // ecommerce.html's inline script) so the charge matches what the cart
-    // summary displays — previously the discount was display-only.
-    var promo    = (typeof window !== 'undefined' && window.activePromo) ? window.activePromo : null;
-    var discount = 0;
-    if (promo) {
-        if (promo.type === 'pct')  discount = rawTotal * (promo.value / 100);
-        if (promo.type === 'flat') discount = Math.min(promo.value, rawTotal);
-    }
-    var total        = Math.max(0, parseFloat((rawTotal - discount).toFixed(2)));
-    var itemCount    = cart.reduce(function(s, i) { return s + (i.quantity || 1); }, 0);
-    var cartCopy     = cart.slice();
-    var pointsEarned = itemCount * 45;
-    var coinsEarned  = Math.floor(total / 10);
-
     if (checkoutInFlight) {
         showNotification('A checkout is already in progress. Please wait.', 'error');
         return;
     }
-
-    DigifinwizDB.getBalance('checking').then(function(balance) {
-        if (total > balance) {
-            showNotification('Insufficient funds. Available: ƒ' + balance.toFixed(2), 'error');
+    Promise.all([
+        DigifinwizDB.getAddresses(),
+        DigifinwizDB.getPaymentMethods()
+    ]).then(function(results) {
+        var addresses      = results[0];
+        var paymentMethods = results[1];
+        if (addresses.length === 0) {
+            showNotification('Add a shipping address before checking out.', 'error');
+            window.location.href = 'shop-address-book.html';
             return;
         }
-
-        // Show confirmation
-        showCheckoutModal({
-            items: cartCopy,
-            total: total,
-            pointsEarned: pointsEarned,
-            balance: balance,
-            newBalance: balance - total
-        }, function() {
-            checkoutInFlight = true;
-            // Fetch userData first and only touch the balance once we know we
-            // can record the purchase — otherwise a failed userData fetch
-            // could leave money deducted with no purchase ever recorded.
-            DigifinwizDB.getUserData().then(function(userData) {
-                if (!userData) return Promise.reject('No user data');
-                return DigifinwizDB.adjustBalance('checking', -total).then(function() {
-                userData.points            += pointsEarned;
-                userData.pointsToNextLevel -= pointsEarned;
-                userData.completedTasks    += 1;
-                userData.coins              = (userData.coins || 0) + coinsEarned;
-                var savePurchase = function() {
-                    return Promise.all([
-                        DigifinwizDB.setUserData(userData),
-                        DigifinwizDB.addPurchase({
-                            date: new Date().toLocaleDateString(),
-                            items: cartCopy.map(function(i){ return { name:i.name, price:i.price, quantity:i.quantity||1 }; }),
-                            total: total,
-                            promoCode: promo ? promo.code : null,
-                            pointsEarned: pointsEarned
-                        })
-                    ]);
-                };
-                if (userData.pointsToNextLevel <= 0) {
-                    if (userData.level === 1) {
-                        return DigifinwizDB.getLevel1Requirements().then(function(req) {
-                            if (req.allMet) {
-                                userData.level++;
-                                userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
-                                showNotification('Level up! You\'re now level ' + userData.level + '!', 'success');
-                            } else {
-                                userData.pointsToNextLevel = 0;
-                            }
-                            return savePurchase();
-                        });
-                    }
-                    userData.level++;
-                    userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
-                    showNotification('Level up! You\'re now level ' + userData.level + '!', 'success');
-                }
-                return savePurchase();
-                });
-            }).then(function() {
-                return DigifinwizDB.clearCart();
-            }).then(function() {
-                checkoutInFlight = false;
-                cart = [];
-                renderCart();
-                updateBalanceLabel();
-                showNotification('Purchase complete! ' + itemCount + ' item(s) for ƒ' + total.toFixed(2) + ' — +' + pointsEarned + ' pts!', 'success');
-                // ── Challenge completion check (full context via getStats) ──
-                // Its own chain: a failure here must not surface as "Checkout
-                // failed", since the purchase itself already succeeded.
-                Promise.all([
-                    DigifinwizDB.getStats(),
-                    DigifinwizDB.getAllBalances(),
-                    DigifinwizDB.getTransactions(1000)
-                ]).then(function(results) {
-                    var stats = results[0];
-                    var bals  = results[1];
-                    var allTx = results[2];
-                    var chkBal = (bals.find(function(b){ return b.account === 'checking'; }) || {}).amount || 0;
-                    var savBal = (bals.find(function(b){ return b.account === 'savings';  }) || {}).amount || 0;
-                    var recipientSet = {};
-                    var savingsTxCount = 0;
-                    allTx.forEach(function(t) {
-                        recipientSet[(t.recipient || '') + '|' + (t.account || '')] = true;
-                        if (t.fromAccount === 'savings') savingsTxCount++;
-                    });
-                    return DigifinwizDB.checkAndCompleteChallenges({
-                        txCount:          stats.txCount,
-                        payCount:         stats.payCount,
-                        purchCount:       stats.purchCount,
-                        lastTxAmount:     0,
-                        lastItemCount:    itemCount,
-                        lastPayAmount:    0,
-                        totalTransferred: stats.totalTransferred,
-                        totalSpentEcom:   stats.totalSpentEcommerce,
-                        userLevel:        stats.user ? stats.user.level : 0,
-                        totalSpentBills:  stats.totalSpentBills,
-                        totalXpEarned:    stats.user ? stats.user.points : 0,
-                        florinBalance:    stats.user ? stats.user.coins  : 0,
-                        checkingBalance:      chkBal,
-                        savingsBalance:       savBal,
-                        uniqueRecipients:     Object.keys(recipientSet).length,
-                        savingsTransferCount: savingsTxCount,
-                        lastRecipient:        null,
-                        lastRecipientAccount: null
-                    });
-                }).then(function(result) {
-                    var completed = result.completed || [];
-                    if (result.leveledUp) {
-                        setTimeout(function() {
-                            showNotification('🎉 Level Up! You\'re now level ' + result.newLevel + '!', 'success');
-                        }, 400);
-                    }
-                    completed.forEach(function(c) {
-                        var catIcon = { banking:'🏦', ecommerce:'🛒', utilities:'⚡' }[c.category] || '🎯';
-                        setTimeout(function() {
-                            showNotification(catIcon + ' Challenge complete: "' + c.title + '" +' + (c.points || 0) + ' bonus XP!', 'success');
-                        }, 800);
-                    });
-                    // Always refresh challenge tracker to show updated progress bars
-                    if (typeof refreshEcoPage === 'function') {
-                        setTimeout(refreshEcoPage, 1000);
-                    }
-                }).catch(function(err) {
-                    console.error('Post-checkout challenge check failed:', err);
-                });
-            }).catch(function(err) {
-                checkoutInFlight = false;
-                console.error('Checkout error:', err);
-                showNotification('Checkout failed. Please try again.', 'error');
-            });
-        });
+        if (paymentMethods.length === 0) {
+            showNotification('Add a payment method before checking out.', 'error');
+            window.location.href = 'shop-wallet.html';
+            return;
+        }
+        openCheckoutModal(addresses, paymentMethods);
     }).catch(function(err) {
-        console.error('Balance check:', err);
-        showNotification('Could not check balance.', 'error');
+        console.error('checkout prep failed:', err);
+        showNotification('Could not start checkout. Please try again.', 'error');
     });
 }
 
-function showCheckoutModal(details, onConfirm) {
+function openCheckoutModal(addresses, paymentMethods) {
     var existing = document.getElementById('checkoutModal');
     if (existing) existing.remove();
+
+    var defaultAddress = addresses.find(function(a){ return a.isDefault; }) || addresses[0];
+    var defaultPayment = paymentMethods.find(function(p){ return p.isDefault; }) || paymentMethods[0];
+
+    var addressOptions = addresses.map(function(a) {
+        var label = a.fullName + ' — ' + a.street + ', ' + a.city + ', ' + a.state + ' ' + a.zip;
+        return '<option value="' + a.id + '"' + (a.id === defaultAddress.id ? ' selected' : '') + '>' + escHtml(label) + '</option>';
+    }).join('');
+    var paymentOptions = paymentMethods.map(function(p) {
+        var label = p.brand.toUpperCase() + ' •••• ' + p.last4 + ' — ' + p.cardholderName;
+        return '<option value="' + p.id + '"' + (p.id === defaultPayment.id ? ' selected' : '') + '>' + escHtml(label) + '</option>';
+    }).join('');
+    var shippingOptions = Object.keys(SHIPPING_METHOD_LABELS).map(function(key) {
+        return '<option value="' + key + '">' + escHtml(SHIPPING_METHOD_LABELS[key]) + '</option>';
+    }).join('');
 
     var modal = document.createElement('div');
     modal.id = 'checkoutModal';
     modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000';
-
-    var itemRows = details.items.map(function(i) {
-        var qty = i.quantity || 1;
-        var label = qty > 1 ? escHtml(i.name) + ' ×' + qty : escHtml(i.name);
-        return '<div style="display:flex;justify-content:space-between;margin-bottom:0.25rem"><span>' + label + '</span><span>ƒ' + (Number(i.price) * qty).toFixed(2) + '</span></div>';
-    }).join('');
-
     modal.innerHTML =
-        '<div style="background:#fff;border-radius:16px;padding:2rem;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2);max-height:80vh;overflow-y:auto">' +
-        '<h2 style="font-size:1.25rem;font-weight:700;margin-bottom:1rem;color:#1e293b">Confirm Purchase</h2>' +
-        '<div style="background:#f1f5f9;border-radius:10px;padding:1rem;margin-bottom:1rem;font-size:0.875rem">' + itemRows +
-        '<div style="display:flex;justify-content:space-between;border-top:1px solid #e2e8f0;padding-top:0.5rem;margin-top:0.5rem"><strong>Total</strong><strong style="color:#6366f1">ƒ' + details.total.toFixed(2) + '</strong></div>' +
-        '<div style="display:flex;justify-content:space-between;margin-top:0.25rem"><span style="color:#64748b">New balance</span><span style="color:' + (details.newBalance<0?'#ef4444':'#10b981') + '">ƒ' + details.newBalance.toFixed(2) + '</span></div>' +
-        '<div style="display:flex;justify-content:space-between;margin-top:0.25rem"><span style="color:#64748b">Points earned</span><span style="color:#10b981">+' + details.pointsEarned + '</span></div>' +
-        '</div>' +
+        '<div style="background:#fff;border-radius:16px;padding:2rem;max-width:460px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2);max-height:85vh;overflow-y:auto">' +
+        '<h2 style="font-size:1.25rem;font-weight:700;margin-bottom:1rem;color:#1e293b">Checkout</h2>' +
+        '<div class="checkout-field"><label>Shipping Address</label><select id="checkoutAddressSelect" class="form-input">' + addressOptions + '</select></div>' +
+        '<div class="checkout-field"><label>Payment Method</label><select id="checkoutPaymentSelect" class="form-input">' + paymentOptions + '</select></div>' +
+        '<div class="checkout-field"><label>Shipping Speed</label><select id="checkoutShippingSelect" class="form-input">' + shippingOptions + '</select></div>' +
+        '<div id="checkoutSummary" style="background:#f1f5f9;border-radius:10px;padding:1rem;margin:1rem 0;font-size:0.875rem">Calculating…</div>' +
         '<div style="display:flex;gap:0.75rem">' +
         '<button id="checkoutCancel" class="btn" style="flex:1">Cancel</button>' +
-        '<button id="checkoutConfirm" class="btn btn-primary" style="flex:1">Confirm Purchase</button>' +
+        '<button id="checkoutConfirm" class="btn btn-primary" style="flex:1" disabled>Confirm Purchase</button>' +
         '</div></div>';
 
     document.body.appendChild(modal);
     document.getElementById('checkoutCancel').addEventListener('click', function(){ modal.remove(); });
-    document.getElementById('checkoutConfirm').addEventListener('click', function(){ modal.remove(); onConfirm(); });
+    document.getElementById('checkoutConfirm').addEventListener('click', confirmCheckout);
     modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
+
+    ['checkoutAddressSelect', 'checkoutPaymentSelect', 'checkoutShippingSelect'].forEach(function(id) {
+        document.getElementById(id).addEventListener('change', refreshCheckoutPreview);
+    });
+    refreshCheckoutPreview();
+}
+
+function currentCheckoutSelection() {
+    var promoInput = document.getElementById('promoCodeInput');
+    return {
+        addressId:       parseInt(document.getElementById('checkoutAddressSelect').value, 10),
+        paymentMethodId: parseInt(document.getElementById('checkoutPaymentSelect').value, 10),
+        shippingMethod:  document.getElementById('checkoutShippingSelect').value,
+        promoCode:       promoInput && promoInput.value.trim() ? promoInput.value.trim() : undefined
+    };
+}
+
+function refreshCheckoutPreview() {
+    var summaryEl = document.getElementById('checkoutSummary');
+    var confirmBtn = document.getElementById('checkoutConfirm');
+    if (!summaryEl) return;
+    var selection = currentCheckoutSelection();
+    selection.dryRun = true;
+    if (confirmBtn) confirmBtn.disabled = true;
+    DigifinwizDB.checkout(selection).then(function(preview) {
+        renderCheckoutSummary(preview);
+        if (confirmBtn) confirmBtn.disabled = !preview.sufficientFunds;
+    }).catch(function(err) {
+        summaryEl.innerHTML = '<span style="color:#dc2626">' + escHtml(err && err.message ? err.message : 'Could not calculate order total.') + '</span>';
+    });
+}
+
+function renderCheckoutSummary(p) {
+    var summaryEl = document.getElementById('checkoutSummary');
+    if (!summaryEl) return;
+    var row = function(label, amount, opts) {
+        opts = opts || {};
+        return '<div style="display:flex;justify-content:space-between;margin-bottom:0.25rem' + (opts.strong ? ';border-top:1px solid #e2e8f0;padding-top:0.4rem;margin-top:0.4rem' : '') + '">' +
+            '<span' + (opts.strong ? '' : ' style="color:#64748b"') + '>' + label + '</span>' +
+            '<span' + (opts.color ? ' style="color:' + opts.color + '"' : '') + '>' + amount + '</span></div>';
+    };
+    summaryEl.innerHTML =
+        row('Subtotal (' + p.itemCount + ' item' + (p.itemCount !== 1 ? 's' : '') + ')', 'ƒ' + p.subtotal.toFixed(2)) +
+        (p.discount > 0 ? row('Discount' + (p.promoCode ? ' (' + escHtml(p.promoCode) + ')' : ''), '−ƒ' + p.discount.toFixed(2), { color: '#10b981' }) : '') +
+        row('Shipping', p.shippingCost > 0 ? 'ƒ' + p.shippingCost.toFixed(2) : 'FREE', { color: p.shippingCost > 0 ? '' : '#10b981' }) +
+        row('Tax (' + (p.taxRate * 100).toFixed(2) + '%)', 'ƒ' + p.tax.toFixed(2)) +
+        row('<strong>Total</strong>', '<strong style="color:#6366f1">ƒ' + p.total.toFixed(2) + '</strong>', { strong: true }) +
+        row('Points you\'ll earn', '+' + p.pointsEarned + ' XP', { color: '#10b981' }) +
+        (p.sufficientFunds ? '' : '<div style="color:#dc2626;font-size:0.8rem;margin-top:0.5rem">Insufficient funds — available: ƒ' + p.checking.toFixed(2) + '</div>');
+}
+
+function confirmCheckout() {
+    if (checkoutInFlight) return;
+    var selection = currentCheckoutSelection();
+    checkoutInFlight = true;
+    var confirmBtn = document.getElementById('checkoutConfirm');
+    if (confirmBtn) confirmBtn.disabled = true;
+
+    DigifinwizDB.checkout(selection).then(function(result) {
+        checkoutInFlight = false;
+        var modal = document.getElementById('checkoutModal');
+        if (modal) modal.remove();
+        var order = result.order;
+
+        loadCart();
+        updateBalanceLabel();
+        if (result.leveledUp) {
+            setTimeout(function() {
+                showNotification('🎉 Level Up! You\'re now level ' + result.newLevel + '!', 'success');
+            }, 400);
+        }
+        showNotification(
+            'Order ' + order.orderId + ' placed! ' + order.items.length + ' item(s) for ƒ' + order.total.toFixed(2) +
+            ' — +' + order.pointsEarned + ' pts!', 'success'
+        );
+
+        // ── Challenge completion check (full context via getStats) ──
+        // Its own chain: a failure here must not surface as "Checkout
+        // failed", since the purchase itself already succeeded.
+        Promise.all([
+            DigifinwizDB.getStats(),
+            DigifinwizDB.getAllBalances(),
+            DigifinwizDB.getTransactions(1000)
+        ]).then(function(results) {
+            var stats = results[0];
+            var bals  = results[1];
+            var allTx = results[2];
+            var chkBal = (bals.find(function(b){ return b.account === 'checking'; }) || {}).amount || 0;
+            var savBal = (bals.find(function(b){ return b.account === 'savings';  }) || {}).amount || 0;
+            var recipientSet = {};
+            var savingsTxCount = 0;
+            allTx.forEach(function(t) {
+                recipientSet[(t.recipient || '') + '|' + (t.account || '')] = true;
+                if (t.fromAccount === 'savings') savingsTxCount++;
+            });
+            return DigifinwizDB.checkAndCompleteChallenges({
+                txCount:          stats.txCount,
+                payCount:         stats.payCount,
+                purchCount:       stats.purchCount,
+                lastTxAmount:     0,
+                lastItemCount:    order.items.reduce(function(s, i){ return s + i.quantity; }, 0),
+                lastPayAmount:    0,
+                totalTransferred: stats.totalTransferred,
+                totalSpentEcom:   stats.totalSpentEcommerce,
+                userLevel:        stats.user ? stats.user.level : 0,
+                totalSpentBills:  stats.totalSpentBills,
+                totalXpEarned:    stats.user ? stats.user.points : 0,
+                florinBalance:    stats.user ? stats.user.coins  : 0,
+                checkingBalance:      chkBal,
+                savingsBalance:       savBal,
+                uniqueRecipients:     Object.keys(recipientSet).length,
+                savingsTransferCount: savingsTxCount,
+                lastRecipient:        null,
+                lastRecipientAccount: null
+            });
+        }).then(function(result2) {
+            var completed = result2.completed || [];
+            completed.forEach(function(c) {
+                var catIcon = { banking:'🏦', ecommerce:'🛒', utilities:'⚡' }[c.category] || '🎯';
+                setTimeout(function() {
+                    showNotification(catIcon + ' Challenge complete: "' + c.title + '" +' + (c.points || 0) + ' bonus XP!', 'success');
+                }, 800);
+            });
+            if (typeof refreshEcoPage === 'function') setTimeout(refreshEcoPage, 1000);
+        }).catch(function(err) {
+            console.error('Post-checkout challenge check failed:', err);
+        });
+    }).catch(function(err) {
+        checkoutInFlight = false;
+        if (confirmBtn) confirmBtn.disabled = false;
+        console.error('Checkout error:', err);
+        showNotification(err && err.message ? err.message : 'Checkout failed. Please try again.', 'error');
+    });
 }
 
 function updateBalanceLabel() {

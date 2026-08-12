@@ -284,10 +284,16 @@ async function renderOrderHistory() {
                         </div>`;
                 }).join('')
                 : `<div class="product-item"><div class="product-details"><h4>Order items</h4></div></div>`;
+            // Status comes from the server (attached to every purchase by
+            // GET /api/me/purchases, computed from elapsed time) — this used
+            // to hardcode every order as "Completed" regardless of how
+            // recently it was placed.
+            const statusCls = { processing: 'processing', shipped: 'shipped', out_for_delivery: 'in-transit', delivered: 'delivered' }[p.status] || 'processing';
+            const orderLabel = p.orderId || ('#' + orderNumOf.get(p));
             return `<div class="order-item">
                 <div class="order-header">
                     <div class="order-info">
-                        <span class="order-number">Order #${orderNumOf.get(p)}</span>
+                        <span class="order-number">Order ${_escOrderText(orderLabel)}</span>
                         <span class="order-date">Placed on ${date}</span>
                     </div>
                     <div class="order-total">
@@ -297,7 +303,7 @@ async function renderOrderHistory() {
                 </div>
                 <div class="order-body">
                     <div class="order-products">${itemsHtml}</div>
-                    <div class="order-status-badge delivered">Completed</div>
+                    <div class="order-status-badge ${statusCls}">${_escOrderText(p.statusLabel || 'Processing')}</div>
                 </div>
                 <div class="order-actions">
                     <button class="btn btn-secondary">View Details</button>

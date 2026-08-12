@@ -122,7 +122,7 @@
             </div>
 
             <!-- ── Account Balance Cards (always visible) ──────────── -->
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:1.5rem">
+            <div id="balanceCardsGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:1.5rem">
                 <div style="background:linear-gradient(135deg,#667eea,#764ba2);border-radius:var(--radius-xl);padding:1.25rem;color:white">
                     <div style="font-size:0.72rem;opacity:0.85;margin-bottom:0.25rem;text-transform:uppercase;letter-spacing:0.05em">Checking Account</div>
                     <div style="font-size:1.6rem;font-weight:700" id="balanceChecking">ƒ—</div>
@@ -161,16 +161,97 @@
             </div>
 
             <!-- ── Page Tab Navigation ─────────────────────────────── -->
-            <div class="page-tabs">
-                <button class="page-tab-btn active" id="tab-btn-banking" onclick="switchPageTab('banking')">
-                    🏦 Banking
+            <div class="page-tabs" style="flex-wrap:wrap">
+                <button class="page-tab-btn active" id="tab-btn-dashboard" onclick="switchPageTab('dashboard')">
+                    🏠 Dashboard
+                </button>
+                <button class="page-tab-btn" id="tab-btn-banking" onclick="switchPageTab('banking')">
+                    🏦 Transfer
+                </button>
+                <button class="page-tab-btn" id="tab-btn-scheduled" onclick="switchPageTab('scheduled')">
+                    🔁 Scheduled
+                </button>
+                <button class="page-tab-btn" id="tab-btn-creditcard" onclick="switchPageTab('creditcard')">
+                    💳 Credit Card
+                </button>
+                <button class="page-tab-btn" id="tab-btn-loans" onclick="switchPageTab('loans')">
+                    🏠 Loans
+                </button>
+                <button class="page-tab-btn" id="tab-btn-goals" onclick="switchPageTab('goals')">
+                    🎯 Goals
+                </button>
+                <button class="page-tab-btn" id="tab-btn-statements" onclick="switchPageTab('statements')">
+                    📄 Statements
+                </button>
+                <button class="page-tab-btn" id="tab-btn-alerts" onclick="switchPageTab('alerts')">
+                    🔔 Alerts
                 </button>
             </div>
 
             <!-- ═══════════════════════════════════════════════════════
+                 DASHBOARD TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel active" id="panel-dashboard">
+                <div class="banking-section full-width" id="dashAccountsSummary"></div>
+
+                <div class="dash-grid" style="display:grid;grid-template-columns:2fr 1fr;gap:1.5rem;margin-top:1.5rem">
+                    <div>
+                        <div class="banking-section full-width">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+                                <h2 style="margin:0">Recent Activity</h2>
+                                <a href="#" onclick="switchPageTab('banking');return false;" style="font-size:0.8rem;color:var(--color-primary-500);text-decoration:none;font-weight:600">Make a transfer →</a>
+                            </div>
+                            <div id="dashActivityList" class="transactions-list"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">Loading…</p></div>
+                        </div>
+
+                        <div class="banking-section full-width" style="margin-top:1.5rem">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+                                <h2 style="margin:0">🔁 Upcoming Transfers</h2>
+                                <a href="#" onclick="switchPageTab('scheduled');return false;" style="font-size:0.8rem;color:var(--color-primary-500);text-decoration:none;font-weight:600">Manage →</a>
+                            </div>
+                            <div id="dashUpcomingSchedule"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">No upcoming transfers.</p></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="banking-section full-width">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+                                <h2 style="margin:0">🎯 Goals</h2>
+                                <a href="#" onclick="switchPageTab('goals');return false;" style="font-size:0.8rem;color:var(--color-primary-500);text-decoration:none;font-weight:600">View all →</a>
+                            </div>
+                            <div id="dashGoalsSummary"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">No goals yet.</p></div>
+                        </div>
+
+                        <div class="banking-section full-width" style="margin-top:1.5rem">
+                            <h2 style="margin:0 0 0.75rem">Quick Actions</h2>
+                            <div style="display:flex;flex-direction:column;gap:0.5rem">
+                                <a href="#" onclick="switchPageTab('banking');return false;" class="btn btn-block" style="text-align:left">💸 Send Money</a>
+                                <a href="#" onclick="switchPageTab('scheduled');return false;" class="btn btn-block" style="text-align:left">🔁 Schedule a Transfer</a>
+                                <a href="utilities.html" class="btn btn-block" style="text-align:left">🧾 Pay a Bill</a>
+                                <a href="#" onclick="switchPageTab('statements');return false;" class="btn btn-block" style="text-align:left">📄 View Statements</a>
+                            </div>
+                        </div>
+
+                        <div class="banking-section full-width" style="margin-top:1.5rem">
+                            <h2 style="margin:0 0 0.75rem">🏧 Branches &amp; ATMs</h2>
+                            <div id="dashBranchLocator"></div>
+                        </div>
+
+                        <div class="banking-section full-width" style="margin-top:1.5rem">
+                            <h2 style="margin:0 0 0.75rem">❓ Support</h2>
+                            <div style="font-size:0.85rem;color:var(--color-gray-600);line-height:1.6">
+                                <p style="margin:0 0 0.5rem">Need help with your account?</p>
+                                <p style="margin:0">📞 1-800-555-0199 &nbsp;•&nbsp; ✉️ support@digifinwiz.bank<br>Mon–Fri, 8am–8pm</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div><!-- /panel-dashboard -->
+
+            <!-- ═══════════════════════════════════════════════════════
                  BANKING TAB
             ═══════════════════════════════════════════════════════ -->
-            <div class="page-tab-panel active" id="panel-banking">
+            <div class="page-tab-panel" id="panel-banking">
 
                 <!-- Challenge Tracker -->
                 <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:1.25rem;margin-bottom:1.5rem">
@@ -381,6 +462,193 @@
 
             </div><!-- /panel-banking -->
 
+            <!-- ═══════════════════════════════════════════════════════
+                 SCHEDULED TRANSFERS TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel" id="panel-scheduled">
+                <div class="banking-section full-width">
+                    <h2>🔁 Schedule a Transfer</h2>
+                    <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1rem">Set up a one-time future transfer, or a recurring one that repeats automatically.</p>
+                    <form id="schedCreateForm">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                            <div class="form-group"><label>Recipient Name</label><input type="text" class="form-input" id="schedRecipientName" required></div>
+                            <div class="form-group"><label>Recipient Account #</label><input type="text" class="form-input" id="schedRecipientAccount" required></div>
+                            <div class="form-group">
+                                <label>From Account</label>
+                                <select class="form-input" id="schedFromAccount">
+                                    <option value="checking">Checking</option>
+                                    <option value="savings">Savings</option>
+                                </select>
+                            </div>
+                            <div class="form-group"><label>Amount (ƒ)</label><input type="number" class="form-input" id="schedAmount" min="0.01" step="0.01" required></div>
+                            <div class="form-group">
+                                <label>Frequency</label>
+                                <select class="form-input" id="schedFrequency">
+                                    <option value="once">One time</option>
+                                    <option value="weekly">Weekly</option>
+                                    <option value="biweekly">Every 2 weeks</option>
+                                    <option value="monthly">Monthly</option>
+                                </select>
+                            </div>
+                            <div class="form-group"><label>Start Date</label><input type="date" class="form-input" id="schedStartDate" required></div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="margin-top:0.5rem">Schedule Transfer</button>
+                    </form>
+                </div>
+                <div class="banking-section full-width" style="margin-top:1.5rem">
+                    <h2>Your Scheduled Transfers</h2>
+                    <div id="schedList"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">No scheduled transfers yet.</p></div>
+                </div>
+            </div><!-- /panel-scheduled -->
+
+            <!-- ═══════════════════════════════════════════════════════
+                 CREDIT CARD TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel" id="panel-creditcard">
+                <div id="ccNoCardSection">
+                    <div class="banking-section full-width">
+                        <h2>💳 Open a Credit Card</h2>
+                        <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1rem">Build credit history by choosing a card tier below. Higher tiers unlock a larger limit and a lower APR.</p>
+                        <div class="cc-tier-grid" id="ccTierGrid"></div>
+                    </div>
+                </div>
+                <div id="ccActiveSection" style="display:none">
+                    <div class="banking-section full-width">
+                        <div id="ccVisual"></div>
+                        <div class="cc-forms-grid" style="margin-top:1.5rem;display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+                            <div>
+                                <h3 style="font-size:0.95rem;margin-bottom:0.6rem">🛍️ Make a Purchase</h3>
+                                <form id="ccPurchaseForm">
+                                    <div class="form-group"><label>Amount (ƒ)</label><input type="number" class="form-input" id="ccPurchaseAmount" min="0.01" step="0.01" required></div>
+                                    <div class="form-group"><label>Description <span style="color:var(--color-gray-400);font-weight:400">(Optional)</span></label><input type="text" class="form-input" id="ccPurchaseDesc" placeholder="What did you buy?"></div>
+                                    <button type="submit" class="btn btn-primary btn-block">Charge to Card</button>
+                                </form>
+                            </div>
+                            <div>
+                                <h3 style="font-size:0.95rem;margin-bottom:0.6rem">💵 Pay Your Card</h3>
+                                <form id="ccPaymentForm">
+                                    <div class="form-group"><label>Amount (ƒ)</label><input type="number" class="form-input" id="ccPaymentAmount" min="0.01" step="0.01" required></div>
+                                    <div id="ccPaymentHint" style="font-size:0.78rem;color:var(--color-gray-500);margin:-0.4rem 0 0.75rem"></div>
+                                    <button type="submit" class="btn btn-primary btn-block">Pay from Checking</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="banking-section full-width" style="margin-top:1.5rem">
+                        <h2>Card Activity</h2>
+                        <div id="ccActivityList" class="transactions-list"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">No activity yet.</p></div>
+                    </div>
+                </div>
+            </div><!-- /panel-creditcard -->
+
+            <!-- ═══════════════════════════════════════════════════════
+                 LOANS TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel" id="panel-loans">
+                <div id="loanApplySection">
+                    <div class="banking-section full-width">
+                        <h2>🏠 Apply for a Loan</h2>
+                        <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1rem">Borrow between ƒ500 and ƒ20,000. Shorter terms cost less in total interest.</p>
+                        <form id="loanApplyForm">
+                            <div class="form-group"><label>Loan Amount (ƒ)</label><input type="number" class="form-input" id="loanAmount" min="500" max="20000" step="0.01" value="1000" required></div>
+                            <div class="form-group">
+                                <label>Term</label>
+                                <select class="form-input" id="loanTerm">
+                                    <option value="6">6 months — 5.99% APR</option>
+                                    <option value="12" selected>12 months — 6.99% APR</option>
+                                    <option value="24">24 months — 8.99% APR</option>
+                                    <option value="36">36 months — 10.99% APR</option>
+                                    <option value="60">60 months — 12.99% APR</option>
+                                </select>
+                            </div>
+                            <div id="loanPreview" style="background:var(--color-gray-50);border-radius:10px;padding:0.875rem;margin-bottom:1rem;font-size:0.85rem"></div>
+                            <button type="submit" class="btn btn-primary btn-block">Apply for Loan</button>
+                        </form>
+                    </div>
+                </div>
+                <div id="loanActiveSection" style="display:none">
+                    <div class="banking-section full-width" id="loanSummaryCard"></div>
+                    <div class="banking-section full-width" style="margin-top:1.5rem">
+                        <h2>Make a Payment</h2>
+                        <form id="loanPaymentForm">
+                            <div class="form-group"><label>Amount (ƒ)</label><input type="number" class="form-input" id="loanPaymentAmount" min="0.01" step="0.01" required></div>
+                            <button type="submit" class="btn btn-primary btn-block">Pay from Checking</button>
+                        </form>
+                    </div>
+                    <div class="banking-section full-width" style="margin-top:1.5rem">
+                        <h2>Payment History</h2>
+                        <div id="loanPaymentsList" class="transactions-list"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">No payments yet.</p></div>
+                    </div>
+                </div>
+                <div id="loanPaidOffSection" style="display:none">
+                    <div class="banking-section full-width" id="loanPaidOffCard" style="text-align:center;padding:2.5rem 1.5rem"></div>
+                </div>
+            </div><!-- /panel-loans -->
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SAVINGS GOALS TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel" id="panel-goals">
+                <div class="banking-section full-width">
+                    <h2>🎯 Create a New Goal</h2>
+                    <form id="goalCreateForm" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:flex-end">
+                        <div class="form-group" style="flex:2;min-width:180px;margin-bottom:0"><label>Goal Name</label><input type="text" class="form-input" id="goalName" placeholder="e.g. New Laptop" maxlength="60" required></div>
+                        <div class="form-group" style="flex:1;min-width:120px;margin-bottom:0"><label>Target (ƒ)</label><input type="number" class="form-input" id="goalTarget" min="10" max="1000000" step="0.01" required></div>
+                        <button type="submit" class="btn btn-primary">Create Goal</button>
+                    </form>
+                </div>
+                <div class="banking-section full-width" style="margin-top:1.5rem">
+                    <h2>Your Goals</h2>
+                    <div id="goalsList" class="goals-grid"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">No goals yet — create one above!</p></div>
+                </div>
+            </div><!-- /panel-goals -->
+
+            <!-- ═══════════════════════════════════════════════════════
+                 STATEMENTS TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel" id="panel-statements">
+                <div class="banking-section full-width no-print">
+                    <h2>📄 Account Statement</h2>
+                    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:0.5rem">
+                        <div class="form-group" style="margin-bottom:0">
+                            <label>Account</label>
+                            <select class="form-input" id="stmtAccount">
+                                <option value="checking">Checking</option>
+                                <option value="savings">Savings</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom:0"><label>Month</label><input type="month" class="form-input" id="stmtMonth"></div>
+                        <button type="button" class="btn btn-primary" onclick="generateStatement()">Generate Statement</button>
+                        <button type="button" class="btn" id="stmtPrintBtn" style="display:none" onclick="window.print()">🖨️ Print / Save as PDF</button>
+                    </div>
+                    <div id="stmtArchiveList" class="statement-archive-list"></div>
+                </div>
+                <div id="stmtOutput"></div>
+            </div><!-- /panel-statements -->
+
+            <!-- ═══════════════════════════════════════════════════════
+                 ALERTS TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel" id="panel-alerts">
+                <div class="banking-section full-width">
+                    <h2>🔔 Alert Preferences</h2>
+                    <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1.25rem">Alerts are delivered to your <a href="messages.html">Messages inbox</a>.</p>
+                    <form id="alertPrefsForm">
+                        <div class="alert-pref-row">
+                            <label class="autopay-switch"><input type="checkbox" id="alertLowBalEnabled"><span class="autopay-slider"></span></label>
+                            <div style="flex:1"><strong>Low Balance Alert</strong><div style="font-size:0.8rem;color:var(--color-gray-500)">Notify me when checking or savings drops to or below:</div></div>
+                            <div class="form-group" style="margin-bottom:0;width:140px"><input type="number" class="form-input" id="alertLowBalThreshold" min="0" step="0.01"></div>
+                        </div>
+                        <div class="alert-pref-row">
+                            <label class="autopay-switch"><input type="checkbox" id="alertLargeTxEnabled"><span class="autopay-slider"></span></label>
+                            <div style="flex:1"><strong>Large Transaction Alert</strong><div style="font-size:0.8rem;color:var(--color-gray-500)">Notify me when any single transaction is at or above:</div></div>
+                            <div class="form-group" style="margin-bottom:0;width:140px"><input type="number" class="form-input" id="alertLargeTxThreshold" min="0" step="0.01"></div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="margin-top:1rem">Save Preferences</button>
+                    </form>
+                </div>
+            </div><!-- /panel-alerts -->
+
         </main>
     </div>
 
@@ -389,10 +657,24 @@
     <script src="db.js"></script>
     <script src="script.js"></script>
     <script src="banking.js"></script>
+    <script src="banking-accounts.js"></script>
     <script>
     /* ── Tab switching ──────────────────────────────────────────────── */
+    // Each new tab lazy-loads (and refreshes on every visit) via a loader
+    // function defined in banking-accounts.js — keeps banking.js/this inline
+    // script focused on the original Banking tab.
+    var PAGE_TAB_LOADERS = {
+        dashboard:  'loadDashboardTab',
+        scheduled:  'loadScheduledTab',
+        creditcard: 'loadCreditCardTab',
+        loans:      'loadLoansTab',
+        goals:      'loadGoalsTab',
+        statements: 'loadStatementsTab',
+        alerts:     'loadAlertsTab'
+    };
+
     function switchPageTab(name) {
-        ['banking'].forEach(function(t) {
+        ['dashboard', 'banking', 'scheduled', 'creditcard', 'loans', 'goals', 'statements', 'alerts'].forEach(function(t) {
             var panel = document.getElementById('panel-' + t);
             var btn   = document.getElementById('tab-btn-' + t);
             if (!panel || !btn) return;
@@ -401,6 +683,8 @@
             btn.classList.toggle('active', active);
         });
         sessionStorage.setItem('banking_tab', name);
+        var loaderName = PAGE_TAB_LOADERS[name];
+        if (loaderName && typeof window[loaderName] === 'function') window[loaderName]();
     }
 
     /* ── HTML escape ────────────────────────────────────────────────── */
@@ -765,7 +1049,7 @@
 
     document.addEventListener('DOMContentLoaded', function() {
         // Restore last active tab
-        switchPageTab(sessionStorage.getItem('banking_tab') || 'banking');
+        switchPageTab(sessionStorage.getItem('banking_tab') || 'dashboard');
         DigifinwizDB.init().then(function() { refreshBankingPage(); });
         // Populate DigiBank game progress bar
         DigifinwizDB.getUserData().then(function(userData) {

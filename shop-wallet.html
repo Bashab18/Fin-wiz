@@ -29,12 +29,12 @@
         <div class="shop-container">
             <div class="shop-logo">InStyl.</div>
             <nav class="shop-nav">
-                <a href="shop-all.html">Shop All</a>
-                <a href="shop-all.html">On Sale</a>
-                <a href="shop-all.html">Women</a>
-                <a href="shop-all.html">Men</a>
-                <a href="shop-all.html">Outdoors</a>
-                <a href="shop-all.html">Cooking</a>
+                <a href="ecommerce.html">Shop All</a>
+                <a href="ecommerce.html?sale=true">On Sale</a>
+                <a href="ecommerce.html?category=women">Women</a>
+                <a href="ecommerce.html?category=men">Men</a>
+                <a href="ecommerce.html?category=outdoors">Outdoors</a>
+                <a href="ecommerce.html?category=cooking">Cooking</a>
             </nav>
             <div class="shop-header-right">
                 <div class="shop-search-box"><input type="text" placeholder="Search..."></div>
@@ -118,39 +118,11 @@
                 <div class="payment-methods-section">
                     <div class="section-header">
                         <h2>Payment Methods</h2>
-                        <button class="btn btn-primary" onclick="alert('Add payment method form would open here')">+ Add New Card</button>
+                        <button class="btn btn-primary" onclick="showCardForm()">+ Add New Card</button>
                     </div>
-                    <div class="payment-cards">
-                        <div class="credit-card-item default">
-                            <div class="card-brand">
-                                <span class="visa-logo">VISA</span>
-                                <span class="default-badge-small">Default</span>
-                            </div>
-                            <div class="card-number">&#8226;&#8226;&#8226;&#8226; &#8226;&#8226;&#8226;&#8226; &#8226;&#8226;&#8226;&#8226; 1234</div>
-                            <div class="card-details">
-                                <div class="card-holder">Andrew Kroger</div>
-                                <div class="card-expiry">Expires 12/2027</div>
-                            </div>
-                            <div class="card-actions">
-                                <button class="btn-link">Edit</button>
-                                <button class="btn-link text-danger">Remove</button>
-                            </div>
-                        </div>
-                        <div class="credit-card-item">
-                            <div class="card-brand">
-                                <span class="mastercard-logo">MasterCard</span>
-                                <button class="btn-link-small" onclick="alert('Set as default')">Set as Default</button>
-                            </div>
-                            <div class="card-number">&#8226;&#8226;&#8226;&#8226; &#8226;&#8226;&#8226;&#8226; &#8226;&#8226;&#8226;&#8226; 5678</div>
-                            <div class="card-details">
-                                <div class="card-holder">Andrew Kroger</div>
-                                <div class="card-expiry">Expires 08/2026</div>
-                            </div>
-                            <div class="card-actions">
-                                <button class="btn-link">Edit</button>
-                                <button class="btn-link text-danger">Remove</button>
-                            </div>
-                        </div>
+                    <div id="cardFormContainer"></div>
+                    <div class="payment-cards" id="paymentCardsList">
+                        <p style="color:#64748b;padding:20px 0;">Loading payment methods&hellip;</p>
                     </div>
                 </div>
 
@@ -203,5 +175,130 @@
     <script src="db.js"></script>
     <script src="shop-bridge.js"></script>
     <script src="shopping-script.js"></script>
+    <script>
+    // ── Payment methods ──────────────────────────────────────────────────────
+    // Simulated cards only (no real card network) — adding one here lets
+    // checkout show a realistic "paid with Visa ••••1234" receipt, but the
+    // actual charge always comes out of the checking account balance, same
+    // as every other feature in the app.
+    var _cards = [];
+
+    function _pmEscH(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    function reloadPaymentMethods() {
+        return DigifinwizDB.getPaymentMethods().then(function(cards) {
+            _cards = cards;
+            renderPaymentMethods();
+        });
+    }
+
+    function renderPaymentMethods() {
+        var el = document.getElementById('paymentCardsList');
+        if (!el) return;
+        if (_cards.length === 0) {
+            el.innerHTML = '<p style="color:#64748b;padding:20px 0;">No payment methods saved yet. Click &ldquo;+ Add New Card&rdquo; to get started.</p>';
+            return;
+        }
+        el.innerHTML = _cards.map(function(c) {
+            return '<div class="credit-card-item' + (c.isDefault ? ' default' : '') + '">' +
+                '<div class="card-brand">' +
+                '<span class="card-brand-label">' + _pmEscH(c.brand) + '</span>' +
+                (c.isDefault
+                    ? '<span class="default-badge-small">Default</span>'
+                    : "<button class=\"btn-link-small\" onclick='setDefaultCard(" + c.id + ")'>Set as Default</button>") +
+                '</div>' +
+                '<div class="card-number">•••• •••• •••• ' + _pmEscH(c.last4) + '</div>' +
+                '<div class="card-details">' +
+                '<div class="card-holder">' + _pmEscH(c.cardholderName) + '</div>' +
+                '<div class="card-expiry">Expires ' + String(c.expMonth).padStart(2,'0') + '/' + c.expYear + '</div>' +
+                '</div>' +
+                '<div class="card-actions">' +
+                "<button class=\"btn-link text-danger\" onclick='removeCard(" + c.id + ")'>Remove</button>" +
+                '</div></div>';
+        }).join('');
+    }
+
+    function showCardForm() {
+        var fc = document.getElementById('cardFormContainer');
+        if (!fc) return;
+        var now = new Date();
+        fc.innerHTML =
+            '<div class="form-container" style="margin-bottom:24px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:24px">' +
+            '<h3 style="margin:0 0 16px;font-size:1rem;font-weight:600">Add New Card</h3>' +
+            '<div class="form-group"><label>Card Number</label><input type="text" id="cf_number" placeholder="4111 1111 1111 1111" inputmode="numeric" maxlength="19"></div>' +
+            '<div class="form-group"><label>Cardholder Name</label><input type="text" id="cf_name" placeholder="Full name on card"></div>' +
+            '<div class="form-row">' +
+            '<div class="form-group"><label>Exp. Month</label><select id="cf_month">' +
+            Array.from({length:12}, function(_, i) { return i+1; }).map(function(m) { return '<option value="' + m + '">' + String(m).padStart(2,'0') + '</option>'; }).join('') +
+            '</select></div>' +
+            '<div class="form-group"><label>Exp. Year</label><select id="cf_year">' +
+            Array.from({length:12}, function(_, i) { return now.getFullYear() + i; }).map(function(y) { return '<option value="' + y + '">' + y + '</option>'; }).join('') +
+            '</select></div>' +
+            '</div>' +
+            '<div class="form-group" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="cf_default"><label for="cf_default" style="margin:0">Set as default</label></div>' +
+            '<div class="form-actions">' +
+            '<button type="button" class="btn btn-secondary" onclick="cancelCardForm()">Cancel</button>' +
+            '<button type="button" class="btn btn-primary" onclick="saveCardForm()">Save Card</button>' +
+            '</div></div>';
+        fc.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function cancelCardForm() {
+        var fc = document.getElementById('cardFormContainer');
+        if (fc) fc.innerHTML = '';
+    }
+
+    function saveCardForm() {
+        var cardNumber     = (document.getElementById('cf_number') || {}).value || '';
+        var cardholderName = (document.getElementById('cf_name')   || {}).value || '';
+        var expMonth       = parseInt((document.getElementById('cf_month') || {}).value, 10);
+        var expYear        = parseInt((document.getElementById('cf_year')  || {}).value, 10);
+        var isDefault       = !!(document.getElementById('cf_default') || {}).checked;
+
+        if (!cardNumber.replace(/\D/g,'') || !cardholderName.trim()) {
+            showShopToast('Please fill in required fields.', true);
+            return;
+        }
+
+        DigifinwizDB.addPaymentMethod({ cardNumber: cardNumber, cardholderName: cardholderName.trim(), expMonth: expMonth, expYear: expYear, isDefault: isDefault })
+            .then(function() {
+                cancelCardForm();
+                return reloadPaymentMethods();
+            }).then(function() {
+                showShopToast('Card saved!');
+            }).catch(function(err) {
+                showShopToast(err && err.message ? err.message : 'Error saving card.', true);
+            });
+    }
+
+    function setDefaultCard(id) {
+        DigifinwizDB.setDefaultPaymentMethod(id).then(function() {
+            return reloadPaymentMethods();
+        }).then(function() {
+            showShopToast('Default payment method updated.');
+        }).catch(function(err) {
+            showShopToast(err && err.message ? err.message : 'Error updating card.', true);
+        });
+    }
+
+    function removeCard(id) {
+        if (!confirm('Remove this card?')) return;
+        DigifinwizDB.deletePaymentMethod(id).then(function() {
+            return reloadPaymentMethods();
+        }).then(function() {
+            showShopToast('Card removed.');
+        }).catch(function(err) {
+            showShopToast(err && err.message ? err.message : 'Error removing card.', true);
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof DigifinwizDB === 'undefined') return;
+        reloadPaymentMethods().catch(function() {
+            document.getElementById('paymentCardsList').innerHTML =
+                '<p style="color:#ef4444;padding:20px 0;">Could not load payment methods.</p>';
+        });
+    });
+    </script>
 </body>
 </html>

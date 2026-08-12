@@ -1275,8 +1275,16 @@
                                 <input type="text" id="billIcon" placeholder="⚡" maxlength="4" style="font-size:1.4rem">
                             </div>
                             <div class="admin-form-group">
-                                <label>Default Amount (ƒ)</label>
-                                <input type="number" id="billAmount" placeholder="0.00" step="0.01" min="0" required>
+                                <label>Category</label>
+                                <select id="billCategory">
+                                    <option value="electricity">Electricity</option>
+                                    <option value="water">Water</option>
+                                    <option value="gas">Gas</option>
+                                    <option value="internet">Internet</option>
+                                    <option value="phone">Phone</option>
+                                    <option value="tax">Tax/Assessment</option>
+                                    <option value="other">Other</option>
+                                </select>
                             </div>
                             <div class="admin-form-group">
                                 <label>Account Number</label>
@@ -1297,8 +1305,47 @@
                                 </select>
                             </div>
                             <div class="admin-form-group">
-                                <label>Due Date</label>
-                                <input type="text" id="billDueDate" placeholder="e.g. Feb 1, 2026">
+                                <label>Due Day of Month</label>
+                                <input type="number" id="billDueDateDay" placeholder="25" min="1" max="28">
+                            </div>
+                            <div class="admin-form-group">
+                                <label>Billing Type</label>
+                                <select id="billBillingType" onchange="toggleAdminBillingFields()">
+                                    <option value="flat">Flat rate</option>
+                                    <option value="usage">Usage-based</option>
+                                </select>
+                            </div>
+                            <div class="admin-form-group" id="billAmountGroup">
+                                <label>Amount (ƒ)</label>
+                                <input type="number" id="billAmount" placeholder="0.00" step="0.01" min="0">
+                            </div>
+                            <div class="admin-form-group" id="billUnitGroup" style="display:none">
+                                <label>Usage Unit</label>
+                                <input type="text" id="billUnit" placeholder="e.g. kWh, gallons, therms">
+                            </div>
+                            <div class="admin-form-group" id="billRateGroup" style="display:none">
+                                <label>Rate per Unit (ƒ)</label>
+                                <input type="number" id="billRatePerUnit" placeholder="0.15" step="0.001" min="0">
+                            </div>
+                            <div class="admin-form-group" id="billBaseFeeGroup" style="display:none">
+                                <label>Base Fee (ƒ)</label>
+                                <input type="number" id="billBaseFee" placeholder="8.00" step="0.01" min="0">
+                            </div>
+                            <div class="admin-form-group" id="billUsageMinGroup" style="display:none">
+                                <label>Typical Usage — Min</label>
+                                <input type="number" id="billUsageMin" placeholder="400" min="0">
+                            </div>
+                            <div class="admin-form-group" id="billUsageMaxGroup" style="display:none">
+                                <label>Typical Usage — Max</label>
+                                <input type="number" id="billUsageMax" placeholder="900" min="0">
+                            </div>
+                            <div class="admin-form-group">
+                                <label>Late Fee Rate (%)</label>
+                                <input type="number" id="billLateFeeRate" placeholder="5" step="0.1" min="0" max="100">
+                            </div>
+                            <div class="admin-form-group">
+                                <label>Grace Period (days)</label>
+                                <input type="number" id="billGraceDays" placeholder="5" min="0" max="60">
                             </div>
                         </div>
                         <div class="admin-form-actions">

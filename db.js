@@ -192,6 +192,31 @@ const DigifinwizDB = (() => {
         return _api('GET', '/api/me/payments?since=' + ts);
     }
 
+    // ── Utilities: bills (per-user monthly cycles) ──────────────────────────────
+    function getMyBills() {
+        return _api('GET', '/api/me/bills');
+    }
+
+    function payBillCycle(cycleId) {
+        return _api('POST', '/api/me/bills/' + cycleId + '/pay');
+    }
+
+    function getCustomBills() {
+        return _api('GET', '/api/me/bills/custom');
+    }
+
+    function createCustomBill(bill) {
+        return _api('POST', '/api/me/bills/custom', bill);
+    }
+
+    function updateCustomBill(id, patch) {
+        return _api('PUT', '/api/me/bills/custom/' + id, patch);
+    }
+
+    function deleteCustomBill(id) {
+        return _api('DELETE', '/api/me/bills/custom/' + id);
+    }
+
     // ── Purchases ─────────────────────────────────────────────────────────────
     function addPurchase(p) {
         return _api('POST', '/api/me/purchases', p);
@@ -358,6 +383,149 @@ const DigifinwizDB = (() => {
         return _api('GET', '/api/me/activity' + qs);
     }
 
+    // ── Alert preferences ───────────────────────────────────────────────────────
+    function getAlertPrefs() {
+        return _api('GET', '/api/me/alert-prefs');
+    }
+
+    function setAlertPrefs(prefs) {
+        return _api('PUT', '/api/me/alert-prefs', prefs);
+    }
+
+    // ── Credit card ──────────────────────────────────────────────────────────────
+    function getCreditCard() {
+        return _api('GET', '/api/me/credit-card');
+    }
+
+    function openCreditCard(tier) {
+        return _api('POST', '/api/me/credit-card/open', { tier });
+    }
+
+    function creditCardPurchase(amount, description) {
+        return _api('POST', '/api/me/credit-card/purchase', { amount, description });
+    }
+
+    function creditCardPayment(amount) {
+        return _api('POST', '/api/me/credit-card/payment', { amount });
+    }
+
+    function getCreditCardActivity() {
+        return _api('GET', '/api/me/credit-card/activity');
+    }
+
+    // ── Loans ────────────────────────────────────────────────────────────────────
+    function getLoan() {
+        return _api('GET', '/api/me/loan');
+    }
+
+    function applyForLoan(amount, termMonths) {
+        return _api('POST', '/api/me/loan/apply', { amount, termMonths });
+    }
+
+    function makeLoanPayment(amount) {
+        return _api('POST', '/api/me/loan/payment', { amount });
+    }
+
+    function getLoanPayments() {
+        return _api('GET', '/api/me/loan/payments');
+    }
+
+    // ── Savings goals ────────────────────────────────────────────────────────────
+    function getSavingsGoals() {
+        return _api('GET', '/api/me/savings-goals');
+    }
+
+    function createSavingsGoal(name, target) {
+        return _api('POST', '/api/me/savings-goals', { name, target });
+    }
+
+    function contributeSavingsGoal(id, amount) {
+        return _api('POST', '/api/me/savings-goals/' + id + '/contribute', { amount });
+    }
+
+    function withdrawSavingsGoal(id, amount) {
+        return _api('POST', '/api/me/savings-goals/' + id + '/withdraw', { amount });
+    }
+
+    function deleteSavingsGoal(id) {
+        return _api('DELETE', '/api/me/savings-goals/' + id);
+    }
+
+    // ── Statement ────────────────────────────────────────────────────────────────
+    function getStatement(account, month) {
+        return _api('GET', '/api/me/statement?account=' + encodeURIComponent(account) + '&month=' + encodeURIComponent(month));
+    }
+
+    // ── Scheduled transfers ─────────────────────────────────────────────────────
+    function getScheduledTransfers() {
+        return _api('GET', '/api/me/scheduled-transfers');
+    }
+
+    function createScheduledTransfer(data) {
+        return _api('POST', '/api/me/scheduled-transfers', data);
+    }
+
+    function toggleScheduledTransfer(id, active) {
+        return _api('PATCH', '/api/me/scheduled-transfers/' + id, { active });
+    }
+
+    function cancelScheduledTransfer(id) {
+        return _api('DELETE', '/api/me/scheduled-transfers/' + id);
+    }
+
+    // ── E-Commerce: product catalog ─────────────────────────────────────────────
+    function getProducts(filters) {
+        var f = filters || {};
+        var qs = [];
+        if (f.category) qs.push('category=' + encodeURIComponent(f.category));
+        if (f.onSale)   qs.push('onSale=true');
+        if (f.q)        qs.push('q=' + encodeURIComponent(f.q));
+        return _api('GET', '/api/products' + (qs.length ? '?' + qs.join('&') : ''));
+    }
+
+    // ── E-Commerce: shipping addresses ──────────────────────────────────────────
+    function getAddresses() {
+        return _api('GET', '/api/me/addresses');
+    }
+
+    function createAddress(address) {
+        return _api('POST', '/api/me/addresses', address);
+    }
+
+    function updateAddress(id, patch) {
+        return _api('PUT', '/api/me/addresses/' + id, patch);
+    }
+
+    function deleteAddress(id) {
+        return _api('DELETE', '/api/me/addresses/' + id);
+    }
+
+    // ── E-Commerce: payment methods ─────────────────────────────────────────────
+    function getPaymentMethods() {
+        return _api('GET', '/api/me/payment-methods');
+    }
+
+    function addPaymentMethod(card) {
+        return _api('POST', '/api/me/payment-methods', card);
+    }
+
+    function setDefaultPaymentMethod(id) {
+        return _api('PATCH', '/api/me/payment-methods/' + id + '/default');
+    }
+
+    function deletePaymentMethod(id) {
+        return _api('DELETE', '/api/me/payment-methods/' + id);
+    }
+
+    // ── E-Commerce: checkout ─────────────────────────────────────────────────────
+    function checkout(details) {
+        return _api('POST', '/api/me/checkout', details);
+    }
+
+    function getOrder(id) {
+        return _api('GET', '/api/me/purchases/' + id);
+    }
+
     // ── Public API ────────────────────────────────────────────────────────────
     return {
         // Init
@@ -404,6 +572,14 @@ const DigifinwizDB = (() => {
         getPayments,
         getPaymentsSince,
 
+        // Utilities: bills
+        getMyBills,
+        payBillCycle,
+        getCustomBills,
+        createCustomBill,
+        updateCustomBill,
+        deleteCustomBill,
+
         // Purchases
         addPurchase,
         getPurchases,
@@ -444,6 +620,58 @@ const DigifinwizDB = (() => {
 
         // Stats & activity
         getStats,
-        getRecentActivity
+        getRecentActivity,
+
+        // Alert preferences
+        getAlertPrefs,
+        setAlertPrefs,
+
+        // Credit card
+        getCreditCard,
+        openCreditCard,
+        creditCardPurchase,
+        creditCardPayment,
+        getCreditCardActivity,
+
+        // Loans
+        getLoan,
+        applyForLoan,
+        makeLoanPayment,
+        getLoanPayments,
+
+        // Savings goals
+        getSavingsGoals,
+        createSavingsGoal,
+        contributeSavingsGoal,
+        withdrawSavingsGoal,
+        deleteSavingsGoal,
+
+        // Statement
+        getStatement,
+
+        // Scheduled transfers
+        getScheduledTransfers,
+        createScheduledTransfer,
+        toggleScheduledTransfer,
+        cancelScheduledTransfer,
+
+        // E-Commerce: products
+        getProducts,
+
+        // E-Commerce: addresses
+        getAddresses,
+        createAddress,
+        updateAddress,
+        deleteAddress,
+
+        // E-Commerce: payment methods
+        getPaymentMethods,
+        addPaymentMethod,
+        setDefaultPaymentMethod,
+        deletePaymentMethod,
+
+        // E-Commerce: checkout
+        checkout,
+        getOrder
     };
 })();
