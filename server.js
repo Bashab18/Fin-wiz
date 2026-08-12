@@ -53,7 +53,10 @@ function ensureLocalDataFiles() {
     });
 }
 
-const STORE_NAMES = ['users', 'transactions', 'payments', 'purchases', 'challenges', 'messages', 'cart', 'bills'];
+const STORE_NAMES = [
+    'users', 'transactions', 'payments', 'purchases', 'challenges', 'messages', 'cart', 'bills',
+    'creditCards', 'creditActivity', 'loans', 'loanPayments', 'savingsGoals', 'savingsGoalActivity'
+];
 
 async function initStorage() {
     if (pool) {
@@ -142,8 +145,59 @@ function simpleHash(str) {
 }
 
 // ── Default data shapes ───────────────────────────────────────────────────────
-const DEFAULT_BALANCES  = { checking: 88674.00, savings: 18074.00 };
-const DEFAULT_USER_DATA = { level: 1, points: 0, pointsToNextLevel: 1000, challenges: 0, completedTasks: 0, coins: 0 };
+const DEFAULT_BALANCES     = { checking: 88674.00, savings: 18074.00 };
+const DEFAULT_USER_DATA    = { level: 1, points: 0, pointsToNextLevel: 1000, challenges: 0, completedTasks: 0, coins: 0 };
+const DEFAULT_ALERT_PREFS  = { lowBalanceEnabled: true, lowBalanceThreshold: 100, largeTxEnabled: true, largeTxThreshold: 1000 };
+
+// Pushes a system message into the user's own Messages inbox when a balance
+// change crosses one of their configured alert thresholds. Called from
+// POST /api/me/balances/adjust — the single choke point every
+// balance-changing action in the app (transfers, bill pay, checkout, and the
+// credit card / loan / savings-goal features) already routes through, so
+// alerts fire consistently no matter which feature moved the money.
+async function maybeFireBalanceAlerts(user, account, current, next, delta) {
+    const prefs  = Object.assign({}, DEFAULT_ALERT_PREFS, (user.userData || {}).alertPrefs || {});
+    const alerts = [];
+
+    // Edge-triggered (current was above the threshold, next isn't) so a
+    // balance that's already low doesn't re-alert on every subsequent debit.
+    if (prefs.lowBalanceEnabled && delta < 0 && current > prefs.lowBalanceThreshold && next <= prefs.lowBalanceThreshold) {
+        alerts.push({
+            subject: 'Low balance alert',
+            body: 'Your ' + account + ' account dropped to ƒ' + next.toFixed(2) + ', at or below your ' +
+                  'ƒ' + Number(prefs.lowBalanceThreshold).toFixed(2) + ' low-balance alert threshold.',
+            type: 'warning'
+        });
+    }
+    if (prefs.largeTxEnabled && Math.abs(delta) >= prefs.largeTxThreshold) {
+        alerts.push({
+            subject: 'Large transaction alert',
+            body: 'A ' + (delta < 0 ? 'debit' : 'credit') + ' of ƒ' + Math.abs(delta).toFixed(2) +
+                  ' hit your ' + account + ' account (alert threshold: ƒ' + Number(prefs.largeTxThreshold).toFixed(2) + ').',
+            type: 'warning'
+        });
+    }
+    if (alerts.length === 0) return;
+
+    const messages = await readJSON('messages');
+    const now = Date.now();
+    let id = nextId(messages);
+    alerts.forEach(a => {
+        messages.push({
+            id: id++,
+            senderId: 0,
+            senderName: 'System',
+            senderEmail: null,
+            recipientId: user.id,
+            subject: a.subject,
+            body: a.body,
+            type: a.type,
+            sentAt: now,
+            readBy: []
+        });
+    });
+    await writeJSON('messages', messages);
+}
 
 // ── Challenge definitions ─────────────────────────────────────────────────────
 const ALL_DEFAULT_CHALLENGES = [
@@ -507,7 +561,10 @@ app.delete('/api/users/:id', async (req, res) => {
     const id = Number(req.params.id);
 
     // Remove from all per-user stores
-    for (const store of ['transactions', 'payments', 'purchases', 'challenges']) {
+    for (const store of [
+        'transactions', 'payments', 'purchases', 'challenges',
+        'creditCards', 'creditActivity', 'loans', 'loanPayments', 'savingsGoals', 'savingsGoalActivity'
+    ]) {
         const rows = await readJSON(store);
         await writeJSON(store, rows.filter(r => r.userId !== id));
     }
@@ -654,11 +711,17 @@ app.post('/api/me/balances/adjust', async (req, res) => {
             if (idx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
             const balances = Object.assign({}, DEFAULT_BALANCES, users[idx].balances || {});
             const current  = balances[account] !== undefined ? balances[account] : 0;
-            const next     = parseFloat((current + Number(delta)).toFixed(2));
+            const signedDelta = Number(delta);
+            const next     = parseFloat((current + signedDelta).toFixed(2));
             if (next < 0) { const e = new Error('Insufficient funds'); e.status = 409; throw e; }
             balances[account] = next;
-            users[idx]        = Object.assign({}, users[idx], { balances });
+            const updatedUser = Object.assign({}, users[idx], { balances });
+            users[idx]        = updatedUser;
             await writeJSON('users', users);
+            // Every balance-changing action in the app (transfers, bill pay,
+            // checkout, credit card/loan/goal activity) routes through this
+            // one endpoint, so it's the single choke point for alert checks.
+            await maybeFireBalanceAlerts(updatedUser, account, current, next, signedDelta);
             return { account, amount: balances[account] };
         });
         res.json(result);
@@ -847,7 +910,10 @@ app.post('/api/me/challenges/reset', async (req, res) => {
 // defaults, and re-seeds their challenges. Scoped to req.userId so this can't
 // affect any other user.
 app.post('/api/me/reset', async (req, res) => {
-    for (const store of ['transactions', 'payments', 'purchases', 'cart']) {
+    for (const store of [
+        'transactions', 'payments', 'purchases', 'cart',
+        'creditCards', 'creditActivity', 'loans', 'loanPayments', 'savingsGoals', 'savingsGoalActivity'
+    ]) {
         const rows = await readJSON(store);
         await writeJSON(store, rows.filter(r => r.userId !== req.userId));
     }
@@ -921,6 +987,501 @@ app.patch('/api/me/messages/:id', async (req, res) => {
     all[idx] = Object.assign({}, all[idx], { readBy });
     await writeJSON('messages', all);
     res.json(all[idx]);
+});
+
+// ── Me: alert preferences ───────────────────────────────────────────────────
+app.get('/api/me/alert-prefs', async (req, res) => {
+    const users = await readJSON('users');
+    const user  = users.find(u => u.id === req.userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(Object.assign({}, DEFAULT_ALERT_PREFS, (user.userData || {}).alertPrefs || {}));
+});
+
+app.put('/api/me/alert-prefs', async (req, res) => {
+    const users = await readJSON('users');
+    const idx   = users.findIndex(u => u.id === req.userId);
+    if (idx === -1) return res.status(404).json({ error: 'User not found' });
+    const body  = req.body || {};
+    const prefs = {
+        lowBalanceEnabled:   body.lowBalanceEnabled   !== undefined ? !!body.lowBalanceEnabled  : DEFAULT_ALERT_PREFS.lowBalanceEnabled,
+        lowBalanceThreshold: body.lowBalanceThreshold !== undefined ? Math.max(0, Number(body.lowBalanceThreshold) || 0) : DEFAULT_ALERT_PREFS.lowBalanceThreshold,
+        largeTxEnabled:      body.largeTxEnabled      !== undefined ? !!body.largeTxEnabled     : DEFAULT_ALERT_PREFS.largeTxEnabled,
+        largeTxThreshold:    body.largeTxThreshold    !== undefined ? Math.max(0, Number(body.largeTxThreshold) || 0) : DEFAULT_ALERT_PREFS.largeTxThreshold
+    };
+    const userData = Object.assign({}, DEFAULT_USER_DATA, users[idx].userData || {}, { alertPrefs: prefs });
+    users[idx] = Object.assign({}, users[idx], { userData });
+    await writeJSON('users', users);
+    res.json(prefs);
+});
+
+// ── Me: credit card ──────────────────────────────────────────────────────────
+const CREDIT_CARD_TIERS = {
+    starter:  { limit: 1000,  apr: 24.99 },
+    standard: { limit: 2500,  apr: 21.99 },
+    premium:  { limit: 5000,  apr: 18.99 }
+};
+
+app.get('/api/me/credit-card', async (req, res) => {
+    const cards = await readJSON('creditCards');
+    const card  = cards.find(c => c.userId === req.userId && c.active);
+    res.json(card || { active: false });
+});
+
+app.post('/api/me/credit-card/open', async (req, res) => {
+    const tier   = req.body && req.body.tier;
+    const chosen = CREDIT_CARD_TIERS[tier];
+    if (!chosen) return res.status(400).json({ error: 'Invalid card tier' });
+    try {
+        const card = await withUserLock(req.userId, async () => {
+            const cards = await readJSON('creditCards');
+            if (cards.some(c => c.userId === req.userId && c.active)) {
+                const e = new Error('You already have an active credit card'); e.status = 409; throw e;
+            }
+            const rec = {
+                id: nextId(cards), userId: req.userId, tier,
+                limit: chosen.limit, apr: chosen.apr, balance: 0,
+                active: true, openedAt: Date.now()
+            };
+            cards.push(rec);
+            await writeJSON('creditCards', cards);
+            return rec;
+        });
+        res.status(201).json(card);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+app.post('/api/me/credit-card/purchase', async (req, res) => {
+    const amt = Number(req.body && req.body.amount);
+    const description = ((req.body && req.body.description) || '').trim() || 'Card purchase';
+    if (!amt || amt <= 0) return res.status(400).json({ error: 'Valid amount required' });
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const cards = await readJSON('creditCards');
+            const idx   = cards.findIndex(c => c.userId === req.userId && c.active);
+            if (idx === -1) { const e = new Error('No active credit card'); e.status = 404; throw e; }
+            const card = cards[idx];
+            const available = parseFloat((card.limit - card.balance).toFixed(2));
+            if (amt > available) { const e = new Error('Exceeds available credit'); e.status = 409; throw e; }
+            cards[idx] = Object.assign({}, card, { balance: parseFloat((card.balance + amt).toFixed(2)) });
+            await writeJSON('creditCards', cards);
+
+            const activity = await readJSON('creditActivity');
+            const record = {
+                id: nextId(activity), userId: req.userId, type: 'purchase',
+                amount: amt, description, date: new Date().toLocaleDateString(), timestamp: Date.now()
+            };
+            activity.push(record);
+            await writeJSON('creditActivity', activity);
+            return { card: cards[idx], activity: record };
+        });
+        res.status(201).json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+app.post('/api/me/credit-card/payment', async (req, res) => {
+    const amt = Number(req.body && req.body.amount);
+    if (!amt || amt <= 0) return res.status(400).json({ error: 'Valid amount required' });
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const cards = await readJSON('creditCards');
+            const idx   = cards.findIndex(c => c.userId === req.userId && c.active);
+            if (idx === -1) { const e = new Error('No active credit card'); e.status = 404; throw e; }
+            const card = cards[idx];
+            const payAmt = Math.min(amt, card.balance);
+            if (payAmt <= 0) { const e = new Error('Card balance is already zero'); e.status = 409; throw e; }
+
+            const users = await readJSON('users');
+            const uidx  = users.findIndex(u => u.id === req.userId);
+            if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
+            const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
+            const current  = balances.checking;
+            const next     = parseFloat((current - payAmt).toFixed(2));
+            if (next < 0) { const e = new Error('Insufficient funds'); e.status = 409; throw e; }
+            balances.checking = next;
+            const updatedUser = Object.assign({}, users[uidx], { balances });
+            users[uidx] = updatedUser;
+            await writeJSON('users', users);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -payAmt);
+
+            cards[idx] = Object.assign({}, card, { balance: parseFloat((card.balance - payAmt).toFixed(2)) });
+            await writeJSON('creditCards', cards);
+
+            const activity = await readJSON('creditActivity');
+            const record = {
+                id: nextId(activity), userId: req.userId, type: 'payment',
+                amount: payAmt, description: 'Card payment', date: new Date().toLocaleDateString(), timestamp: Date.now()
+            };
+            activity.push(record);
+            await writeJSON('creditActivity', activity);
+            return { card: cards[idx], checking: next, activity: record };
+        });
+        res.status(201).json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+app.get('/api/me/credit-card/activity', async (req, res) => {
+    const activity = await readJSON('creditActivity');
+    const mine = activity.filter(a => a.userId === req.userId).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    res.json(mine);
+});
+
+// ── Me: loans ─────────────────────────────────────────────────────────────────
+const LOAN_TERMS = {
+    6:  { apr: 5.99  },
+    12: { apr: 6.99  },
+    24: { apr: 8.99  },
+    36: { apr: 10.99 },
+    60: { apr: 12.99 }
+};
+
+app.get('/api/me/loan', async (req, res) => {
+    const loans = await readJSON('loans');
+    // Most recent loan regardless of status, so the client can distinguish
+    // "never applied" from "actively repaying" from "paid off" (a strict
+    // active-only filter would make a paid-off loan look identical to never
+    // having had one, losing the payoff-celebration state).
+    const mine = loans.filter(l => l.userId === req.userId).sort((a, b) => (b.openedAt || 0) - (a.openedAt || 0));
+    res.json(mine[0] || { active: false, paidOff: false });
+});
+
+app.post('/api/me/loan/apply', async (req, res) => {
+    const amt  = Number(req.body && req.body.amount);
+    const term = Number(req.body && req.body.termMonths);
+    const termInfo = LOAN_TERMS[term];
+    if (!amt || amt < 500 || amt > 20000) return res.status(400).json({ error: 'Loan amount must be between ƒ500 and ƒ20,000' });
+    if (!termInfo) return res.status(400).json({ error: 'Invalid loan term' });
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const loans = await readJSON('loans');
+            if (loans.some(l => l.userId === req.userId && l.active)) {
+                const e = new Error('You already have an active loan'); e.status = 409; throw e;
+            }
+            // Simple (non-amortizing) interest — total interest = principal ×
+            // rate × (term in years). Easier to reason about than a real
+            // amortization schedule and still teaches the core idea that a
+            // longer term costs more in total interest.
+            const totalInterest  = parseFloat((amt * (termInfo.apr / 100) * (term / 12)).toFixed(2));
+            const totalOwed      = parseFloat((amt + totalInterest).toFixed(2));
+            const monthlyPayment = parseFloat((totalOwed / term).toFixed(2));
+            const loan = {
+                id: nextId(loans), userId: req.userId, principal: amt, apr: termInfo.apr,
+                termMonths: term, totalInterest, balance: totalOwed, monthlyPayment,
+                active: true, paidOff: false, openedAt: Date.now(), paidOffAt: null
+            };
+            loans.push(loan);
+            await writeJSON('loans', loans);
+
+            const users = await readJSON('users');
+            const uidx  = users.findIndex(u => u.id === req.userId);
+            if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
+            const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
+            const current   = balances.checking;
+            const next      = parseFloat((current + amt).toFixed(2));
+            balances.checking = next;
+            const updatedUser = Object.assign({}, users[uidx], { balances });
+            users[uidx] = updatedUser;
+            await writeJSON('users', users);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, amt);
+
+            return { loan, checking: next };
+        });
+        res.status(201).json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+app.post('/api/me/loan/payment', async (req, res) => {
+    const amt = Number(req.body && req.body.amount);
+    if (!amt || amt <= 0) return res.status(400).json({ error: 'Valid amount required' });
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const loans = await readJSON('loans');
+            const idx   = loans.findIndex(l => l.userId === req.userId && l.active);
+            if (idx === -1) { const e = new Error('No active loan'); e.status = 404; throw e; }
+            const loan = loans[idx];
+            const payAmt = Math.min(amt, loan.balance);
+            if (payAmt <= 0) { const e = new Error('Loan balance is already zero'); e.status = 409; throw e; }
+
+            const users = await readJSON('users');
+            const uidx  = users.findIndex(u => u.id === req.userId);
+            if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
+            const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
+            const current  = balances.checking;
+            const next     = parseFloat((current - payAmt).toFixed(2));
+            if (next < 0) { const e = new Error('Insufficient funds'); e.status = 409; throw e; }
+            balances.checking = next;
+            const updatedUser = Object.assign({}, users[uidx], { balances });
+            users[uidx] = updatedUser;
+            await writeJSON('users', users);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -payAmt);
+
+            const newBalance = parseFloat((loan.balance - payAmt).toFixed(2));
+            const paidOff = newBalance <= 0;
+            loans[idx] = Object.assign({}, loan, {
+                balance: Math.max(0, newBalance),
+                active: !paidOff,
+                paidOff: paidOff,
+                paidOffAt: paidOff ? Date.now() : null
+            });
+            await writeJSON('loans', loans);
+
+            const loanPayments = await readJSON('loanPayments');
+            const record = {
+                id: nextId(loanPayments), userId: req.userId, loanId: loan.id,
+                amount: payAmt, date: new Date().toLocaleDateString(), timestamp: Date.now()
+            };
+            loanPayments.push(record);
+            await writeJSON('loanPayments', loanPayments);
+
+            return { loan: loans[idx], checking: next, payment: record };
+        });
+        res.status(201).json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+app.get('/api/me/loan/payments', async (req, res) => {
+    const payments = await readJSON('loanPayments');
+    const mine = payments.filter(p => p.userId === req.userId).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    res.json(mine);
+});
+
+// ── Me: savings goals ────────────────────────────────────────────────────────
+app.get('/api/me/savings-goals', async (req, res) => {
+    const goals = await readJSON('savingsGoals');
+    const mine  = goals.filter(g => g.userId === req.userId).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    res.json(mine);
+});
+
+app.post('/api/me/savings-goals', async (req, res) => {
+    const name   = ((req.body && req.body.name) || '').trim();
+    const target = Number(req.body && req.body.target);
+    if (!name) return res.status(400).json({ error: 'Goal name required' });
+    if (!target || target < 10 || target > 1000000) return res.status(400).json({ error: 'Target must be between ƒ10 and ƒ1,000,000' });
+    const goals = await readJSON('savingsGoals');
+    const goal = {
+        id: nextId(goals), userId: req.userId, name, target,
+        current: 0, createdAt: Date.now(), completedAt: null
+    };
+    goals.push(goal);
+    await writeJSON('savingsGoals', goals);
+    res.status(201).json(goal);
+});
+
+app.post('/api/me/savings-goals/:id/contribute', async (req, res) => {
+    const id  = Number(req.params.id);
+    const amt = Number(req.body && req.body.amount);
+    if (!amt || amt <= 0) return res.status(400).json({ error: 'Valid amount required' });
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const goals = await readJSON('savingsGoals');
+            const idx   = goals.findIndex(g => g.id === id && g.userId === req.userId);
+            if (idx === -1) { const e = new Error('Goal not found'); e.status = 404; throw e; }
+            const goal = goals[idx];
+
+            const users = await readJSON('users');
+            const uidx  = users.findIndex(u => u.id === req.userId);
+            if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
+            const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
+            const current  = balances.checking;
+            const next     = parseFloat((current - amt).toFixed(2));
+            if (next < 0) { const e = new Error('Insufficient funds'); e.status = 409; throw e; }
+            balances.checking = next;
+            const updatedUser = Object.assign({}, users[uidx], { balances });
+            users[uidx] = updatedUser;
+            await writeJSON('users', users);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -amt);
+
+            const wasComplete = goal.current >= goal.target;
+            const newCurrent  = parseFloat((goal.current + amt).toFixed(2));
+            const nowComplete = newCurrent >= goal.target;
+            goals[idx] = Object.assign({}, goal, {
+                current: newCurrent,
+                completedAt: (!wasComplete && nowComplete) ? Date.now() : goal.completedAt
+            });
+            await writeJSON('savingsGoals', goals);
+
+            const activity = await readJSON('savingsGoalActivity');
+            activity.push({
+                id: nextId(activity), userId: req.userId, goalId: id, type: 'contribute',
+                amount: amt, date: new Date().toLocaleDateString(), timestamp: Date.now()
+            });
+            await writeJSON('savingsGoalActivity', activity);
+
+            return { goal: goals[idx], checking: next, justCompleted: !wasComplete && nowComplete };
+        });
+        res.status(201).json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+app.post('/api/me/savings-goals/:id/withdraw', async (req, res) => {
+    const id  = Number(req.params.id);
+    const amt = Number(req.body && req.body.amount);
+    if (!amt || amt <= 0) return res.status(400).json({ error: 'Valid amount required' });
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const goals = await readJSON('savingsGoals');
+            const idx   = goals.findIndex(g => g.id === id && g.userId === req.userId);
+            if (idx === -1) { const e = new Error('Goal not found'); e.status = 404; throw e; }
+            const goal = goals[idx];
+            const wAmt = Math.min(amt, goal.current);
+            if (wAmt <= 0) { const e = new Error('Goal balance is already zero'); e.status = 409; throw e; }
+
+            const users = await readJSON('users');
+            const uidx  = users.findIndex(u => u.id === req.userId);
+            if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
+            const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
+            const current  = balances.checking;
+            const next     = parseFloat((current + wAmt).toFixed(2));
+            balances.checking = next;
+            const updatedUser = Object.assign({}, users[uidx], { balances });
+            users[uidx] = updatedUser;
+            await writeJSON('users', users);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, wAmt);
+
+            goals[idx] = Object.assign({}, goal, { current: parseFloat((goal.current - wAmt).toFixed(2)) });
+            await writeJSON('savingsGoals', goals);
+
+            const activity = await readJSON('savingsGoalActivity');
+            activity.push({
+                id: nextId(activity), userId: req.userId, goalId: id, type: 'withdraw',
+                amount: wAmt, date: new Date().toLocaleDateString(), timestamp: Date.now()
+            });
+            await writeJSON('savingsGoalActivity', activity);
+
+            return { goal: goals[idx], checking: next };
+        });
+        res.status(201).json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+app.delete('/api/me/savings-goals/:id', async (req, res) => {
+    const id = Number(req.params.id);
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const goals = await readJSON('savingsGoals');
+            const idx   = goals.findIndex(g => g.id === id && g.userId === req.userId);
+            if (idx === -1) { const e = new Error('Goal not found'); e.status = 404; throw e; }
+            const remaining = goals[idx].current;
+
+            if (remaining > 0) {
+                const users = await readJSON('users');
+                const uidx  = users.findIndex(u => u.id === req.userId);
+                if (uidx !== -1) {
+                    const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
+                    balances.checking = parseFloat((balances.checking + remaining).toFixed(2));
+                    users[uidx] = Object.assign({}, users[uidx], { balances });
+                    await writeJSON('users', users);
+                }
+                const activity = await readJSON('savingsGoalActivity');
+                activity.push({
+                    id: nextId(activity), userId: req.userId, goalId: id, type: 'withdraw',
+                    amount: remaining, date: new Date().toLocaleDateString(), timestamp: Date.now()
+                });
+                await writeJSON('savingsGoalActivity', activity);
+            }
+
+            await writeJSON('savingsGoals', goals.filter(g => g.id !== id));
+            return { ok: true, returnedToChecking: remaining };
+        });
+        res.json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+// ── Me: account statement ────────────────────────────────────────────────────
+// Reconstructs a month's activity + opening/closing balance purely from
+// existing timestamped records plus the current balance — there's no stored
+// historical snapshot, so: closingBalance(month) = currentBalance - (every
+// signed delta that happened AFTER the month ended); openingBalance(month) =
+// closingBalance(month) - (every signed delta that happened DURING the
+// month). Both are exact as long as every balance-affecting event for the
+// account is accounted for below. An admin-forced balance edit (which
+// bypasses /api/me/balances/adjust and every route in this file) has no
+// discrete event to reconstruct from and will not appear as a line item.
+app.get('/api/me/statement', async (req, res) => {
+    const account = req.query.account === 'savings' ? 'savings' : 'checking';
+    const monthParam = String(req.query.month || '');
+    const m = /^(\d{4})-(\d{2})$/.exec(monthParam);
+    if (!m) return res.status(400).json({ error: 'month must be in YYYY-MM format' });
+    const year = Number(m[1]);
+    const mon0 = Number(m[2]) - 1;
+    const monthStart = new Date(year, mon0, 1).getTime();
+    const monthEnd   = new Date(year, mon0 + 1, 1).getTime();
+    const now = Date.now();
+
+    const users = await readJSON('users');
+    const user  = users.find(u => u.id === req.userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const balances = Object.assign({}, DEFAULT_BALANCES, user.balances || {});
+    const currentBalance = balances[account] !== undefined ? balances[account] : 0;
+
+    const [txs, pays, purchs, creditActivity, loans, loanPayments, goalActivity] = await Promise.all([
+        readJSON('transactions'), readJSON('payments'), readJSON('purchases'),
+        readJSON('creditActivity'), readJSON('loans'), readJSON('loanPayments'), readJSON('savingsGoalActivity')
+    ]);
+
+    const events = [];
+    txs.filter(t => t.userId === req.userId && t.fromAccount === account).forEach(t => {
+        events.push({ timestamp: t.timestamp || 0, amount: -(t.amount || 0), label: 'Transfer to ' + (t.recipient || 'recipient') });
+    });
+    pays.filter(p => p.userId === req.userId && p.fromAccount === account).forEach(p => {
+        events.push({ timestamp: p.timestamp || 0, amount: -(p.amount || 0), label: (p.type || 'Bill') + ' bill payment' });
+    });
+    if (account === 'checking') {
+        purchs.filter(p => p.userId === req.userId).forEach(p => {
+            const n = p.items ? p.items.length : 0;
+            events.push({ timestamp: p.timestamp || 0, amount: -(p.total || 0), label: 'Store purchase (' + n + ' item' + (n !== 1 ? 's' : '') + ')' });
+        });
+        creditActivity.filter(a => a.userId === req.userId && a.type === 'payment').forEach(a => {
+            events.push({ timestamp: a.timestamp || 0, amount: -(a.amount || 0), label: 'Credit card payment' });
+        });
+        loanPayments.filter(lp => lp.userId === req.userId).forEach(lp => {
+            events.push({ timestamp: lp.timestamp || 0, amount: -(lp.amount || 0), label: 'Loan payment' });
+        });
+        loans.filter(l => l.userId === req.userId).forEach(l => {
+            events.push({ timestamp: l.openedAt || 0, amount: (l.principal || 0), label: 'Loan proceeds deposited' });
+        });
+        goalActivity.filter(a => a.userId === req.userId).forEach(a => {
+            events.push({
+                timestamp: a.timestamp || 0,
+                amount: a.type === 'withdraw' ? (a.amount || 0) : -(a.amount || 0),
+                label: (a.type === 'withdraw' ? 'Savings goal withdrawal' : 'Savings goal contribution')
+            });
+        });
+    }
+
+    events.forEach(e => { e.date = new Date(e.timestamp).toLocaleDateString(); });
+    events.sort((a, b) => a.timestamp - b.timestamp);
+
+    const afterMonth = events.filter(e => e.timestamp >= monthEnd);
+    const closingBalance = parseFloat((currentBalance - afterMonth.reduce((s, e) => s + e.amount, 0)).toFixed(2));
+
+    const inMonth = events.filter(e => e.timestamp >= monthStart && e.timestamp < monthEnd);
+    const openingBalance = parseFloat((closingBalance - inMonth.reduce((s, e) => s + e.amount, 0)).toFixed(2));
+    const totalDebits  = parseFloat(inMonth.filter(e => e.amount < 0).reduce((s, e) => s + e.amount, 0).toFixed(2));
+    const totalCredits = parseFloat(inMonth.filter(e => e.amount > 0).reduce((s, e) => s + e.amount, 0).toFixed(2));
+
+    res.json({
+        account, month: monthParam,
+        openingBalance, closingBalance, totalDebits, totalCredits,
+        events: inMonth,
+        isCurrentMonth: monthStart <= now && now < monthEnd,
+        generatedAt: now
+    });
 });
 
 // ── Me: stats ─────────────────────────────────────────────────────────────────

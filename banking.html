@@ -122,7 +122,7 @@
             </div>
 
             <!-- ── Account Balance Cards (always visible) ──────────── -->
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:1.5rem">
+            <div id="balanceCardsGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:1.5rem">
                 <div style="background:linear-gradient(135deg,#667eea,#764ba2);border-radius:var(--radius-xl);padding:1.25rem;color:white">
                     <div style="font-size:0.72rem;opacity:0.85;margin-bottom:0.25rem;text-transform:uppercase;letter-spacing:0.05em">Checking Account</div>
                     <div style="font-size:1.6rem;font-weight:700" id="balanceChecking">ƒ—</div>
@@ -161,9 +161,24 @@
             </div>
 
             <!-- ── Page Tab Navigation ─────────────────────────────── -->
-            <div class="page-tabs">
+            <div class="page-tabs" style="flex-wrap:wrap">
                 <button class="page-tab-btn active" id="tab-btn-banking" onclick="switchPageTab('banking')">
                     🏦 Banking
+                </button>
+                <button class="page-tab-btn" id="tab-btn-creditcard" onclick="switchPageTab('creditcard')">
+                    💳 Credit Card
+                </button>
+                <button class="page-tab-btn" id="tab-btn-loans" onclick="switchPageTab('loans')">
+                    🏠 Loans
+                </button>
+                <button class="page-tab-btn" id="tab-btn-goals" onclick="switchPageTab('goals')">
+                    🎯 Goals
+                </button>
+                <button class="page-tab-btn" id="tab-btn-statements" onclick="switchPageTab('statements')">
+                    📄 Statements
+                </button>
+                <button class="page-tab-btn" id="tab-btn-alerts" onclick="switchPageTab('alerts')">
+                    🔔 Alerts
                 </button>
             </div>
 
@@ -381,6 +396,153 @@
 
             </div><!-- /panel-banking -->
 
+            <!-- ═══════════════════════════════════════════════════════
+                 CREDIT CARD TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel" id="panel-creditcard">
+                <div id="ccNoCardSection">
+                    <div class="banking-section full-width">
+                        <h2>💳 Open a Credit Card</h2>
+                        <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1rem">Build credit history by choosing a card tier below. Higher tiers unlock a larger limit and a lower APR.</p>
+                        <div class="cc-tier-grid" id="ccTierGrid"></div>
+                    </div>
+                </div>
+                <div id="ccActiveSection" style="display:none">
+                    <div class="banking-section full-width">
+                        <div id="ccVisual"></div>
+                        <div class="cc-forms-grid" style="margin-top:1.5rem;display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+                            <div>
+                                <h3 style="font-size:0.95rem;margin-bottom:0.6rem">🛍️ Make a Purchase</h3>
+                                <form id="ccPurchaseForm">
+                                    <div class="form-group"><label>Amount (ƒ)</label><input type="number" class="form-input" id="ccPurchaseAmount" min="0.01" step="0.01" required></div>
+                                    <div class="form-group"><label>Description <span style="color:var(--color-gray-400);font-weight:400">(Optional)</span></label><input type="text" class="form-input" id="ccPurchaseDesc" placeholder="What did you buy?"></div>
+                                    <button type="submit" class="btn btn-primary btn-block">Charge to Card</button>
+                                </form>
+                            </div>
+                            <div>
+                                <h3 style="font-size:0.95rem;margin-bottom:0.6rem">💵 Pay Your Card</h3>
+                                <form id="ccPaymentForm">
+                                    <div class="form-group"><label>Amount (ƒ)</label><input type="number" class="form-input" id="ccPaymentAmount" min="0.01" step="0.01" required></div>
+                                    <div id="ccPaymentHint" style="font-size:0.78rem;color:var(--color-gray-500);margin:-0.4rem 0 0.75rem"></div>
+                                    <button type="submit" class="btn btn-primary btn-block">Pay from Checking</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="banking-section full-width" style="margin-top:1.5rem">
+                        <h2>Card Activity</h2>
+                        <div id="ccActivityList" class="transactions-list"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">No activity yet.</p></div>
+                    </div>
+                </div>
+            </div><!-- /panel-creditcard -->
+
+            <!-- ═══════════════════════════════════════════════════════
+                 LOANS TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel" id="panel-loans">
+                <div id="loanApplySection">
+                    <div class="banking-section full-width">
+                        <h2>🏠 Apply for a Loan</h2>
+                        <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1rem">Borrow between ƒ500 and ƒ20,000. Shorter terms cost less in total interest.</p>
+                        <form id="loanApplyForm">
+                            <div class="form-group"><label>Loan Amount (ƒ)</label><input type="number" class="form-input" id="loanAmount" min="500" max="20000" step="0.01" value="1000" required></div>
+                            <div class="form-group">
+                                <label>Term</label>
+                                <select class="form-input" id="loanTerm">
+                                    <option value="6">6 months — 5.99% APR</option>
+                                    <option value="12" selected>12 months — 6.99% APR</option>
+                                    <option value="24">24 months — 8.99% APR</option>
+                                    <option value="36">36 months — 10.99% APR</option>
+                                    <option value="60">60 months — 12.99% APR</option>
+                                </select>
+                            </div>
+                            <div id="loanPreview" style="background:var(--color-gray-50);border-radius:10px;padding:0.875rem;margin-bottom:1rem;font-size:0.85rem"></div>
+                            <button type="submit" class="btn btn-primary btn-block">Apply for Loan</button>
+                        </form>
+                    </div>
+                </div>
+                <div id="loanActiveSection" style="display:none">
+                    <div class="banking-section full-width" id="loanSummaryCard"></div>
+                    <div class="banking-section full-width" style="margin-top:1.5rem">
+                        <h2>Make a Payment</h2>
+                        <form id="loanPaymentForm">
+                            <div class="form-group"><label>Amount (ƒ)</label><input type="number" class="form-input" id="loanPaymentAmount" min="0.01" step="0.01" required></div>
+                            <button type="submit" class="btn btn-primary btn-block">Pay from Checking</button>
+                        </form>
+                    </div>
+                    <div class="banking-section full-width" style="margin-top:1.5rem">
+                        <h2>Payment History</h2>
+                        <div id="loanPaymentsList" class="transactions-list"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">No payments yet.</p></div>
+                    </div>
+                </div>
+                <div id="loanPaidOffSection" style="display:none">
+                    <div class="banking-section full-width" id="loanPaidOffCard" style="text-align:center;padding:2.5rem 1.5rem"></div>
+                </div>
+            </div><!-- /panel-loans -->
+
+            <!-- ═══════════════════════════════════════════════════════
+                 SAVINGS GOALS TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel" id="panel-goals">
+                <div class="banking-section full-width">
+                    <h2>🎯 Create a New Goal</h2>
+                    <form id="goalCreateForm" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:flex-end">
+                        <div class="form-group" style="flex:2;min-width:180px;margin-bottom:0"><label>Goal Name</label><input type="text" class="form-input" id="goalName" placeholder="e.g. New Laptop" maxlength="60" required></div>
+                        <div class="form-group" style="flex:1;min-width:120px;margin-bottom:0"><label>Target (ƒ)</label><input type="number" class="form-input" id="goalTarget" min="10" max="1000000" step="0.01" required></div>
+                        <button type="submit" class="btn btn-primary">Create Goal</button>
+                    </form>
+                </div>
+                <div class="banking-section full-width" style="margin-top:1.5rem">
+                    <h2>Your Goals</h2>
+                    <div id="goalsList" class="goals-grid"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">No goals yet — create one above!</p></div>
+                </div>
+            </div><!-- /panel-goals -->
+
+            <!-- ═══════════════════════════════════════════════════════
+                 STATEMENTS TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel" id="panel-statements">
+                <div class="banking-section full-width no-print">
+                    <h2>📄 Account Statement</h2>
+                    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:0.5rem">
+                        <div class="form-group" style="margin-bottom:0">
+                            <label>Account</label>
+                            <select class="form-input" id="stmtAccount">
+                                <option value="checking">Checking</option>
+                                <option value="savings">Savings</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom:0"><label>Month</label><input type="month" class="form-input" id="stmtMonth"></div>
+                        <button type="button" class="btn btn-primary" onclick="generateStatement()">Generate Statement</button>
+                        <button type="button" class="btn" id="stmtPrintBtn" style="display:none" onclick="window.print()">🖨️ Print / Save as PDF</button>
+                    </div>
+                </div>
+                <div id="stmtOutput"></div>
+            </div><!-- /panel-statements -->
+
+            <!-- ═══════════════════════════════════════════════════════
+                 ALERTS TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel" id="panel-alerts">
+                <div class="banking-section full-width">
+                    <h2>🔔 Alert Preferences</h2>
+                    <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1.25rem">Alerts are delivered to your <a href="messages.html">Messages inbox</a>.</p>
+                    <form id="alertPrefsForm">
+                        <div class="alert-pref-row">
+                            <label class="autopay-switch"><input type="checkbox" id="alertLowBalEnabled"><span class="autopay-slider"></span></label>
+                            <div style="flex:1"><strong>Low Balance Alert</strong><div style="font-size:0.8rem;color:var(--color-gray-500)">Notify me when checking or savings drops to or below:</div></div>
+                            <div class="form-group" style="margin-bottom:0;width:140px"><input type="number" class="form-input" id="alertLowBalThreshold" min="0" step="0.01"></div>
+                        </div>
+                        <div class="alert-pref-row">
+                            <label class="autopay-switch"><input type="checkbox" id="alertLargeTxEnabled"><span class="autopay-slider"></span></label>
+                            <div style="flex:1"><strong>Large Transaction Alert</strong><div style="font-size:0.8rem;color:var(--color-gray-500)">Notify me when any single transaction is at or above:</div></div>
+                            <div class="form-group" style="margin-bottom:0;width:140px"><input type="number" class="form-input" id="alertLargeTxThreshold" min="0" step="0.01"></div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="margin-top:1rem">Save Preferences</button>
+                    </form>
+                </div>
+            </div><!-- /panel-alerts -->
+
         </main>
     </div>
 
@@ -389,10 +551,22 @@
     <script src="db.js"></script>
     <script src="script.js"></script>
     <script src="banking.js"></script>
+    <script src="banking-accounts.js"></script>
     <script>
     /* ── Tab switching ──────────────────────────────────────────────── */
+    // Each new tab lazy-loads (and refreshes on every visit) via a loader
+    // function defined in banking-accounts.js — keeps banking.js/this inline
+    // script focused on the original Banking tab.
+    var PAGE_TAB_LOADERS = {
+        creditcard: 'loadCreditCardTab',
+        loans:      'loadLoansTab',
+        goals:      'loadGoalsTab',
+        statements: 'loadStatementsTab',
+        alerts:     'loadAlertsTab'
+    };
+
     function switchPageTab(name) {
-        ['banking'].forEach(function(t) {
+        ['banking', 'creditcard', 'loans', 'goals', 'statements', 'alerts'].forEach(function(t) {
             var panel = document.getElementById('panel-' + t);
             var btn   = document.getElementById('tab-btn-' + t);
             if (!panel || !btn) return;
@@ -401,6 +575,8 @@
             btn.classList.toggle('active', active);
         });
         sessionStorage.setItem('banking_tab', name);
+        var loaderName = PAGE_TAB_LOADERS[name];
+        if (loaderName && typeof window[loaderName] === 'function') window[loaderName]();
     }
 
     /* ── HTML escape ────────────────────────────────────────────────── */

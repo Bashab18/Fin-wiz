@@ -358,6 +358,79 @@ const DigifinwizDB = (() => {
         return _api('GET', '/api/me/activity' + qs);
     }
 
+    // ── Alert preferences ───────────────────────────────────────────────────────
+    function getAlertPrefs() {
+        return _api('GET', '/api/me/alert-prefs');
+    }
+
+    function setAlertPrefs(prefs) {
+        return _api('PUT', '/api/me/alert-prefs', prefs);
+    }
+
+    // ── Credit card ──────────────────────────────────────────────────────────────
+    function getCreditCard() {
+        return _api('GET', '/api/me/credit-card');
+    }
+
+    function openCreditCard(tier) {
+        return _api('POST', '/api/me/credit-card/open', { tier });
+    }
+
+    function creditCardPurchase(amount, description) {
+        return _api('POST', '/api/me/credit-card/purchase', { amount, description });
+    }
+
+    function creditCardPayment(amount) {
+        return _api('POST', '/api/me/credit-card/payment', { amount });
+    }
+
+    function getCreditCardActivity() {
+        return _api('GET', '/api/me/credit-card/activity');
+    }
+
+    // ── Loans ────────────────────────────────────────────────────────────────────
+    function getLoan() {
+        return _api('GET', '/api/me/loan');
+    }
+
+    function applyForLoan(amount, termMonths) {
+        return _api('POST', '/api/me/loan/apply', { amount, termMonths });
+    }
+
+    function makeLoanPayment(amount) {
+        return _api('POST', '/api/me/loan/payment', { amount });
+    }
+
+    function getLoanPayments() {
+        return _api('GET', '/api/me/loan/payments');
+    }
+
+    // ── Savings goals ────────────────────────────────────────────────────────────
+    function getSavingsGoals() {
+        return _api('GET', '/api/me/savings-goals');
+    }
+
+    function createSavingsGoal(name, target) {
+        return _api('POST', '/api/me/savings-goals', { name, target });
+    }
+
+    function contributeSavingsGoal(id, amount) {
+        return _api('POST', '/api/me/savings-goals/' + id + '/contribute', { amount });
+    }
+
+    function withdrawSavingsGoal(id, amount) {
+        return _api('POST', '/api/me/savings-goals/' + id + '/withdraw', { amount });
+    }
+
+    function deleteSavingsGoal(id) {
+        return _api('DELETE', '/api/me/savings-goals/' + id);
+    }
+
+    // ── Statement ────────────────────────────────────────────────────────────────
+    function getStatement(account, month) {
+        return _api('GET', '/api/me/statement?account=' + encodeURIComponent(account) + '&month=' + encodeURIComponent(month));
+    }
+
     // ── Public API ────────────────────────────────────────────────────────────
     return {
         // Init
@@ -444,6 +517,33 @@ const DigifinwizDB = (() => {
 
         // Stats & activity
         getStats,
-        getRecentActivity
+        getRecentActivity,
+
+        // Alert preferences
+        getAlertPrefs,
+        setAlertPrefs,
+
+        // Credit card
+        getCreditCard,
+        openCreditCard,
+        creditCardPurchase,
+        creditCardPayment,
+        getCreditCardActivity,
+
+        // Loans
+        getLoan,
+        applyForLoan,
+        makeLoanPayment,
+        getLoanPayments,
+
+        // Savings goals
+        getSavingsGoals,
+        createSavingsGoal,
+        contributeSavingsGoal,
+        withdrawSavingsGoal,
+        deleteSavingsGoal,
+
+        // Statement
+        getStatement
     };
 })();

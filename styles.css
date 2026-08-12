@@ -4567,3 +4567,96 @@ body {
    UTILITIES: Savings estimator chip (Round 3)
    ============================================ */
 .bill-savings-chip { display:inline-flex;align-items:center;gap:0.25rem;font-size:0.7rem;font-weight:600;color:#065f46;background:#d1fae5;border-radius:99px;padding:0.18rem 0.6rem;border:1px solid #6ee7b7;margin-bottom:0.4rem;cursor:default; }
+
+/* ============================================
+   BANKING: Credit card tier picker + card visual
+   ============================================ */
+.cc-tier-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:1rem; }
+.cc-tier-card {
+    border:1.5px solid var(--color-border);
+    border-radius:var(--radius-xl);
+    padding:1.25rem;
+    text-align:center;
+    background:var(--color-surface);
+    transition:box-shadow var(--transition-base), transform var(--transition-base);
+}
+.cc-tier-card:hover { box-shadow:var(--shadow-md); transform:translateY(-2px); }
+.cc-tier-swatch { width:100%; height:44px; border-radius:var(--radius-lg); margin-bottom:0.75rem; }
+.cc-tier-card h3 { margin:0 0 0.3rem; font-size:1rem; }
+.cc-tier-limit { font-size:1.15rem; font-weight:700; color:var(--color-gray-800); }
+.cc-tier-apr   { font-size:0.78rem; color:var(--color-gray-500); margin-bottom:0.9rem; }
+
+.cc-visual-card {
+    border-radius:var(--radius-xl);
+    padding:1.5rem;
+    color:#fff;
+    max-width:380px;
+    box-shadow:var(--shadow-md);
+    font-family:var(--font-sans);
+}
+.cc-visual-top    { display:flex; justify-content:space-between; font-size:0.8rem; opacity:0.9; font-weight:600; margin-bottom:1.75rem; }
+.cc-visual-number { font-size:1.15rem; letter-spacing:0.08em; font-weight:600; margin-bottom:1.5rem; }
+.cc-visual-bottom { display:flex; justify-content:space-between; align-items:flex-end; }
+.cc-visual-label  { font-size:0.68rem; opacity:0.8; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.15rem; }
+.cc-visual-value  { font-size:1.15rem; font-weight:700; }
+
+@media (max-width:640px) {
+    .cc-forms-grid { grid-template-columns:1fr !important; }
+}
+
+/* ============================================
+   BANKING: Savings goal cards
+   ============================================ */
+.goals-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:1rem; }
+.goal-card {
+    border:1.5px solid var(--color-border);
+    border-radius:var(--radius-xl);
+    padding:1rem;
+    background:var(--color-surface);
+}
+.goal-card.goal-done { border-color:#bbf7d0; background:#f0fdf4; }
+
+/* ============================================
+   BANKING: Alert preference rows
+   ============================================ */
+.alert-pref-row {
+    display:flex;
+    align-items:center;
+    gap:1rem;
+    padding:0.875rem 0;
+    border-bottom:1px solid var(--color-border);
+}
+.alert-pref-row:last-of-type { border-bottom:none; }
+
+/* ============================================
+   BANKING: Printable statement
+   ============================================ */
+.statement-paper { max-width:720px; margin:0 auto; }
+.statement-header {
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    border-bottom:2px solid var(--color-gray-800);
+    padding-bottom:0.75rem;
+    margin-bottom:0.5rem;
+}
+.statement-table { width:100%; border-collapse:collapse; font-size:0.85rem; margin-top:0.5rem; }
+.statement-table th {
+    text-align:left;
+    font-size:0.72rem;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--color-gray-500);
+    border-bottom:1.5px solid var(--color-border);
+    padding:0.5rem 0.4rem;
+}
+.statement-table td { padding:0.5rem 0.4rem; border-bottom:1px solid var(--color-gray-100); }
+.statement-table tbody tr:last-child td { border-bottom:none; }
+
+@media print {
+    .no-print, .navbar, .shop-header, .game-progress-bar, .sidebar, .page-tabs,
+    .page-header, #balanceCardsGrid, #balanceSplitRow, .banking-section:not(.statement-paper) { display:none !important; }
+    body { background:#fff; }
+    .main-content, .container { display:block !important; margin:0 !important; padding:0 !important; }
+    .statement-paper { box-shadow:none; border:none; max-width:100%; }
+}
