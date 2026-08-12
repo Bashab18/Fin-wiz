@@ -386,7 +386,10 @@ function updateUIWithData(data) {
         var avatar = document.querySelector('.user-profile .avatar img');
         if (h3 && prof.fullName) h3.textContent = prof.fullName;
         if (un && prof.username) un.textContent = prof.username;
-        if (avatar && prof.fullName) {
+        if (avatar && prof.avatarDataUri) {
+            avatar.src = prof.avatarDataUri;
+            if (prof.fullName) avatar.alt = prof.fullName;
+        } else if (avatar && prof.fullName) {
             var parts = prof.fullName.trim().split(' ');
             var initials = (parts[0] ? parts[0][0] : '?') + (parts[1] ? parts[1][0] : '');
             avatar.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect fill='%23667eea' width='80' height='80'/%3E%3Ctext x='50%25' y='50%25' font-size='32' fill='white' text-anchor='middle' dy='.3em'%3E" + encodeURIComponent(initials) + "%3C/text%3E%3C/svg%3E";
@@ -395,15 +398,28 @@ function updateUIWithData(data) {
     }).catch(function(){});
 }
 
-// Update sidebar nav-badge counts based on incomplete challenges per category
+// Update sidebar nav-badge counts based on incomplete challenges plus unread
+// system-message alerts per category (banking/ecommerce/utilities) — so the
+// badge reflects both "things to do" and "things that need your attention".
 function updateSidebarBadges() {
     if (typeof DigifinwizDB === 'undefined' || !DigifinwizDB.getChallenges) return;
-    DigifinwizDB.getChallenges().then(function(challenges) {
+    var challengesP = DigifinwizDB.getChallenges().catch(function(){ return []; });
+    var messagesP   = DigifinwizDB.getMessagesForUser ? DigifinwizDB.getMessagesForUser().catch(function(){ return []; }) : Promise.resolve([]);
+    Promise.all([challengesP, messagesP]).then(function(results) {
+        var challenges = results[0], messages = results[1];
         var active = challenges.filter(function(c){ return c.active && !c.completed; });
         var byCategory = { ecommerce: 0, banking: 0, utilities: 0 };
         active.forEach(function(c) {
             if (byCategory.hasOwnProperty(c.category)) byCategory[c.category]++;
         });
+
+        var session = (typeof DigifinwizAuth !== 'undefined' && DigifinwizAuth.getSession) ? DigifinwizAuth.getSession() : null;
+        if (session && session.userId) {
+            messages.forEach(function(m) {
+                var isUnread = (m.readBy || []).indexOf(session.userId) === -1;
+                if (isUnread && byCategory.hasOwnProperty(m.category)) byCategory[m.category]++;
+            });
+        }
 
         var ecoBadge = document.getElementById('sidebarBadgeEcommerce');
         var bankBadge = document.getElementById('sidebarBadgeBanking');

@@ -219,13 +219,29 @@ function computeOrderStatus(order) {
     };
 }
 
+// Shared entry point for every system-generated Messages-inbox notification
+// (balance alerts, scheduled-transfer results, credit/loan/goal milestones,
+// bill overdue notices, order status changes, security notices). `category`
+// drives the per-module unread badges in the sidebar nav.
+async function pushSystemMessage(userId, { subject, body, type, category }) {
+    const messages = await readJSON('messages');
+    const msg = {
+        id: nextId(messages), senderId: 0, senderName: 'System', senderEmail: null,
+        recipientId: userId, subject, body, type: type || 'info', category: category || 'system',
+        sentAt: Date.now(), readBy: []
+    };
+    messages.push(msg);
+    await writeJSON('messages', messages);
+    return msg;
+}
+
 // Pushes a system message into the user's own Messages inbox when a balance
 // change crosses one of their configured alert thresholds. Called from
-// POST /api/me/balances/adjust — the single choke point every
-// balance-changing action in the app (transfers, bill pay, checkout, and the
-// credit card / loan / savings-goal features) already routes through, so
-// alerts fire consistently no matter which feature moved the money.
-async function maybeFireBalanceAlerts(user, account, current, next, delta) {
+// every balance-changing route (transfers, bill pay, checkout, and the
+// credit card / loan / savings-goal features), so alerts fire consistently
+// no matter which feature moved the money. `category` tags which module
+// the triggering action belongs to, for the sidebar unread badges.
+async function maybeFireBalanceAlerts(user, account, current, next, delta, category) {
     const prefs  = Object.assign({}, DEFAULT_ALERT_PREFS, (user.userData || {}).alertPrefs || {});
     const alerts = [];
 
@@ -262,6 +278,7 @@ async function maybeFireBalanceAlerts(user, account, current, next, delta) {
             subject: a.subject,
             body: a.body,
             type: a.type,
+            category: category || 'system',
             sentAt: now,
             readBy: []
         });
@@ -301,15 +318,12 @@ async function executeOneScheduledTransfer(userId, scheduleId) {
         if (next < 0) {
             // Insufficient funds: skip this occurrence, notify, and try again
             // next period (a one-time transfer just deactivates instead).
-            const messages = await readJSON('messages');
-            messages.push({
-                id: nextId(messages), senderId: 0, senderName: 'System', senderEmail: null,
-                recipientId: userId, subject: 'Scheduled transfer skipped',
+            await pushSystemMessage(userId, {
+                subject: 'Scheduled transfer skipped',
                 body: 'Your scheduled transfer of ƒ' + sched.amount.toFixed(2) + ' to ' + sched.recipient +
                       ' could not be completed — insufficient funds in ' + sched.fromAccount + '.',
-                type: 'warning', sentAt: Date.now(), readBy: []
+                type: 'warning', category: 'banking'
             });
-            await writeJSON('messages', messages);
 
             schedules[idx] = Object.assign({}, sched, {
                 active:       !isOneTime,
@@ -325,7 +339,13 @@ async function executeOneScheduledTransfer(userId, scheduleId) {
         const updatedUser = Object.assign({}, users[uidx], { balances });
         users[uidx] = updatedUser;
         await writeJSON('users', users);
-        await maybeFireBalanceAlerts(updatedUser, sched.fromAccount, current, next, -sched.amount);
+        await maybeFireBalanceAlerts(updatedUser, sched.fromAccount, current, next, -sched.amount, 'banking');
+        await pushSystemMessage(userId, {
+            subject: 'Scheduled transfer completed',
+            body: 'Your scheduled transfer of ƒ' + sched.amount.toFixed(2) + ' to ' + sched.recipient +
+                  ' was completed from your ' + sched.fromAccount + ' account.',
+            type: 'success', category: 'banking'
+        });
 
         const txs = await readJSON('transactions');
         txs.push({
@@ -809,23 +829,29 @@ app.get('/api/me/profile', async (req, res) => {
     const users = await readJSON('users');
     const user  = users.find(u => u.id === req.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ fullName: user.fullName, username: user.username, email: user.email });
+    res.json({ fullName: user.fullName, username: user.username, email: user.email, avatarDataUri: user.avatarDataUri || null });
 });
 
 app.put('/api/me/profile', async (req, res) => {
     const users = await readJSON('users');
     const idx   = users.findIndex(u => u.id === req.userId);
     if (idx === -1) return res.status(404).json({ error: 'User not found' });
-    const { fullName, username, email } = req.body || {};
+    const { fullName, username, email, avatarDataUri } = req.body || {};
     const patch = {};
     if (fullName !== undefined) patch.fullName = fullName;
     // Lowercased to match login's lowercase comparison (server.js login handler) —
     // otherwise saving "Jane@Email.com" here would make email login stop matching.
     if (username  !== undefined) patch.username = username.toLowerCase();
     if (email     !== undefined) patch.email    = email.toLowerCase();
+    if (avatarDataUri !== undefined) {
+        if (avatarDataUri !== null && (typeof avatarDataUri !== 'string' || !avatarDataUri.startsWith('data:image/') || avatarDataUri.length > 400000)) {
+            return res.status(400).json({ error: 'Invalid avatar image' });
+        }
+        patch.avatarDataUri = avatarDataUri;
+    }
     users[idx] = Object.assign({}, users[idx], patch);
     await writeJSON('users', users);
-    res.json({ fullName: users[idx].fullName, username: users[idx].username, email: users[idx].email });
+    res.json({ fullName: users[idx].fullName, username: users[idx].username, email: users[idx].email, avatarDataUri: users[idx].avatarDataUri || null });
 });
 
 // Verifies the current password server-side and updates the hash — the client
@@ -843,6 +869,11 @@ app.post('/api/me/password', async (req, res) => {
     }
     users[idx] = Object.assign({}, users[idx], { passwordHash: simpleHash(newPassword) });
     await writeJSON('users', users);
+    await pushSystemMessage(req.userId, {
+        subject: 'Your password was changed',
+        body: 'Your account password was changed. If you didn\'t make this change, contact support immediately.',
+        type: 'warning', category: 'system'
+    });
     res.json({ ok: true });
 });
 
@@ -894,7 +925,7 @@ app.post('/api/me/balances/adjust', async (req, res) => {
             // Every balance-changing action in the app (transfers, bill pay,
             // checkout, credit card/loan/goal activity) routes through this
             // one endpoint, so it's the single choke point for alert checks.
-            await maybeFireBalanceAlerts(updatedUser, account, current, next, signedDelta);
+            await maybeFireBalanceAlerts(updatedUser, account, current, next, signedDelta, 'banking');
             return { account, amount: balances[account] };
         });
         res.json(result);
@@ -962,11 +993,48 @@ app.delete('/api/me/payments', async (req, res) => {
 });
 
 // ── Me: purchases ─────────────────────────────────────────────────────────────
+// Notify-on-first-observe: fires a message the first time an order is seen
+// having reached "shipped" or "delivered", then flags it so it never
+// repeats for that order — same lazy-execution-on-read pattern used for
+// overdue bills and scheduled transfers.
+async function notifyOrderStatusForUser(userId, orders) {
+    const toNotify = [];
+    orders.forEach(o => {
+        const status = computeOrderStatus(o).status;
+        if (status === 'shipped' && !o.shippedNotified) toNotify.push({ order: o, stage: 'shipped' });
+        if (status === 'delivered' && !o.deliveredNotified) toNotify.push({ order: o, stage: 'delivered' });
+    });
+    if (toNotify.length === 0) return orders;
+    const all = await readJSON('purchases');
+    toNotify.forEach(({ order, stage }) => {
+        const idx = all.findIndex(x => x.id === order.id);
+        if (idx !== -1) all[idx] = Object.assign({}, all[idx], stage === 'shipped' ? { shippedNotified: true } : { deliveredNotified: true });
+    });
+    await writeJSON('purchases', all);
+    for (const { order, stage } of toNotify) {
+        await pushSystemMessage(userId, {
+            subject: stage === 'shipped' ? 'Your order has shipped' : 'Your order was delivered',
+            body: stage === 'shipped'
+                ? 'Your order ' + (order.orderId || '#' + order.id) + ' (ƒ' + (order.total || 0).toFixed(2) + ') has shipped and is on its way.'
+                : 'Your order ' + (order.orderId || '#' + order.id) + ' (ƒ' + (order.total || 0).toFixed(2) + ') was delivered. We hope you enjoy it!',
+            type: 'info', category: 'ecommerce'
+        });
+    }
+    return orders.map(o => {
+        const hit = toNotify.filter(t => t.order.id === o.id);
+        if (hit.length === 0) return o;
+        const patch = {};
+        hit.forEach(({ stage }) => { patch[stage === 'shipped' ? 'shippedNotified' : 'deliveredNotified'] = true; });
+        return Object.assign({}, o, patch);
+    });
+}
+
 app.get('/api/me/purchases', async (req, res) => {
     const limit    = req.query.limit ? parseInt(req.query.limit, 10) : null;
     const all      = await readJSON('purchases');
     let filtered   = all.filter(p => p.userId === req.userId);
     filtered.sort((a, b) => (b.id || 0) - (a.id || 0));
+    filtered = await notifyOrderStatusForUser(req.userId, filtered);
     filtered = filtered.map(p => Object.assign({}, p, computeOrderStatus(p)));
     res.json(limit ? filtered.slice(0, limit) : filtered);
 });
@@ -1134,7 +1202,7 @@ app.post('/api/me/checkout', async (req, res) => {
             const updatedUser = Object.assign({}, users[uidx], { balances, userData });
             users[uidx] = updatedUser;
             await writeJSON('users', users);
-            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -total);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -total, 'ecommerce');
 
             const updatedProducts = products.map(p => {
                 const line = items.find(i => i.productId === p.id);
@@ -1392,8 +1460,22 @@ app.post('/api/me/credit-card/purchase', async (req, res) => {
             const card = cards[idx];
             const available = parseFloat((card.limit - card.balance).toFixed(2));
             if (amt > available) { const e = new Error('Exceeds available credit'); e.status = 409; throw e; }
-            cards[idx] = Object.assign({}, card, { balance: parseFloat((card.balance + amt).toFixed(2)) });
+            const newBalance = parseFloat((card.balance + amt).toFixed(2));
+            cards[idx] = Object.assign({}, card, { balance: newBalance });
             await writeJSON('creditCards', cards);
+
+            // Edge-triggered so a card that's already over the threshold
+            // doesn't re-alert on every subsequent purchase.
+            const pctBefore = card.limit > 0 ? card.balance / card.limit : 0;
+            const pctAfter  = card.limit > 0 ? newBalance   / card.limit : 0;
+            if (pctBefore < 0.7 && pctAfter >= 0.7) {
+                await pushSystemMessage(req.userId, {
+                    subject: 'High credit card utilization',
+                    body: 'Your credit card balance has reached ' + Math.round(pctAfter * 100) + '% of your ƒ' +
+                          card.limit.toFixed(2) + ' limit. Consider paying down your balance to protect your credit health.',
+                    type: 'warning', category: 'banking'
+                });
+            }
 
             const activity = await readJSON('creditActivity');
             const record = {
@@ -1433,7 +1515,7 @@ app.post('/api/me/credit-card/payment', async (req, res) => {
             const updatedUser = Object.assign({}, users[uidx], { balances });
             users[uidx] = updatedUser;
             await writeJSON('users', users);
-            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -payAmt);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -payAmt, 'banking');
 
             cards[idx] = Object.assign({}, card, { balance: parseFloat((card.balance - payAmt).toFixed(2)) });
             await writeJSON('creditCards', cards);
@@ -1515,7 +1597,7 @@ app.post('/api/me/loan/apply', async (req, res) => {
             const updatedUser = Object.assign({}, users[uidx], { balances });
             users[uidx] = updatedUser;
             await writeJSON('users', users);
-            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, amt);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, amt, 'banking');
 
             return { loan, checking: next };
         });
@@ -1548,7 +1630,7 @@ app.post('/api/me/loan/payment', async (req, res) => {
             const updatedUser = Object.assign({}, users[uidx], { balances });
             users[uidx] = updatedUser;
             await writeJSON('users', users);
-            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -payAmt);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -payAmt, 'banking');
 
             const newBalance = parseFloat((loan.balance - payAmt).toFixed(2));
             const paidOff = newBalance <= 0;
@@ -1559,6 +1641,13 @@ app.post('/api/me/loan/payment', async (req, res) => {
                 paidOffAt: paidOff ? Date.now() : null
             });
             await writeJSON('loans', loans);
+            if (paidOff) {
+                await pushSystemMessage(req.userId, {
+                    subject: 'Loan paid off!',
+                    body: 'Congratulations! You\'ve paid off your loan of ƒ' + loan.principal.toFixed(2) + ' in full.',
+                    type: 'success', category: 'banking'
+                });
+            }
 
             const loanPayments = await readJSON('loanPayments');
             const record = {
@@ -1626,7 +1715,7 @@ app.post('/api/me/savings-goals/:id/contribute', async (req, res) => {
             const updatedUser = Object.assign({}, users[uidx], { balances });
             users[uidx] = updatedUser;
             await writeJSON('users', users);
-            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -amt);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -amt, 'banking');
 
             const wasComplete = goal.current >= goal.target;
             const newCurrent  = parseFloat((goal.current + amt).toFixed(2));
@@ -1636,6 +1725,13 @@ app.post('/api/me/savings-goals/:id/contribute', async (req, res) => {
                 completedAt: (!wasComplete && nowComplete) ? Date.now() : goal.completedAt
             });
             await writeJSON('savingsGoals', goals);
+            if (!wasComplete && nowComplete) {
+                await pushSystemMessage(req.userId, {
+                    subject: 'Savings goal reached!',
+                    body: 'You\'ve reached your savings goal "' + goal.name + '" of ƒ' + goal.target.toFixed(2) + '. Great work!',
+                    type: 'success', category: 'banking'
+                });
+            }
 
             const activity = await readJSON('savingsGoalActivity');
             activity.push({
@@ -1675,7 +1771,7 @@ app.post('/api/me/savings-goals/:id/withdraw', async (req, res) => {
             const updatedUser = Object.assign({}, users[uidx], { balances });
             users[uidx] = updatedUser;
             await writeJSON('users', users);
-            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, wAmt);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, wAmt, 'banking');
 
             goals[idx] = Object.assign({}, goal, { current: parseFloat((goal.current - wAmt).toFixed(2)) });
             await writeJSON('savingsGoals', goals);
@@ -2298,8 +2394,34 @@ function computeBillCycleStatus(cycle) {
     };
 }
 
+// Notify-on-first-observe: fires an overdue/late-fee message the first time
+// a cycle is seen past its grace period, then flags it so it never repeats
+// for that cycle — mirrors the lazy-execution-on-read pattern already used
+// for scheduled transfers, just for a read-only status instead of a payment.
+async function notifyOverdueBillsForUser(userId, cycles) {
+    const overdueNow = cycles.filter(c => c.status !== 'paid' && !c.overdueNotified && computeBillCycleStatus(c).overdue);
+    if (overdueNow.length === 0) return cycles;
+    const all = await readJSON('billCycles');
+    overdueNow.forEach(c => {
+        const idx = all.findIndex(x => x.id === c.id);
+        if (idx !== -1) all[idx] = Object.assign({}, all[idx], { overdueNotified: true });
+    });
+    await writeJSON('billCycles', all);
+    for (const c of overdueNow) {
+        const info = computeBillCycleStatus(c);
+        await pushSystemMessage(userId, {
+            subject: 'Bill overdue: ' + c.name,
+            body: 'Your ' + c.name + ' bill of ƒ' + c.amount.toFixed(2) + ' is now overdue. A late fee of ƒ' +
+                  info.lateFee.toFixed(2) + ' has been added — total due is ƒ' + info.totalDue.toFixed(2) + '.',
+            type: 'warning', category: 'utilities'
+        });
+    }
+    return cycles.map(c => overdueNow.some(o => o.id === c.id) ? Object.assign({}, c, { overdueNotified: true }) : c);
+}
+
 app.get('/api/me/bills', async (req, res) => {
-    const cycles   = await ensureCurrentBillCycles(req.userId);
+    let cycles = await ensureCurrentBillCycles(req.userId);
+    cycles = await notifyOverdueBillsForUser(req.userId, cycles);
     const enriched = cycles.map(c => Object.assign({}, c, computeBillCycleStatus(c)));
     enriched.sort((a, b) => (a.dueDate || 0) - (b.dueDate || 0));
     res.json(enriched);
@@ -2365,7 +2487,7 @@ app.post('/api/me/bills/:cycleId/pay', async (req, res) => {
             const updatedUser = Object.assign({}, users[uidx], { balances, userData });
             users[uidx] = updatedUser;
             await writeJSON('users', users);
-            await maybeFireBalanceAlerts(updatedUser, account, current, next, -totalDue);
+            await maybeFireBalanceAlerts(updatedUser, account, current, next, -totalDue, 'utilities');
 
             cycles[idx] = Object.assign({}, cycle, { status: 'paid', paidAt: Date.now(), paidAmount: totalDue, lateFeePaid: statusInfo.lateFee });
             await writeJSON('billCycles', cycles);
