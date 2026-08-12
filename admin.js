@@ -190,7 +190,8 @@ document.addEventListener('DOMContentLoaded', function () {
             var ud = Object.assign({}, u ? u.userData || {} : {});
             ud.level             = parseInt(getVal('edit-level'))      || 1;
             ud.points            = parseInt(getVal('edit-points'))     || 0;
-            ud.pointsToNextLevel = parseInt(getVal('edit-ptnl'))       || 1000;
+            var ptnlParsed = parseInt(getVal('edit-ptnl'));
+            ud.pointsToNextLevel = isNaN(ptnlParsed) ? 1000 : ptnlParsed;
             ud.challenges        = parseInt(getVal('edit-challenges')) || 0;
             ud.completedTasks    = parseInt(getVal('edit-tasks'))      || 0;
             return DigifinwizDB.updateUser(id, { userData: ud });
@@ -1050,7 +1051,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 extraConditions: Array.isArray(c.extraConditions) ? c.extraConditions.slice() : [],
                 conditionLogic:  c.conditionLogic || 'all'
             };
-            DigifinwizDB.addChallenge(copy)
+            DigifinwizDB.adminCreateChallenge(copy)
                 .then(() => { showToast('Challenge duplicated!', 'success'); reloadChallengesTable(); })
                 .catch(() => showToast('Duplicate failed.', 'error'));
         });
@@ -1058,7 +1059,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     window.adminDeleteChallenge = function (id) {
         if (!confirm('Delete this challenge? This cannot be undone.')) return;
-        DigifinwizDB.deleteChallenge(id).then(() => {
+        DigifinwizDB.adminDeleteChallenge(id).then(() => {
             showToast('Challenge deleted.', 'info');
             if (chalEditingId === id) resetChallengeForm();
             reloadChallengesTable();
@@ -1262,7 +1263,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 .then(() => { showToast('Challenge updated!', 'success'); resetChallengeForm(); reloadChallengesTable(); })
                 .catch(() => showToast('Update failed.', 'error'));
         } else {
-            DigifinwizDB.addChallenge(payload)
+            DigifinwizDB.adminCreateChallenge(payload)
                 .then(() => { showToast('Challenge created!', 'success'); resetChallengeForm(); reloadChallengesTable(); })
                 .catch(() => showToast('Create failed.', 'error'));
         }
@@ -1275,6 +1276,35 @@ document.addEventListener('DOMContentLoaded', function () {
     function fmtDate(ts) {
         if (!ts) return '—';
         return new Date(ts).toLocaleDateString();
+    }
+
+    // loadUsersPage() re-runs after every approve/reject/delete, but the
+    // search/filter listeners must only ever be wired once — re-attaching them
+    // on each reload used to pile up duplicate listeners on the same
+    // never-recreated DOM elements, so one keystroke ran the filter many times
+    // over, each copy closing over a stale `users` snapshot from whichever
+    // load wired it.
+    var _usersPageWired   = false;
+    var _usersPageUsers   = [];
+    var _usersPageSession = null;
+
+    function applyUsersFilter() {
+        var searchInput  = document.getElementById('users-search');
+        var filterStatus = document.getElementById('users-filter-status');
+        var filterRole   = document.getElementById('users-filter-role');
+        var q      = (searchInput ? searchInput.value.toLowerCase() : '');
+        var status = filterStatus ? filterStatus.value : '';
+        var role   = filterRole   ? filterRole.value   : '';
+        var filtered = _usersPageUsers.filter(function(u) {
+            var matchQ = !q ||
+                (u.fullName  || '').toLowerCase().includes(q) ||
+                (u.username  || '').toLowerCase().includes(q) ||
+                (u.email     || '').toLowerCase().includes(q);
+            var matchStatus = !status || u.status === status;
+            var matchRole   = !role   || u.role   === role;
+            return matchQ && matchStatus && matchRole;
+        });
+        renderUsersTable(filtered, _usersPageSession);
     }
 
     function loadUsersPage() {
@@ -1300,32 +1330,20 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             renderPendingTable(pending, session);
-            renderUsersTable(users, session);
 
-            // Wire search + filter
-            var searchInput = document.getElementById('users-search');
-            var filterStatus = document.getElementById('users-filter-status');
-            var filterRole   = document.getElementById('users-filter-role');
+            _usersPageUsers   = users;
+            _usersPageSession = session;
 
-            function applyFilters() {
-                var q      = (searchInput ? searchInput.value.toLowerCase() : '');
-                var status = filterStatus ? filterStatus.value : '';
-                var role   = filterRole   ? filterRole.value   : '';
-                var filtered = users.filter(function(u) {
-                    var matchQ = !q ||
-                        (u.fullName  || '').toLowerCase().includes(q) ||
-                        (u.username  || '').toLowerCase().includes(q) ||
-                        (u.email     || '').toLowerCase().includes(q);
-                    var matchStatus = !status || u.status === status;
-                    var matchRole   = !role   || u.role   === role;
-                    return matchQ && matchStatus && matchRole;
-                });
-                renderUsersTable(filtered, session);
+            if (!_usersPageWired) {
+                _usersPageWired = true;
+                var searchInput  = document.getElementById('users-search');
+                var filterStatus = document.getElementById('users-filter-status');
+                var filterRole   = document.getElementById('users-filter-role');
+                if (searchInput)  searchInput .addEventListener('input',  applyUsersFilter);
+                if (filterStatus) filterStatus.addEventListener('change', applyUsersFilter);
+                if (filterRole)   filterRole  .addEventListener('change', applyUsersFilter);
             }
-
-            if (searchInput)  searchInput .addEventListener('input',  applyFilters);
-            if (filterStatus) filterStatus.addEventListener('change', applyFilters);
-            if (filterRole)   filterRole  .addEventListener('change', applyFilters);
+            applyUsersFilter();
 
         }).catch(function(err){ console.error('loadUsersPage:', err); });
     }
@@ -1347,7 +1365,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     '<button class="btn" style="padding:3px 10px;font-size:var(--text-xs);color:#10b981;border-color:#10b981;margin-right:4px" ' +
                         'onclick="adminApproveUser(' + u.id + ')">✓ Approve</button>' +
                     '<button class="btn btn-danger" style="padding:3px 10px;font-size:var(--text-xs)" ' +
-                        'onclick="adminRejectUser(' + u.id + ', ' + JSON.stringify(u.username) + ')">✕ Reject</button>' +
+                        "onclick='adminRejectUser(" + u.id + ', ' + jsAttr(u.username) + ")'>✕ Reject</button>" +
                 '</td>' +
                 '</tr>';
         }).join('');
@@ -1373,7 +1391,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 actions += '<button class="btn" style="padding:2px 8px;font-size:var(--text-xs);color:#10b981;border-color:#10b981;margin-right:2px" ' +
                     'onclick="adminApproveUser(' + u.id + ')">✓</button>';
                 actions += '<button class="btn btn-danger" style="padding:2px 8px;font-size:var(--text-xs);margin-right:2px" ' +
-                    'onclick="adminRejectUser(' + u.id + ', ' + JSON.stringify(u.username) + ')">✕</button>';
+                    "onclick='adminRejectUser(" + u.id + ', ' + jsAttr(u.username) + ")'>✕</button>";
             } else if (u.status === 'rejected') {
                 actions += '<button class="btn" style="padding:2px 8px;font-size:var(--text-xs);color:#10b981;border-color:#10b981;margin-right:2px" ' +
                     'onclick="adminApproveUser(' + u.id + ')">↺ Approve</button>';
@@ -1386,7 +1404,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             if (!isMe) {
                 actions += '<button class="btn btn-danger" style="padding:2px 8px;font-size:var(--text-xs)" ' +
-                    'onclick="adminDeleteUser(' + u.id + ', ' + JSON.stringify(u.username) + ')">🗑</button>';
+                    "onclick='adminDeleteUser(" + u.id + ', ' + jsAttr(u.username) + ")'>🗑</button>";
             } else {
                 actions += '<span style="font-size:var(--text-xs);color:var(--color-text-muted)">(you)</span>';
             }
@@ -1490,8 +1508,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--color-text-muted);padding:var(--space-6)">No messages sent yet.</td></tr>';
                 return;
             }
-            var TYPE_PILL  = { announcement: 'pill-purple', warning: 'pill-red', info: 'pill-blue' };
-            var TYPE_LABEL = { announcement: '📣 Announcement', warning: '⚠️ Warning', info: 'ℹ️ Info' };
+            var TYPE_PILL  = { announcement: 'pill-purple', warning: 'pill-red', info: 'pill-blue', email: 'pill-blue' };
+            var TYPE_LABEL = { announcement: '📣 Announcement', warning: '⚠️ Warning', info: 'ℹ️ Info', email: '✉️ Email' };
             tbody.innerHTML = msgs.map(function(m) {
                 var pill      = TYPE_PILL[m.type]  || 'pill-blue';
                 var label     = TYPE_LABEL[m.type] || m.type;
@@ -1737,20 +1755,17 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     document.getElementById('resetAllBtn').addEventListener('click', function () {
         if (!confirm('RESET EVERYTHING? All data will be deleted.')) return;
-        Promise.all([
-            DigifinwizDB.clearStore('transactions'),
-            DigifinwizDB.clearStore('payments'),
-            DigifinwizDB.clearStore('purchaseHistory'),
-            DigifinwizDB.clearStore('cart'),
-            DigifinwizDB.clearStore('challenges').then(() => DigifinwizDB.seedDefaultChallenges()),
-            DigifinwizDB.setBalance('checking', DigifinwizDB.DEFAULT_BALANCES.checking),
-            DigifinwizDB.setBalance('savings',  DigifinwizDB.DEFAULT_BALANCES.savings),
-            DigifinwizDB.setUserData({ level:13, points:1390, pointsToNextLevel:345, challenges:5, completedTasks:8 })
-        ]).then(() => {
+        // This page has no participant selector, so "Reset Everything" has
+        // only ever acted on the logged-in admin's own account — a single
+        // self-scoped request keeps that behavior but resets balances/userData
+        // to real defaults instead of referencing a nonexistent
+        // DigifinwizDB.DEFAULT_BALANCES export (which threw before anything
+        // was cleared) and seeding made-up level-13 demo values.
+        DigifinwizDB.resetMyProgress().then(() => {
             txTable = null; payTable = null; purchTable = null; chalTable = null;
             showToast('Everything reset.', 'info');
             loadSettingsPage();
-        });
+        }).catch(() => showToast('Reset failed.', 'error'));
     });
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -1760,6 +1775,13 @@ document.addEventListener('DOMContentLoaded', function () {
     function escHtml(str) {
         if (str == null) return '';
         return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    // Safe to splice into a single-quoted HTML attribute: JSON.stringify() a value for use as a JS
+    // argument literal, then neutralize characters that could break out of the attribute or get
+    // decoded as an HTML entity before the JS parser ever sees them.
+    function jsAttr(v) {
+        return JSON.stringify(v)
+            .replace(/&/g, '\\u0026').replace(/</g, '\\u003C').replace(/>/g, '\\u003E').replace(/'/g, '\\u0027');
     }
     function showToast(message, type) {
         const colors = { success:'#10b981', error:'#ef4444', info:'#3b82f6' };
@@ -1930,7 +1952,10 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     window.mgmtMarkChalComplete = function(chalId) {
-        DigifinwizDB.updateChallenge(chalId, { completed: true, completedAt: Date.now() })
+        // adminUpdateChallenge, not updateChallenge — the drawer edits the
+        // managed participant's challenge, not the logged-in admin's own
+        // (updateChallenge is scoped to the caller and would 404 here).
+        DigifinwizDB.adminUpdateChallenge(chalId, { completed: true, completedAt: Date.now() })
             .then(function() {
                 showToast('Challenge marked complete!', 'success');
                 if (mgmtUserId) loadMgmtChallenges(mgmtUserId);
@@ -1938,7 +1963,7 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     window.mgmtMarkChalIncomplete = function(chalId) {
-        DigifinwizDB.updateChallenge(chalId, { completed: false, completedAt: null })
+        DigifinwizDB.adminUpdateChallenge(chalId, { completed: false, completedAt: null })
             .then(function() {
                 showToast('Challenge reset.', 'info');
                 if (mgmtUserId) loadMgmtChallenges(mgmtUserId);
