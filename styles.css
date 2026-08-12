@@ -4588,6 +4588,65 @@ body {
 .bill-savings-chip { display:inline-flex;align-items:center;gap:0.25rem;font-size:0.7rem;font-weight:600;color:#065f46;background:#d1fae5;border-radius:99px;padding:0.18rem 0.6rem;border:1px solid #6ee7b7;margin-bottom:0.4rem;cursor:default; }
 
 /* ============================================
+   UTILITIES: Usage-based billing + late fees + custom bills
+   ============================================ */
+.bill-usage-line {
+    font-size:0.74rem;
+    color:var(--color-gray-600);
+    background:var(--color-gray-50);
+    border-radius:var(--radius-md);
+    padding:0.35rem 0.6rem;
+    margin-bottom:0.5rem;
+    font-family:var(--font-mono, monospace);
+}
+.bill-late-fee-line {
+    font-size:0.72rem;
+    color:#991b1b;
+    background:#fee2e2;
+    border-radius:var(--radius-md);
+    padding:0.3rem 0.55rem;
+    margin:-0.25rem 0 0.5rem;
+    border-left:3px solid #ef4444;
+}
+.bill-custom-badge {
+    display:inline-block;
+    font-size:0.62rem;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.03em;
+    background:rgba(255,255,255,0.25);
+    color:#fff;
+    border-radius:99px;
+    padding:0.1rem 0.5rem;
+    vertical-align:middle;
+    margin-left:0.3rem;
+}
+.bill-custom-delete {
+    display:block;
+    width:100%;
+    background:none;
+    border:1.5px solid var(--color-gray-200);
+    color:var(--color-gray-500);
+    font-size:0.75rem;
+    font-weight:600;
+    border-radius:var(--radius-md);
+    padding:0.35rem;
+    margin-top:0.5rem;
+    cursor:pointer;
+    font-family:var(--font-sans);
+    transition:all var(--transition-base);
+}
+.bill-custom-delete:hover { border-color:#ef4444; color:#ef4444; }
+
+.custom-bill-form {
+    background:var(--color-gray-50);
+    border:1px solid var(--color-border);
+    border-radius:var(--radius-xl);
+    padding:1.25rem;
+    margin-bottom:1.25rem;
+}
+
+/* ============================================
    BANKING: Credit card tier picker + card visual
    ============================================ */
 .cc-tier-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:1rem; }

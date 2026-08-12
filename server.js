@@ -56,7 +56,7 @@ function ensureLocalDataFiles() {
 const STORE_NAMES = [
     'users', 'transactions', 'payments', 'purchases', 'challenges', 'messages', 'cart', 'bills',
     'creditCards', 'creditActivity', 'loans', 'loanPayments', 'savingsGoals', 'savingsGoalActivity',
-    'scheduledTransfers', 'products', 'addresses', 'paymentMethods'
+    'scheduledTransfers', 'products', 'addresses', 'paymentMethods', 'billCycles', 'customBills'
 ];
 
 async function initStorage() {
@@ -730,7 +730,7 @@ app.delete('/api/users/:id', async (req, res) => {
     for (const store of [
         'transactions', 'payments', 'purchases', 'challenges',
         'creditCards', 'creditActivity', 'loans', 'loanPayments', 'savingsGoals', 'savingsGoalActivity',
-        'scheduledTransfers', 'addresses', 'paymentMethods'
+        'scheduledTransfers', 'addresses', 'paymentMethods', 'billCycles', 'customBills'
     ]) {
         const rows = await readJSON(store);
         await writeJSON(store, rows.filter(r => r.userId !== id));
@@ -1240,7 +1240,7 @@ app.post('/api/me/reset', async (req, res) => {
     for (const store of [
         'transactions', 'payments', 'purchases', 'cart',
         'creditCards', 'creditActivity', 'loans', 'loanPayments', 'savingsGoals', 'savingsGoalActivity',
-        'scheduledTransfers', 'addresses', 'paymentMethods'
+        'scheduledTransfers', 'addresses', 'paymentMethods', 'billCycles', 'customBills'
     ]) {
         const rows = await readJSON(store);
         await writeJSON(store, rows.filter(r => r.userId !== req.userId));
@@ -2152,13 +2152,22 @@ app.post('/api/admin/challenges/reseed', async (req, res) => {
 });
 
 // ── Bills API ─────────────────────────────────────────────────────────────────
+// Bill templates are shared/admin-managed (like DEFAULT_PRODUCTS). Each
+// user's actual bill for "this month" is a separate per-user 'billCycles'
+// record generated lazily from a template — see ensureCurrentBillCycles().
+// billingType 'usage' bills compute their amount from a generated meter
+// reading (baseFee + usage*ratePerUnit) instead of a fixed amount, the way
+// real electric/water/gas bills fluctuate month to month; 'flat' bills
+// (internet, phone, property tax) charge the same `amount` every cycle,
+// matching how those are typically billed as flat subscriptions/assessments
+// in the US.
 const DEFAULT_BILLS = [
-    { id: 1, name: 'Electricity',  icon: '⚡', amount: 89.50,   accountNumber: '1234560', gradient: 'linear-gradient(135deg,#fbbf24,#f59e0b)', dueDate: 'Jan 25, 2026', active: true },
-    { id: 2, name: 'Water',        icon: '💧', amount: 45.00,   accountNumber: '1234560', gradient: 'linear-gradient(135deg,#3b82f6,#2563eb)', dueDate: 'Jan 28, 2026', active: true },
-    { id: 3, name: 'Internet',     icon: '🌐', amount: 79.99,   accountNumber: '9876543', gradient: 'linear-gradient(135deg,#10b981,#059669)', dueDate: 'Feb 1, 2026',  active: true },
-    { id: 4, name: 'Property Tax', icon: '🏠', amount: 1250.00, accountNumber: '1234560', gradient: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', dueDate: 'Feb 15, 2026', active: true },
-    { id: 5, name: 'Phone',        icon: '📱', amount: 55.00,   accountNumber: '2175550123', gradient: 'linear-gradient(135deg,#ec4899,#db2777)', dueDate: 'Jan 30, 2026', active: true },
-    { id: 6, name: 'Gas',          icon: '🔥', amount: 65.75,   accountNumber: '5551234', gradient: 'linear-gradient(135deg,#f97316,#ea580c)', dueDate: 'Feb 5, 2026',  active: true }
+    { id: 1, name: 'Electricity',  icon: '⚡', category: 'electricity', billingType: 'usage', amount: 89.50,   unit: 'kWh',    ratePerUnit: 0.15,  baseFee: 8.00,  usageMin: 400,  usageMax: 900,  accountNumber: '1234560',    gradient: 'linear-gradient(135deg,#fbbf24,#f59e0b)', dueDateDay: 25, lateFeeRate: 0.05, graceDays: 5, active: true },
+    { id: 2, name: 'Water',        icon: '💧', category: 'water',       billingType: 'usage', amount: 45.00,   unit: 'gallons', ratePerUnit: 0.006, baseFee: 15.00, usageMin: 3000, usageMax: 8000, accountNumber: '1234560',    gradient: 'linear-gradient(135deg,#3b82f6,#2563eb)', dueDateDay: 28, lateFeeRate: 0.05, graceDays: 5, active: true },
+    { id: 3, name: 'Internet',     icon: '🌐', category: 'internet',    billingType: 'flat',  amount: 79.99,   unit: null,     ratePerUnit: null,  baseFee: null,  usageMin: null, usageMax: null, accountNumber: '9876543',    gradient: 'linear-gradient(135deg,#10b981,#059669)', dueDateDay: 1,  lateFeeRate: 0.05, graceDays: 5, active: true },
+    { id: 4, name: 'Property Tax', icon: '🏠', category: 'tax',         billingType: 'flat',  amount: 1250.00, unit: null,     ratePerUnit: null,  baseFee: null,  usageMin: null, usageMax: null, accountNumber: '1234560',    gradient: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', dueDateDay: 15, lateFeeRate: 0.05, graceDays: 10, active: true },
+    { id: 5, name: 'Phone',        icon: '📱', category: 'phone',       billingType: 'flat',  amount: 55.00,   unit: null,     ratePerUnit: null,  baseFee: null,  usageMin: null, usageMax: null, accountNumber: '2175550123', gradient: 'linear-gradient(135deg,#ec4899,#db2777)', dueDateDay: 30, lateFeeRate: 0.05, graceDays: 5, active: true },
+    { id: 6, name: 'Gas',          icon: '🔥', category: 'gas',         billingType: 'usage', amount: 65.75,   unit: 'therms', ratePerUnit: 1.10,  baseFee: 10.00, usageMin: 30,   usageMax: 70,   accountNumber: '5551234',    gradient: 'linear-gradient(135deg,#f97316,#ea580c)', dueDateDay: 5,  lateFeeRate: 0.05, graceDays: 5, active: true }
 ];
 
 async function seedDefaultBills() {
@@ -2201,6 +2210,268 @@ app.delete('/api/bills/:id', async (req, res) => {
     const all   = await readJSON('bills');
     const bills = all.filter(b => String(b.id) !== String(req.params.id));
     await writeJSON('bills', bills);
+    res.json({ ok: true });
+});
+
+// ── Me: bills (per-user monthly bill cycles) ────────────────────────────────
+// Bill templates (the 'bills' store, admin-managed, plus each user's own
+// 'customBills') describe a recurring bill; a 'billCycles' record is the
+// actual per-user, per-month instance of one — generated lazily on read the
+// same way scheduled transfers execute lazily, so no background job is
+// needed. An unpaid cycle carries forward (accruing late fee, never
+// silently replaced) until the user pays it; only then does the next
+// month's cycle get generated, with a freshly generated usage reading for
+// usage-based bills.
+function currentCycleMonth() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+function randomUsage(min, max) {
+    return Math.round(min + Math.random() * (max - min));
+}
+
+function computeBillAmount(def) {
+    if (def.billingType === 'usage') {
+        const usage  = randomUsage(def.usageMin, def.usageMax);
+        const amount = parseFloat(((def.baseFee || 0) + usage * def.ratePerUnit).toFixed(2));
+        return { usage, amount };
+    }
+    return { usage: null, amount: def.amount };
+}
+
+function billCycleDueDate(def, cycleMonth) {
+    const [y, m] = cycleMonth.split('-').map(Number);
+    const day = Math.min(Math.max(def.dueDateDay || 25, 1), 28);
+    return new Date(y, m - 1, day).getTime();
+}
+
+async function ensureCurrentBillCycles(userId) {
+    const [templates, customBills, cycles] = await Promise.all([
+        readJSON('bills'), readJSON('customBills'), readJSON('billCycles')
+    ]);
+    const defs = templates.filter(b => b.active !== false).map(b => Object.assign({ defKey: 'catalog:' + b.id }, b))
+        .concat(customBills.filter(b => b.userId === userId && b.active !== false).map(b => Object.assign({ defKey: 'custom:' + b.id }, b)));
+
+    const month = currentCycleMonth();
+    let all = cycles;
+    let changed = false;
+
+    for (const def of defs) {
+        const mine   = all.filter(c => c.userId === userId && c.billDefKey === def.defKey);
+        const latest = mine.reduce((a, b) => (!a || b.id > a.id) ? b : a, null);
+        const needsNew = !latest || (latest.status === 'paid' && latest.cycleMonth !== month);
+        if (!needsNew) continue;
+        const { usage, amount } = computeBillAmount(def);
+        const record = {
+            id: nextId(all), userId, billDefKey: def.defKey,
+            name: def.name, icon: def.icon, category: def.category, billingType: def.billingType,
+            unit: def.unit, ratePerUnit: def.ratePerUnit, baseFee: def.baseFee,
+            accountNumber: def.accountNumber, gradient: def.gradient,
+            usage, amount, cycleMonth: month, dueDate: billCycleDueDate(def, month),
+            lateFeeRate: def.lateFeeRate != null ? def.lateFeeRate : 0.05,
+            graceDays:   def.graceDays   != null ? def.graceDays   : 5,
+            status: 'open', createdAt: Date.now(), paidAt: null
+        };
+        all = all.concat([record]);
+        changed = true;
+    }
+    if (changed) await writeJSON('billCycles', all);
+    return all.filter(c => c.userId === userId);
+}
+
+// Overdue/late-fee status is derived purely from elapsed time since the due
+// date, recomputed fresh on every read — the same "compute on read" pattern
+// used for e-commerce order status, so nothing needs a background sweep.
+function computeBillCycleStatus(cycle) {
+    if (cycle.status === 'paid') return { overdue: false, lateFee: 0, totalDue: 0, daysUntilDue: null, daysOverdue: 0 };
+    const now      = Date.now();
+    const graceMs  = (cycle.graceDays || 0) * 24 * 60 * 60 * 1000;
+    const overdue  = now > cycle.dueDate + graceMs;
+    const dayMs    = 24 * 60 * 60 * 1000;
+    const lateFee  = overdue ? parseFloat((cycle.amount * (cycle.lateFeeRate || 0)).toFixed(2)) : 0;
+    const totalDue = parseFloat((cycle.amount + lateFee).toFixed(2));
+    return {
+        overdue, lateFee, totalDue,
+        daysUntilDue: overdue ? null : Math.max(0, Math.ceil((cycle.dueDate - now) / dayMs)),
+        daysOverdue:  overdue ? Math.floor((now - cycle.dueDate) / dayMs) : 0
+    };
+}
+
+app.get('/api/me/bills', async (req, res) => {
+    const cycles   = await ensureCurrentBillCycles(req.userId);
+    const enriched = cycles.map(c => Object.assign({}, c, computeBillCycleStatus(c)));
+    enriched.sort((a, b) => (a.dueDate || 0) - (b.dueDate || 0));
+    res.json(enriched);
+});
+
+app.post('/api/me/bills/:cycleId/pay', async (req, res) => {
+    const cycleId = Number(req.params.cycleId);
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const cycles = await readJSON('billCycles');
+            const idx    = cycles.findIndex(c => c.id === cycleId && c.userId === req.userId);
+            if (idx === -1) { const e = new Error('Bill not found'); e.status = 404; throw e; }
+            const cycle = cycles[idx];
+            if (cycle.status === 'paid') { const e = new Error('Bill is already paid'); e.status = 409; throw e; }
+
+            const statusInfo = computeBillCycleStatus(cycle);
+            const totalDue    = statusInfo.totalDue;
+
+            const users = await readJSON('users');
+            const uidx  = users.findIndex(u => u.id === req.userId);
+            if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
+            const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
+
+            let account = 'checking';
+            if (totalDue > balances[account]) {
+                if (totalDue <= balances.savings) account = 'savings';
+                else { const e = new Error('Insufficient funds in both accounts. Need ƒ' + totalDue.toFixed(2)); e.status = 409; throw e; }
+            }
+            const current = balances[account];
+            const next    = parseFloat((current - totalDue).toFixed(2));
+            balances[account] = next;
+
+            const onTime       = !statusInfo.overdue;
+            const pointsEarned = 45 + (onTime ? 15 : 0);
+            const coinsEarned  = Math.floor(totalDue / 10);
+
+            const userData = Object.assign({}, DEFAULT_USER_DATA, users[uidx].userData || {});
+            userData.points            = (userData.points || 0) + pointsEarned;
+            userData.pointsToNextLevel = (userData.pointsToNextLevel != null ? userData.pointsToNextLevel : 1000) - pointsEarned;
+            userData.completedTasks    = (userData.completedTasks || 0) + 1;
+            userData.coins              = (userData.coins || 0) + coinsEarned;
+            let leveledUp = false, newLevel = 0;
+            if (userData.pointsToNextLevel <= 0) {
+                if (userData.level === 1) {
+                    const challenges = await readJSON('challenges');
+                    const reqMet = LEVEL_1_REQUIRED_CONDITIONS.every(cond =>
+                        challenges.some(c => c.userId === req.userId && c.condition === cond && c.completed)
+                    );
+                    if (reqMet) {
+                        userData.level++;
+                        userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
+                        leveledUp = true; newLevel = userData.level;
+                    } else {
+                        userData.pointsToNextLevel = 0;
+                    }
+                } else {
+                    userData.level++;
+                    userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
+                    leveledUp = true; newLevel = userData.level;
+                }
+            }
+
+            const updatedUser = Object.assign({}, users[uidx], { balances, userData });
+            users[uidx] = updatedUser;
+            await writeJSON('users', users);
+            await maybeFireBalanceAlerts(updatedUser, account, current, next, -totalDue);
+
+            cycles[idx] = Object.assign({}, cycle, { status: 'paid', paidAt: Date.now(), paidAmount: totalDue, lateFeePaid: statusInfo.lateFee });
+            await writeJSON('billCycles', cycles);
+
+            const payments = await readJSON('payments');
+            const paymentRecord = {
+                id: nextId(payments), userId: req.userId,
+                type: cycle.name, amount: totalDue, accountNumber: cycle.accountNumber,
+                fromAccount: account, date: new Date().toLocaleDateString(), timestamp: Date.now(),
+                pointsEarned, lateFee: statusInfo.lateFee, usage: cycle.usage, unit: cycle.unit
+            };
+            payments.push(paymentRecord);
+            await writeJSON('payments', payments);
+
+            return {
+                cycle: Object.assign({}, cycles[idx], computeBillCycleStatus(cycles[idx])),
+                payment: paymentRecord, leveledUp, newLevel, account, balance: next, onTimeBonus: onTime, pointsEarned
+            };
+        });
+        res.status(201).json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+// ── Me: custom bills ─────────────────────────────────────────────────────────
+const CUSTOM_BILL_CATEGORIES = new Set(['electricity', 'water', 'gas', 'internet', 'phone', 'tax', 'other']);
+const CUSTOM_BILL_ICONS = { electricity: '⚡', water: '💧', gas: '🔥', internet: '🌐', phone: '📱', tax: '🏠', other: '🧾' };
+
+app.get('/api/me/bills/custom', async (req, res) => {
+    const all = await readJSON('customBills');
+    res.json(all.filter(b => b.userId === req.userId));
+});
+
+app.post('/api/me/bills/custom', async (req, res) => {
+    const body = req.body || {};
+    const name = String(body.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Bill name required' });
+    const category    = CUSTOM_BILL_CATEGORIES.has(body.category) ? body.category : 'other';
+    const billingType = body.billingType === 'usage' ? 'usage' : 'flat';
+    const dueDateDay  = Math.min(28, Math.max(1, parseInt(body.dueDateDay, 10) || 25));
+    const base = {
+        id: 0, userId: req.userId, name, category, icon: CUSTOM_BILL_ICONS[category],
+        billingType, accountNumber: String(body.accountNumber || '').trim(),
+        gradient: 'linear-gradient(135deg,#64748b,#475569)',
+        dueDateDay, lateFeeRate: 0.05, graceDays: 5, active: true, createdAt: Date.now()
+    };
+
+    const all = await readJSON('customBills');
+    let record;
+    if (billingType === 'usage') {
+        const unit        = String(body.unit || '').trim();
+        const ratePerUnit = Number(body.ratePerUnit);
+        const usageMin     = Number(body.usageMin);
+        const usageMax     = Number(body.usageMax);
+        if (!unit) return res.status(400).json({ error: 'Usage unit required' });
+        if (!ratePerUnit || ratePerUnit <= 0) return res.status(400).json({ error: 'Valid rate per unit required' });
+        if (!usageMin || !usageMax || usageMax <= usageMin) return res.status(400).json({ error: 'Valid usage range required (max must exceed min)' });
+        record = Object.assign({}, base, {
+            unit, ratePerUnit, baseFee: Math.max(0, Number(body.baseFee) || 0), usageMin, usageMax, amount: null
+        });
+    } else {
+        const amount = Number(body.amount);
+        if (!amount || amount <= 0) return res.status(400).json({ error: 'Valid amount required' });
+        record = Object.assign({}, base, {
+            unit: null, ratePerUnit: null, baseFee: null, usageMin: null, usageMax: null, amount
+        });
+    }
+    record.id = nextId(all);
+    all.push(record);
+    await writeJSON('customBills', all);
+    res.status(201).json(record);
+});
+
+app.put('/api/me/bills/custom/:id', async (req, res) => {
+    const id  = Number(req.params.id);
+    const all = await readJSON('customBills');
+    const idx = all.findIndex(b => b.id === id && b.userId === req.userId);
+    if (idx === -1) return res.status(404).json({ error: 'Custom bill not found' });
+    const body  = req.body || {};
+    const patch = {};
+    if (body.name !== undefined)          patch.name          = String(body.name).trim();
+    if (body.accountNumber !== undefined) patch.accountNumber = String(body.accountNumber).trim();
+    if (body.active !== undefined)        patch.active        = !!body.active;
+    if (all[idx].billingType === 'flat' && body.amount !== undefined) {
+        const amount = Number(body.amount);
+        if (!amount || amount <= 0) return res.status(400).json({ error: 'Valid amount required' });
+        patch.amount = amount;
+    }
+    if (all[idx].billingType === 'usage' && body.ratePerUnit !== undefined) {
+        const ratePerUnit = Number(body.ratePerUnit);
+        if (!ratePerUnit || ratePerUnit <= 0) return res.status(400).json({ error: 'Valid rate per unit required' });
+        patch.ratePerUnit = ratePerUnit;
+    }
+    all[idx] = Object.assign({}, all[idx], patch);
+    await writeJSON('customBills', all);
+    res.json(all[idx]);
+});
+
+app.delete('/api/me/bills/custom/:id', async (req, res) => {
+    const id  = Number(req.params.id);
+    const all = await readJSON('customBills');
+    await writeJSON('customBills', all.filter(b => !(b.id === id && b.userId === req.userId)));
+    // Drop any bill cycles this custom bill generated so it stops appearing.
+    const cycles = await readJSON('billCycles');
+    await writeJSON('billCycles', cycles.filter(c => !(c.userId === req.userId && c.billDefKey === 'custom:' + id)));
     res.json({ ok: true });
 });
 

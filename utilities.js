@@ -46,88 +46,54 @@ var paymentInFlight = false;
 // ── Main pay function ──────────────────────────────────────────────────────
 // Returns a Promise resolving to { paid: boolean } so callers (e.g. "Pay All
 // Bills") can tell whether the user actually confirmed and paid, or cancelled.
-function payBill(billType, amount, accountNumber) {
-    // Determine which account to pay from (checking by default)
-    var fromAccount = 'checking';
-    var fromLabel   = 'Checking Account';
+// The actual charge (balance deduction, late fee, XP/coins, level-up, cycle
+// status) all happens atomically server-side in POST /api/me/bills/:id/pay —
+// this function's job is just to preview which account will be used and
+// show a confirm modal before calling it.
+function payBill(cycleId) {
+    var cycle = (typeof LOADED_BILLS !== 'undefined' ? LOADED_BILLS : []).find(function(b) { return b.id === cycleId; });
+    if (!cycle) { showNotification('Bill not found. Please refresh.', 'error'); return Promise.resolve({ paid: false }); }
+    var totalDue = cycle.status === 'paid' ? 0 : cycle.totalDue;
 
     if (paymentInFlight) {
         showNotification('A payment is already in progress. Please wait.', 'error');
         return Promise.resolve({ paid: false });
     }
 
-    return DigifinwizDB.getBalance(fromAccount).then(function(balance) {
-        if (amount > balance) {
-            // Try savings
+    return DigifinwizDB.getBalance('checking').then(function(balance) {
+        if (totalDue > balance) {
             return DigifinwizDB.getBalance('savings').then(function(savBal) {
-                if (amount > savBal) {
-                    showNotification('Insufficient funds in both accounts. Need ƒ' + amount.toFixed(2), 'error');
+                if (totalDue > savBal) {
+                    showNotification('Insufficient funds in both accounts. Need ƒ' + totalDue.toFixed(2), 'error');
                     return null;
                 }
                 return { account: 'savings', label: 'Savings Account', balance: savBal };
             });
         }
-        return { account: fromAccount, label: fromLabel, balance: balance };
+        return { account: 'checking', label: 'Checking Account', balance: balance };
     }).then(function(chosen) {
         if (!chosen) return { paid: false };
 
         return showPaymentConfirmModal({
-            billType: billType,
-            accountNumber: accountNumber,
-            amount: amount,
+            billType: cycle.name + (cycle.lateFee > 0 ? ' (incl. ƒ' + cycle.lateFee.toFixed(2) + ' late fee)' : ''),
+            accountNumber: cycle.accountNumber,
+            amount: totalDue,
             fromLabel: chosen.label,
-            newBalance: chosen.balance - amount
+            newBalance: chosen.balance - totalDue
         }).then(function(confirmed) {
             if (!confirmed) return { paid: false };
 
             paymentInFlight = true;
-            var pointsEarned = 45;
-
-            // Fetch userData first and only touch the balance once we know we
-            // can record the payment — otherwise a failed userData fetch could
-            // leave money deducted with no payment ever recorded.
-            return DigifinwizDB.getUserData().then(function(userData) {
-                if (!userData) return Promise.reject('No user data');
-                return DigifinwizDB.adjustBalance(chosen.account, -amount).then(function() {
-                    userData.points            += pointsEarned;
-                    userData.pointsToNextLevel -= pointsEarned;
-                    userData.completedTasks    += 1;
-
-                    var savePayment = function() {
-                        return Promise.all([
-                            DigifinwizDB.setUserData(userData),
-                            DigifinwizDB.addPayment({
-                                type: billType,
-                                amount: amount,
-                                accountNumber: accountNumber,
-                                fromAccount: chosen.account,
-                                date: new Date().toLocaleDateString(),
-                                pointsEarned: pointsEarned
-                            })
-                        ]);
-                    };
-                    if (userData.pointsToNextLevel <= 0) {
-                        if (userData.level === 1) {
-                            return DigifinwizDB.getLevel1Requirements().then(function(req) {
-                                if (req.allMet) {
-                                    userData.level++;
-                                    userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
-                                    showNotification('Level up! You\'re now level ' + userData.level + '!', 'success');
-                                } else {
-                                    userData.pointsToNextLevel = 0;
-                                }
-                                return savePayment();
-                            });
-                        }
-                        userData.level++;
-                        userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
-                        showNotification('Level up! You\'re now level ' + userData.level + '!', 'success');
-                    }
-                    return savePayment();
-                });
-            }).then(function() {
+            return DigifinwizDB.payBillCycle(cycleId).then(function(result) {
                 paymentInFlight = false;
-                showNotification(billType + ' ƒ' + amount.toFixed(2) + ' paid! +' + pointsEarned + ' pts', 'success');
+                var bonusNote = result.onTimeBonus ? ' (+15 on-time bonus)' : '';
+                showNotification(cycle.name + ' ƒ' + totalDue.toFixed(2) + ' paid! +' + result.pointsEarned + ' pts' + bonusNote, 'success');
+                if (result.leveledUp) {
+                    setTimeout(function() {
+                        showNotification('Level up! You\'re now level ' + result.newLevel + '!', 'success');
+                    }, 400);
+                }
+                if (typeof loadBills === 'function') loadBills();
                 updatePaymentHistory();
                 // ── Challenge completion check (full context via getStats) ──
                 // Its own chain: a failure here must not surface as "Payment
@@ -154,7 +120,7 @@ function payBill(billType, amount, accountNumber) {
                         purchCount:       stats.purchCount,
                         lastTxAmount:     0,
                         lastItemCount:    0,
-                        lastPayAmount:    amount,
+                        lastPayAmount:    totalDue,
                         totalTransferred: stats.totalTransferred,
                         totalSpentEcom:   stats.totalSpentEcommerce,
                         userLevel:        stats.user ? stats.user.level : 0,
@@ -168,13 +134,8 @@ function payBill(billType, amount, accountNumber) {
                         lastRecipient:        null,
                         lastRecipientAccount: null
                     });
-                }).then(function(result) {
-                    var completed = result.completed || [];
-                    if (result.leveledUp) {
-                        setTimeout(function() {
-                            showNotification('🎉 Level Up! You\'re now level ' + result.newLevel + '!', 'success');
-                        }, 400);
-                    }
+                }).then(function(chResult) {
+                    var completed = chResult.completed || [];
                     completed.forEach(function(c) {
                         var catIcon = { banking:'🏦', ecommerce:'🛒', utilities:'⚡' }[c.category] || '🎯';
                         setTimeout(function() {
@@ -192,7 +153,7 @@ function payBill(billType, amount, accountNumber) {
             }).catch(function(err) {
                 paymentInFlight = false;
                 console.error('payBill error:', err);
-                showNotification('Payment failed. Please try again.', 'error');
+                showNotification(err && err.message ? err.message : 'Payment failed. Please try again.', 'error');
                 return { paid: false };
             });
         });
@@ -249,11 +210,15 @@ function updatePaymentHistory() {
                 var fromLbl = p.fromAccount
                     ? (p.fromAccount.charAt(0).toUpperCase() + p.fromAccount.slice(1)) + ' Account'
                     : '';
+                var detailBits = [];
+                if (p.usage != null && p.unit) detailBits.push(p.usage.toLocaleString() + ' ' + p.unit);
+                if (p.lateFee > 0) detailBits.push('incl. ƒ' + Number(p.lateFee).toFixed(2) + ' late fee');
+                var detailLine = detailBits.length ? (' · ' + escHtml(detailBits.join(' · '))) : '';
                 return '<div class="pay-hist-item" data-type="' + escHtml(p.type||'') + '" style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem 0;border-bottom:1px solid #f1f5f9">' +
                     '<div style="width:40px;height:40px;background:#f0fdf4;border:2px solid #bbf7d0;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0">' + icon + '</div>' +
                     '<div style="flex:1;min-width:0">' +
                         '<strong style="font-size:0.875rem">' + escHtml(p.type) + ' Bill Paid</strong>' +
-                        '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">' + escHtml(p.date||'') + (fromLbl ? ' · from ' + fromLbl : '') + '</div>' +
+                        '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">' + escHtml(p.date||'') + (fromLbl ? ' · from ' + fromLbl : '') + detailLine + '</div>' +
                     '</div>' +
                     '<div style="text-align:right;flex-shrink:0">' +
                         '<div style="font-weight:700;color:#1e293b">ƒ' + Number(p.amount).toFixed(2) + '</div>' +

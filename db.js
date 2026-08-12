@@ -192,6 +192,31 @@ const DigifinwizDB = (() => {
         return _api('GET', '/api/me/payments?since=' + ts);
     }
 
+    // ── Utilities: bills (per-user monthly cycles) ──────────────────────────────
+    function getMyBills() {
+        return _api('GET', '/api/me/bills');
+    }
+
+    function payBillCycle(cycleId) {
+        return _api('POST', '/api/me/bills/' + cycleId + '/pay');
+    }
+
+    function getCustomBills() {
+        return _api('GET', '/api/me/bills/custom');
+    }
+
+    function createCustomBill(bill) {
+        return _api('POST', '/api/me/bills/custom', bill);
+    }
+
+    function updateCustomBill(id, patch) {
+        return _api('PUT', '/api/me/bills/custom/' + id, patch);
+    }
+
+    function deleteCustomBill(id) {
+        return _api('DELETE', '/api/me/bills/custom/' + id);
+    }
+
     // ── Purchases ─────────────────────────────────────────────────────────────
     function addPurchase(p) {
         return _api('POST', '/api/me/purchases', p);
@@ -546,6 +571,14 @@ const DigifinwizDB = (() => {
         addPayment,
         getPayments,
         getPaymentsSince,
+
+        // Utilities: bills
+        getMyBills,
+        payBillCycle,
+        getCustomBills,
+        createCustomBill,
+        updateCustomBill,
+        deleteCustomBill,
 
         // Purchases
         addPurchase,

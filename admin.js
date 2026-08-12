@@ -1554,14 +1554,28 @@ document.addEventListener('DOMContentLoaded', function () {
             <div style="display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-border)">
                 <div style="width:40px;height:40px;border-radius:10px;background:${escHtml(b.gradient)};display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">${escHtml(b.icon || '🧾')}</div>
                 <div style="flex:1;min-width:0">
-                    <div style="font-weight:600;font-size:var(--text-sm)">${escHtml(b.name)}</div>
-                    <div style="font-size:var(--text-xs);color:var(--color-text-muted)">Acct: ${escHtml(b.accountNumber || '—')} &nbsp;·&nbsp; Due: ${escHtml(b.dueDate || '—')}</div>
+                    <div style="font-weight:600;font-size:var(--text-sm)">${escHtml(b.name)} ${b.billingType === 'usage' ? '<span class="pill pill-purple" style="font-size:0.65rem">usage-based</span>' : ''}</div>
+                    <div style="font-size:var(--text-xs);color:var(--color-text-muted)">Acct: ${escHtml(b.accountNumber || '—')} &nbsp;·&nbsp; Due day: ${b.dueDateDay || '—'} &nbsp;·&nbsp; Late fee: ${Math.round((b.lateFeeRate||0)*100)}% after ${b.graceDays||0}d</div>
                 </div>
-                <div style="font-weight:700;color:var(--color-primary-600);margin-right:var(--space-3)">ƒ${Number(b.amount).toFixed(2)}</div>
+                <div style="font-weight:700;color:var(--color-primary-600);margin-right:var(--space-3)">${b.billingType === 'usage' ? `ƒ${Number(b.ratePerUnit).toFixed(3)}/${escHtml(b.unit)}` : `ƒ${Number(b.amount).toFixed(2)}`}</div>
                 <button class="btn" style="padding:4px 10px;font-size:var(--text-xs)" onclick="editBill(${b.id})">Edit</button>
                 <button class="btn" style="padding:4px 10px;font-size:var(--text-xs);color:#ef4444;border-color:#ef4444" onclick="deleteBill(${b.id})">Delete</button>
             </div>`).join('');
     }
+
+    // Toggles the Amount field vs. the Unit/Rate/Base-Fee/Usage-Range fields
+    // depending on billing type, mirroring the same split on the user-facing
+    // "Add Your Own Bill" form in utilities.html.
+    window.toggleAdminBillingFields = function() {
+        const usage = (document.getElementById('billBillingType') || {}).value === 'usage';
+        const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+        show('billAmountGroup',   !usage);
+        show('billUnitGroup',      usage);
+        show('billRateGroup',      usage);
+        show('billBaseFeeGroup',   usage);
+        show('billUsageMinGroup',  usage);
+        show('billUsageMaxGroup',  usage);
+    };
 
     // Expose to inline onclick handlers
     window.editBill = function(id) {
@@ -1570,13 +1584,23 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(bills => {
                 const b = bills.find(x => x.id === id);
                 if (!b) return;
-                document.getElementById('billEditId').value       = b.id;
-                document.getElementById('billName').value         = b.name;
-                document.getElementById('billIcon').value         = b.icon || '';
-                document.getElementById('billAmount').value       = b.amount;
+                document.getElementById('billEditId').value        = b.id;
+                document.getElementById('billName').value          = b.name;
+                document.getElementById('billIcon').value          = b.icon || '';
+                document.getElementById('billCategory').value      = b.category || 'other';
                 document.getElementById('billAccountNumber').value = b.accountNumber || '';
-                document.getElementById('billGradient').value     = b.gradient || '';
-                document.getElementById('billDueDate').value      = b.dueDate || '';
+                document.getElementById('billGradient').value      = b.gradient || '';
+                document.getElementById('billDueDateDay').value    = b.dueDateDay || 25;
+                document.getElementById('billBillingType').value   = b.billingType || 'flat';
+                document.getElementById('billAmount').value        = b.amount != null ? b.amount : '';
+                document.getElementById('billUnit').value          = b.unit || '';
+                document.getElementById('billRatePerUnit').value   = b.ratePerUnit != null ? b.ratePerUnit : '';
+                document.getElementById('billBaseFee').value       = b.baseFee != null ? b.baseFee : '';
+                document.getElementById('billUsageMin').value      = b.usageMin != null ? b.usageMin : '';
+                document.getElementById('billUsageMax').value      = b.usageMax != null ? b.usageMax : '';
+                document.getElementById('billLateFeeRate').value   = b.lateFeeRate != null ? Math.round(b.lateFeeRate * 100) : 5;
+                document.getElementById('billGraceDays').value     = b.graceDays != null ? b.graceDays : 5;
+                toggleAdminBillingFields();
                 document.getElementById('billFormTitle').textContent = 'Edit Bill';
                 document.getElementById('billSubmitBtn').textContent = 'Save Changes';
                 document.getElementById('billCancelBtn').style.display = '';
@@ -1600,21 +1624,37 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('billFormTitle').textContent   = 'Add New Bill';
         document.getElementById('billSubmitBtn').textContent   = 'Add Bill';
         document.getElementById('billCancelBtn').style.display = 'none';
+        toggleAdminBillingFields();
     };
 
     document.getElementById('billForm').addEventListener('submit', function(e) {
         e.preventDefault();
         const s      = DigifinwizAuth.getSession();
         const editId = document.getElementById('billEditId').value;
+        const billingType = document.getElementById('billBillingType').value;
         const payload = {
             name:          document.getElementById('billName').value.trim(),
             icon:          document.getElementById('billIcon').value.trim() || '🧾',
-            amount:        parseFloat(document.getElementById('billAmount').value) || 0,
+            category:      document.getElementById('billCategory').value,
             accountNumber: document.getElementById('billAccountNumber').value.trim(),
             gradient:      document.getElementById('billGradient').value,
-            dueDate:       document.getElementById('billDueDate').value.trim(),
+            dueDateDay:    parseInt(document.getElementById('billDueDateDay').value, 10) || 25,
+            billingType,
+            lateFeeRate:   (parseFloat(document.getElementById('billLateFeeRate').value) || 0) / 100,
+            graceDays:     parseInt(document.getElementById('billGraceDays').value, 10) || 0,
             active:        true
         };
+        if (billingType === 'usage') {
+            payload.unit        = document.getElementById('billUnit').value.trim();
+            payload.ratePerUnit = parseFloat(document.getElementById('billRatePerUnit').value) || 0;
+            payload.baseFee     = parseFloat(document.getElementById('billBaseFee').value) || 0;
+            payload.usageMin    = parseFloat(document.getElementById('billUsageMin').value) || 0;
+            payload.usageMax    = parseFloat(document.getElementById('billUsageMax').value) || 0;
+            payload.amount      = null;
+        } else {
+            payload.amount      = parseFloat(document.getElementById('billAmount').value) || 0;
+            payload.unit = payload.ratePerUnit = payload.baseFee = payload.usageMin = payload.usageMax = null;
+        }
         const url    = (window.API_BASE_URL || '') + (editId ? '/api/bills/' + editId : '/api/bills');
         const method = editId ? 'PUT' : 'POST';
         fetch(url, {
