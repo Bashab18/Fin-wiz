@@ -56,7 +56,12 @@ function ensureLocalDataFiles() {
 const STORE_NAMES = [
     'users', 'transactions', 'payments', 'purchases', 'challenges', 'messages', 'cart', 'bills',
     'creditCards', 'creditActivity', 'loans', 'loanPayments', 'savingsGoals', 'savingsGoalActivity',
-    'scheduledTransfers', 'products', 'addresses', 'paymentMethods', 'billCycles', 'customBills'
+    'scheduledTransfers', 'products', 'addresses', 'paymentMethods', 'billCycles', 'customBills',
+    // Standalone per-module accounts (Banking/E-Commerce/Utilities each fully separate from the
+    // shared 'users'/'challenges'/'messages' stores above — see the X-App middleware below).
+    'bankingUsers', 'ecommerceUsers', 'utilitiesUsers',
+    'bankingChallenges', 'ecommerceChallenges', 'utilitiesChallenges',
+    'bankingMessages', 'ecommerceMessages', 'utilitiesMessages'
 ];
 
 async function initStorage() {
@@ -225,15 +230,15 @@ function computeOrderStatus(order) {
 // (balance alerts, scheduled-transfer results, credit/loan/goal milestones,
 // bill overdue notices, order status changes, security notices). `category`
 // drives the per-module unread badges in the sidebar nav.
-async function pushSystemMessage(userId, { subject, body, type, category }) {
-    const messages = await readJSON('messages');
+async function pushSystemMessage(userId, { subject, body, type, category }, messageStore = 'messages') {
+    const messages = await readJSON(messageStore);
     const msg = {
         id: nextId(messages), senderId: 0, senderName: 'System', senderEmail: null,
         recipientId: userId, subject, body, type: type || 'info', category: category || 'system',
         sentAt: Date.now(), readBy: []
     };
     messages.push(msg);
-    await writeJSON('messages', messages);
+    await writeJSON(messageStore, messages);
     return msg;
 }
 
@@ -243,7 +248,7 @@ async function pushSystemMessage(userId, { subject, body, type, category }) {
 // credit card / loan / savings-goal features), so alerts fire consistently
 // no matter which feature moved the money. `category` tags which module
 // the triggering action belongs to, for the sidebar unread badges.
-async function maybeFireBalanceAlerts(user, account, current, next, delta, category) {
+async function maybeFireBalanceAlerts(user, account, current, next, delta, category, messageStore = 'messages') {
     const prefs  = Object.assign({}, DEFAULT_ALERT_PREFS, (user.userData || {}).alertPrefs || {});
     const alerts = [];
 
@@ -267,7 +272,7 @@ async function maybeFireBalanceAlerts(user, account, current, next, delta, categ
     }
     if (alerts.length === 0) return;
 
-    const messages = await readJSON('messages');
+    const messages = await readJSON(messageStore);
     const now = Date.now();
     let id = nextId(messages);
     alerts.forEach(a => {
@@ -285,7 +290,7 @@ async function maybeFireBalanceAlerts(user, account, current, next, delta, categ
             readBy: []
         });
     });
-    await writeJSON('messages', messages);
+    await writeJSON(messageStore, messages);
 }
 
 // ── Scheduled / recurring transfers ─────────────────────────────────────────
@@ -301,7 +306,7 @@ function advanceScheduleDate(current, frequency) {
 // per-user lock every other money-moving route uses. Re-reads fresh state
 // under the lock (rather than trusting the caller's snapshot) since another
 // occurrence of the same or a different schedule may have just run.
-async function executeOneScheduledTransfer(userId, scheduleId) {
+async function executeOneScheduledTransfer(userId, scheduleId, userStore = 'users', messageStore = 'messages') {
     await withUserLock(userId, async () => {
         const schedules = await readJSON('scheduledTransfers');
         const idx = schedules.findIndex(x => x.id === scheduleId);
@@ -309,7 +314,7 @@ async function executeOneScheduledTransfer(userId, scheduleId) {
         const sched = schedules[idx];
         if ((sched.nextRunDate || 0) > Date.now()) return;
 
-        const users = await readJSON('users');
+        const users = await readJSON(userStore);
         const uidx  = users.findIndex(u => u.id === userId);
         if (uidx === -1) return;
         const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
@@ -325,7 +330,7 @@ async function executeOneScheduledTransfer(userId, scheduleId) {
                 body: 'Your scheduled transfer of ƒ' + sched.amount.toFixed(2) + ' to ' + sched.recipient +
                       ' could not be completed — insufficient funds in ' + sched.fromAccount + '.',
                 type: 'warning', category: 'banking'
-            });
+            }, messageStore);
 
             schedules[idx] = Object.assign({}, sched, {
                 active:       !isOneTime,
@@ -340,14 +345,14 @@ async function executeOneScheduledTransfer(userId, scheduleId) {
         balances[sched.fromAccount] = next;
         const updatedUser = Object.assign({}, users[uidx], { balances });
         users[uidx] = updatedUser;
-        await writeJSON('users', users);
-        await maybeFireBalanceAlerts(updatedUser, sched.fromAccount, current, next, -sched.amount, 'banking');
+        await writeJSON(userStore, users);
+        await maybeFireBalanceAlerts(updatedUser, sched.fromAccount, current, next, -sched.amount, 'banking', messageStore);
         await pushSystemMessage(userId, {
             subject: 'Scheduled transfer completed',
             body: 'Your scheduled transfer of ƒ' + sched.amount.toFixed(2) + ' to ' + sched.recipient +
                   ' was completed from your ' + sched.fromAccount + ' account.',
             type: 'success', category: 'banking'
-        });
+        }, messageStore);
 
         const txs = await readJSON('transactions');
         txs.push({
@@ -374,7 +379,7 @@ async function executeOneScheduledTransfer(userId, scheduleId) {
 // schedule executes the moment the user is looking at their account, whether
 // or not the server process happened to be running at the exact scheduled
 // moment — plus from a periodic sweep (below) while the server is up.
-async function runDueScheduledTransfers(userId) {
+async function runDueScheduledTransfers(userId, userStore = 'users', messageStore = 'messages') {
     const schedules = await readJSON('scheduledTransfers');
     const mine = schedules.filter(s => s.userId === userId && s.active);
     for (const s of mine) {
@@ -382,7 +387,7 @@ async function runDueScheduledTransfers(userId) {
         while (guard++ < 24) {
             const fresh = (await readJSON('scheduledTransfers')).find(x => x.id === s.id);
             if (!fresh || !fresh.active || (fresh.nextRunDate || 0) > Date.now()) break;
-            await executeOneScheduledTransfer(userId, s.id);
+            await executeOneScheduledTransfer(userId, s.id, userStore, messageStore);
         }
     }
 }
@@ -440,8 +445,8 @@ async function seedDefaultAdmin() {
 }
 
 // ── Challenge helpers ─────────────────────────────────────────────────────────
-async function getChallengesForUser(userId, role) {
-    const all      = await readJSON('challenges');
+async function getChallengesForUser(userId, role, challengeStore = 'challenges') {
+    const all      = await readJSON(challengeStore);
     let filtered   = role === 'participant' ? all.filter(c => c.userId === userId) : all;
 
     // Deduplicate by title
@@ -462,13 +467,23 @@ async function getChallengesForUser(userId, role) {
     return Array.from(seen.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
 
-async function seedChallengesForUser(userId) {
-    const challenges = await readJSON('challenges');
+// category (optional): for a standalone module account, only that module's
+// own challenges make sense — a Banking-only account has no way to ever
+// browse the E-Commerce catalog or pay a utility bill, so seeding it the
+// full cross-module set would leave 2/3 of its challenges permanently
+// unreachable. 'general' (level-up, profile-complete) challenges are
+// self-contained and included regardless of category, since they don't
+// depend on activity in another module.
+async function seedChallengesForUser(userId, challengeStore = 'challenges', category = null) {
+    const challenges = await readJSON(challengeStore);
     const existing   = challenges.filter(c => c.userId === userId);
     if (existing.length > 0) return;
     const now = Date.now();
     let id    = nextId(challenges);
-    ALL_DEFAULT_CHALLENGES.forEach(c => {
+    const defs = category
+        ? ALL_DEFAULT_CHALLENGES.filter(c => c.category === category || c.category === 'general')
+        : ALL_DEFAULT_CHALLENGES;
+    defs.forEach(c => {
         challenges.push(Object.assign({}, c, {
             id:        id++,
             userId:    userId,
@@ -477,7 +492,7 @@ async function seedChallengesForUser(userId) {
             completed: false
         }));
     });
-    await writeJSON('challenges', challenges);
+    await writeJSON(challengeStore, challenges);
 }
 
 // Context fields a "custom" condition is allowed to read — never eval
@@ -536,9 +551,9 @@ function evaluateCondition(cc, context) {
     }
 }
 
-async function checkAndCompleteChallengesForUser(userId, context) {
-    const challenges = await readJSON('challenges');
-    const users      = await readJSON('users');
+async function checkAndCompleteChallengesForUser(userId, context, challengeStore = 'challenges', userStore = 'users', appModule = null) {
+    const challenges = await readJSON(challengeStore);
+    const users      = await readJSON(userStore);
     const user       = users.find(u => u.id === userId);
     if (!user) return { completed: [], leveledUp: false, newLevel: 0 };
 
@@ -569,7 +584,7 @@ async function checkAndCompleteChallengesForUser(userId, context) {
     const updatedChallenges = challenges.map(c =>
         completedIds.has(c.id) ? Object.assign({}, c, { completed: true, completedAt: now }) : c
     );
-    await writeJSON('challenges', updatedChallenges);
+    await writeJSON(challengeStore, updatedChallenges);
 
     // Award XP + florins + update userData
     const bonusXP      = completed.reduce((s, c) => s + (c.points || 0), 0);
@@ -585,9 +600,11 @@ async function checkAndCompleteChallengesForUser(userId, context) {
 
     if (userData.pointsToNextLevel <= 0) {
         if (userData.level === 1) {
-            // Gate: must have completed all 3 core Level-1 activities
+            // Gate: must have completed all 3 core Level-1 activities — one
+            // per module. Meaningless for a standalone single-module account
+            // (it has no way to ever do the other two), so bypass it there.
             const allNow = updatedChallenges.filter(c => c.userId === userId);
-            const reqMet = LEVEL_1_REQUIRED_CONDITIONS.every(cond =>
+            const reqMet = appModule ? true : LEVEL_1_REQUIRED_CONDITIONS.every(cond =>
                 allNow.some(c => c.condition === cond && c.completed)
             );
             if (reqMet) {
@@ -607,7 +624,7 @@ async function checkAndCompleteChallengesForUser(userId, context) {
     }
 
     const updatedUsers = users.map(u => u.id === userId ? Object.assign({}, u, { userData }) : u);
-    await writeJSON('users', updatedUsers);
+    await writeJSON(userStore, updatedUsers);
 
     return { completed, leveledUp, newLevel };
 }
@@ -627,6 +644,28 @@ app.use((req, res, next) => {
     const role = req.headers['x-user-role'];
     req.userId   = uid  ? Number(uid) : null;
     req.userRole = role ? role        : null;
+    next();
+});
+
+// Module middleware — Banking, E-Commerce, and Utilities are each fully
+// standalone apps with their own separate accounts, decoupled from the
+// original shared 'users'/'challenges'/'messages' stores every other page
+// still uses. A page belonging to one of them sends X-App so every
+// /api/me/* route below transparently resolves req.userId against the
+// right store instead of the shared one — pages that never send X-App
+// (every pre-existing page) see req.userStore/challengeStore/messageStore
+// resolve to the original literal names, i.e. no behavior change at all.
+const MODULE_STORES = {
+    banking:   { users: 'bankingUsers',   challenges: 'bankingChallenges',   messages: 'bankingMessages' },
+    ecommerce: { users: 'ecommerceUsers', challenges: 'ecommerceChallenges', messages: 'ecommerceMessages' },
+    utilities: { users: 'utilitiesUsers', challenges: 'utilitiesChallenges', messages: 'utilitiesMessages' }
+};
+app.use((req, res, next) => {
+    const mod = MODULE_STORES[req.headers['x-app']];
+    req.appModule      = mod ? req.headers['x-app'] : null;
+    req.userStore      = mod ? mod.users      : 'users';
+    req.challengeStore = mod ? mod.challenges : 'challenges';
+    req.messageStore   = mod ? mod.messages   : 'messages';
     next();
 });
 
@@ -691,8 +730,8 @@ app.post('/api/auth/register', async (req, res) => {
 
 app.post('/api/auth/notify-admins', async (req, res) => {
     const { username, fullName } = req.body || {};
-    const users    = await readJSON('users');
-    const messages = await readJSON('messages');
+    const users    = await readJSON(req.userStore);
+    const messages = await readJSON(req.messageStore);
     const admins   = users.filter(u => u.role === 'admin');
     const now      = Date.now();
     admins.forEach(admin => {
@@ -709,19 +748,167 @@ app.post('/api/auth/notify-admins', async (req, res) => {
             readBy:      []
         });
     });
-    await writeJSON('messages', messages);
+    await writeJSON(req.messageStore, messages);
     res.json({ ok: true });
 });
 
+// ── Module auth (Banking / E-Commerce / Utilities standalone accounts) ─────────
+// Each module has its own separate account space, decoupled from the shared
+// 'users' store above — no role/status/approval gate, accounts are usable
+// immediately after registration.
+app.post('/api/banking/auth/register', async (req, res) => {
+    const { fullName, username, email, password } = req.body || {};
+    if (!fullName || !username || !email || !password) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+    const users  = await readJSON('bankingUsers');
+    const uLower = username.toLowerCase();
+    const eLower = email.toLowerCase();
+    if (users.some(u => u.username === uLower)) {
+        return res.status(409).json({ error: 'Username already taken' });
+    }
+    if (users.some(u => u.email === eLower)) {
+        return res.status(409).json({ error: 'Email already registered' });
+    }
+    const user = {
+        id:           nextId(users),
+        fullName,
+        username:     uLower,
+        email:        eLower,
+        passwordHash: simpleHash(password),
+        createdAt:    Date.now(),
+        lastLogin:    Date.now(),
+        userData:     Object.assign({}, DEFAULT_USER_DATA),
+        balances:     Object.assign({}, DEFAULT_BALANCES)
+    };
+    users.push(user);
+    await writeJSON('bankingUsers', users);
+    await seedChallengesForUser(user.id, 'bankingChallenges', 'banking');
+    const { passwordHash, ...safeUser } = user;
+    res.status(201).json({ user: safeUser });
+});
+
+app.post('/api/banking/auth/login', async (req, res) => {
+    const { usernameOrEmail, password } = req.body || {};
+    if (!usernameOrEmail || !password) {
+        return res.status(400).json({ success: false, reason: 'missing_fields' });
+    }
+    const val   = usernameOrEmail.toLowerCase();
+    const users = await readJSON('bankingUsers');
+    const user  = users.find(u => u.username === val || u.email === val);
+    if (!user) return res.json({ success: false, reason: 'not_found' });
+    if (user.passwordHash !== simpleHash(password)) return res.json({ success: false, reason: 'wrong_password' });
+    const now = Date.now();
+    await writeJSON('bankingUsers', users.map(u => u.id === user.id ? Object.assign({}, u, { lastLogin: now }) : u));
+    const { passwordHash, ...safeUser } = user;
+    res.json({ success: true, user: Object.assign({}, safeUser, { lastLogin: now }) });
+});
+
+app.post('/api/ecommerce/auth/register', async (req, res) => {
+    const { fullName, username, email, password } = req.body || {};
+    if (!fullName || !username || !email || !password) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+    const users  = await readJSON('ecommerceUsers');
+    const uLower = username.toLowerCase();
+    const eLower = email.toLowerCase();
+    if (users.some(u => u.username === uLower)) {
+        return res.status(409).json({ error: 'Username already taken' });
+    }
+    if (users.some(u => u.email === eLower)) {
+        return res.status(409).json({ error: 'Email already registered' });
+    }
+    const user = {
+        id:           nextId(users),
+        fullName,
+        username:     uLower,
+        email:        eLower,
+        passwordHash: simpleHash(password),
+        createdAt:    Date.now(),
+        lastLogin:    Date.now(),
+        userData:     Object.assign({}, DEFAULT_USER_DATA),
+        balances:     Object.assign({}, DEFAULT_BALANCES)
+    };
+    users.push(user);
+    await writeJSON('ecommerceUsers', users);
+    await seedChallengesForUser(user.id, 'ecommerceChallenges', 'ecommerce');
+    const { passwordHash, ...safeUser } = user;
+    res.status(201).json({ user: safeUser });
+});
+
+app.post('/api/ecommerce/auth/login', async (req, res) => {
+    const { usernameOrEmail, password } = req.body || {};
+    if (!usernameOrEmail || !password) {
+        return res.status(400).json({ success: false, reason: 'missing_fields' });
+    }
+    const val   = usernameOrEmail.toLowerCase();
+    const users = await readJSON('ecommerceUsers');
+    const user  = users.find(u => u.username === val || u.email === val);
+    if (!user) return res.json({ success: false, reason: 'not_found' });
+    if (user.passwordHash !== simpleHash(password)) return res.json({ success: false, reason: 'wrong_password' });
+    const now = Date.now();
+    await writeJSON('ecommerceUsers', users.map(u => u.id === user.id ? Object.assign({}, u, { lastLogin: now }) : u));
+    const { passwordHash, ...safeUser } = user;
+    res.json({ success: true, user: Object.assign({}, safeUser, { lastLogin: now }) });
+});
+
+app.post('/api/utilities/auth/register', async (req, res) => {
+    const { fullName, username, email, password } = req.body || {};
+    if (!fullName || !username || !email || !password) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+    const users  = await readJSON('utilitiesUsers');
+    const uLower = username.toLowerCase();
+    const eLower = email.toLowerCase();
+    if (users.some(u => u.username === uLower)) {
+        return res.status(409).json({ error: 'Username already taken' });
+    }
+    if (users.some(u => u.email === eLower)) {
+        return res.status(409).json({ error: 'Email already registered' });
+    }
+    const user = {
+        id:           nextId(users),
+        fullName,
+        username:     uLower,
+        email:        eLower,
+        passwordHash: simpleHash(password),
+        createdAt:    Date.now(),
+        lastLogin:    Date.now(),
+        userData:     Object.assign({}, DEFAULT_USER_DATA),
+        balances:     Object.assign({}, DEFAULT_BALANCES)
+    };
+    users.push(user);
+    await writeJSON('utilitiesUsers', users);
+    await seedChallengesForUser(user.id, 'utilitiesChallenges', 'utilities');
+    const { passwordHash, ...safeUser } = user;
+    res.status(201).json({ user: safeUser });
+});
+
+app.post('/api/utilities/auth/login', async (req, res) => {
+    const { usernameOrEmail, password } = req.body || {};
+    if (!usernameOrEmail || !password) {
+        return res.status(400).json({ success: false, reason: 'missing_fields' });
+    }
+    const val   = usernameOrEmail.toLowerCase();
+    const users = await readJSON('utilitiesUsers');
+    const user  = users.find(u => u.username === val || u.email === val);
+    if (!user) return res.json({ success: false, reason: 'not_found' });
+    if (user.passwordHash !== simpleHash(password)) return res.json({ success: false, reason: 'wrong_password' });
+    const now = Date.now();
+    await writeJSON('utilitiesUsers', users.map(u => u.id === user.id ? Object.assign({}, u, { lastLogin: now }) : u));
+    const { passwordHash, ...safeUser } = user;
+    res.json({ success: true, user: Object.assign({}, safeUser, { lastLogin: now }) });
+});
+
 // ── Users ─────────────────────────────────────────────────────────────────────
-app.get('/api/users', async (_req, res) => {
-    const users = await readJSON('users');
+app.get('/api/users', async (req, res) => {
+    const users = await readJSON(req.userStore);
     res.json(users.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
 });
 
 app.get('/api/users/:id', async (req, res) => {
     const id    = Number(req.params.id);
-    const users = await readJSON('users');
+    const users = await readJSON(req.userStore);
     const user  = users.find(u => u.id === id);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (req.userRole !== 'admin' && req.userId !== id) {
@@ -741,7 +928,7 @@ app.put('/api/users/:id', async (req, res) => {
     if (!isAdmin && req.userId !== id) return res.status(403).json({ error: 'Forbidden' });
     try {
         const result = await withUserLock(req.userId, async () => {
-            const users = await readJSON('users');
+            const users = await readJSON(req.userStore);
             const idx   = users.findIndex(u => u.id === id);
             if (idx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
             const body  = req.body || {};
@@ -756,7 +943,7 @@ app.put('/api/users/:id', async (req, res) => {
             if (patch.email    !== undefined) patch.email    = String(patch.email).toLowerCase();
             if (patch.username !== undefined) patch.username = String(patch.username).toLowerCase();
             users[idx] = Object.assign({}, users[idx], patch, { id });
-            await writeJSON('users', users);
+            await writeJSON(req.userStore, users);
             return users[idx];
         });
         res.json(result);
@@ -780,8 +967,8 @@ app.delete('/api/users/:id', async (req, res) => {
     }
 
     // Messages: delete direct, scrub readBy from broadcasts
-    const messages = await readJSON('messages');
-    await writeJSON('messages', messages
+    const messages = await readJSON(req.messageStore);
+    await writeJSON(req.messageStore, messages
         .filter(m => m.recipientId !== id)
         .map(m => {
             if (m.recipientId === 'all') {
@@ -791,19 +978,19 @@ app.delete('/api/users/:id', async (req, res) => {
         })
     );
 
-    const users = await readJSON('users');
-    await writeJSON('users', users.filter(u => u.id !== id));
+    const users = await readJSON(req.userStore);
+    await writeJSON(req.userStore, users.filter(u => u.id !== id));
     res.json({ ok: true });
 });
 
 app.post('/api/users/:id/approve', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const id    = Number(req.params.id);
-    const users = await readJSON('users');
+    const users = await readJSON(req.userStore);
     const idx   = users.findIndex(u => u.id === id);
     if (idx === -1) return res.status(404).json({ error: 'User not found' });
     users[idx] = Object.assign({}, users[idx], { status: 'approved', approvedAt: Date.now() });
-    await writeJSON('users', users);
+    await writeJSON(req.userStore, users);
     await seedChallengesForUser(id);
     res.json(users[idx]);
 });
@@ -811,11 +998,11 @@ app.post('/api/users/:id/approve', async (req, res) => {
 app.post('/api/users/:id/reject', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const id    = Number(req.params.id);
-    const users = await readJSON('users');
+    const users = await readJSON(req.userStore);
     const idx   = users.findIndex(u => u.id === id);
     if (idx === -1) return res.status(404).json({ error: 'User not found' });
     users[idx] = Object.assign({}, users[idx], { status: 'rejected' });
-    await writeJSON('users', users);
+    await writeJSON(req.userStore, users);
     res.json(users[idx]);
 });
 
@@ -834,31 +1021,31 @@ app.post('/api/users/:id/seed-challenges', async (req, res) => {
 
 // ── Me: user data ─────────────────────────────────────────────────────────────
 app.get('/api/me/data', async (req, res) => {
-    const users = await readJSON('users');
+    const users = await readJSON(req.userStore);
     const user  = users.find(u => u.id === req.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json(user.userData || Object.assign({}, DEFAULT_USER_DATA));
 });
 
 app.put('/api/me/data', async (req, res) => {
-    const users = await readJSON('users');
+    const users = await readJSON(req.userStore);
     const idx   = users.findIndex(u => u.id === req.userId);
     if (idx === -1) return res.status(404).json({ error: 'User not found' });
     users[idx] = Object.assign({}, users[idx], { userData: req.body });
-    await writeJSON('users', users);
+    await writeJSON(req.userStore, users);
     res.json(users[idx].userData);
 });
 
 // ── Me: profile ───────────────────────────────────────────────────────────────
 app.get('/api/me/profile', async (req, res) => {
-    const users = await readJSON('users');
+    const users = await readJSON(req.userStore);
     const user  = users.find(u => u.id === req.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json({ fullName: user.fullName, username: user.username, email: user.email, avatarDataUri: user.avatarDataUri || null });
 });
 
 app.put('/api/me/profile', async (req, res) => {
-    const users = await readJSON('users');
+    const users = await readJSON(req.userStore);
     const idx   = users.findIndex(u => u.id === req.userId);
     if (idx === -1) return res.status(404).json({ error: 'User not found' });
     const { fullName, username, email, avatarDataUri } = req.body || {};
@@ -875,7 +1062,7 @@ app.put('/api/me/profile', async (req, res) => {
         patch.avatarDataUri = avatarDataUri;
     }
     users[idx] = Object.assign({}, users[idx], patch);
-    await writeJSON('users', users);
+    await writeJSON(req.userStore, users);
     res.json({ fullName: users[idx].fullName, username: users[idx].username, email: users[idx].email, avatarDataUri: users[idx].avatarDataUri || null });
 });
 
@@ -886,19 +1073,19 @@ app.post('/api/me/password', async (req, res) => {
     if (!currentPassword || !newPassword) {
         return res.status(400).json({ error: 'currentPassword and newPassword required' });
     }
-    const users = await readJSON('users');
+    const users = await readJSON(req.userStore);
     const idx   = users.findIndex(u => u.id === req.userId);
     if (idx === -1) return res.status(404).json({ error: 'User not found' });
     if (users[idx].passwordHash !== simpleHash(currentPassword)) {
         return res.status(401).json({ error: 'Current password is incorrect' });
     }
     users[idx] = Object.assign({}, users[idx], { passwordHash: simpleHash(newPassword) });
-    await writeJSON('users', users);
+    await writeJSON(req.userStore, users);
     await pushSystemMessage(req.userId, {
         subject: 'Your password was changed',
         body: 'Your account password was changed. If you didn\'t make this change, contact support immediately.',
         type: 'warning', category: 'system'
-    });
+    }, req.messageStore);
     res.json({ ok: true });
 });
 
@@ -909,8 +1096,8 @@ app.get('/api/me/balances', async (req, res) => {
     // page visit, so it's the most reliable point to self-correct regardless
     // of whether the server process was actually running at the scheduled
     // moment.
-    await runDueScheduledTransfers(req.userId);
-    const users = await readJSON('users');
+    await runDueScheduledTransfers(req.userId, req.userStore, req.messageStore);
+    const users = await readJSON(req.userStore);
     const user  = users.find(u => u.id === req.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
     const balances = Object.assign({}, DEFAULT_BALANCES, user.balances || {});
@@ -918,7 +1105,7 @@ app.get('/api/me/balances', async (req, res) => {
 });
 
 app.get('/api/me/balances/:account', async (req, res) => {
-    const users   = await readJSON('users');
+    const users   = await readJSON(req.userStore);
     const user    = users.find(u => u.id === req.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
     const account  = req.params.account;
@@ -937,7 +1124,7 @@ app.post('/api/me/balances/adjust', async (req, res) => {
         // against the up-to-date balance instead of both reading the same
         // stale value and driving it past zero.
         const result = await withUserLock(req.userId, async () => {
-            const users = await readJSON('users');
+            const users = await readJSON(req.userStore);
             const idx   = users.findIndex(u => u.id === req.userId);
             if (idx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
             const balances = Object.assign({}, DEFAULT_BALANCES, users[idx].balances || {});
@@ -947,11 +1134,11 @@ app.post('/api/me/balances/adjust', async (req, res) => {
             balances[account] = next;
             const updatedUser = Object.assign({}, users[idx], { balances });
             users[idx]        = updatedUser;
-            await writeJSON('users', users);
+            await writeJSON(req.userStore, users);
             // Every balance-changing action in the app (transfers, bill pay,
             // checkout, credit card/loan/goal activity) routes through this
             // one endpoint, so it's the single choke point for alert checks.
-            await maybeFireBalanceAlerts(updatedUser, account, current, next, signedDelta, 'banking');
+            await maybeFireBalanceAlerts(updatedUser, account, current, next, signedDelta, 'banking', req.messageStore);
             return { account, amount: balances[account] };
         });
         res.json(result);
@@ -971,7 +1158,7 @@ app.post('/api/me/balances/:account/set', async (req, res) => {
     if (!Number.isFinite(amount) || amount < 0) return res.status(400).json({ error: 'amount must be a non-negative finite number' });
     try {
         const result = await withUserLock(req.userId, async () => {
-            const users = await readJSON('users');
+            const users = await readJSON(req.userStore);
             const idx   = users.findIndex(u => u.id === req.userId);
             if (idx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
             const balances = Object.assign({}, DEFAULT_BALANCES, users[idx].balances || {});
@@ -980,8 +1167,8 @@ app.post('/api/me/balances/:account/set', async (req, res) => {
             balances[account] = next;
             const updatedUser = Object.assign({}, users[idx], { balances });
             users[idx] = updatedUser;
-            await writeJSON('users', users);
-            await maybeFireBalanceAlerts(updatedUser, account, current, next, next - current, 'banking');
+            await writeJSON(req.userStore, users);
+            await maybeFireBalanceAlerts(updatedUser, account, current, next, next - current, 'banking', req.messageStore);
             return { account, amount: next };
         });
         res.json(result);
@@ -1053,7 +1240,7 @@ app.delete('/api/me/payments', async (req, res) => {
 // having reached "shipped" or "delivered", then flags it so it never
 // repeats for that order — same lazy-execution-on-read pattern used for
 // overdue bills and scheduled transfers.
-async function notifyOrderStatusForUser(userId, orders) {
+async function notifyOrderStatusForUser(userId, orders, messageStore = 'messages') {
     const toNotify = [];
     orders.forEach(o => {
         const status = computeOrderStatus(o).status;
@@ -1074,7 +1261,7 @@ async function notifyOrderStatusForUser(userId, orders) {
                 ? 'Your order ' + (order.orderId || '#' + order.id) + ' (ƒ' + (order.total || 0).toFixed(2) + ') has shipped and is on its way.'
                 : 'Your order ' + (order.orderId || '#' + order.id) + ' (ƒ' + (order.total || 0).toFixed(2) + ') was delivered. We hope you enjoy it!',
             type: 'info', category: 'ecommerce'
-        });
+        }, messageStore);
     }
     return orders.map(o => {
         const hit = toNotify.filter(t => t.order.id === o.id);
@@ -1092,7 +1279,7 @@ app.get('/api/me/purchases', async (req, res) => {
     filtered.sort((a, b) => (b.id || 0) - (a.id || 0));
     // Locked so two concurrent GETs (two open tabs) can't both observe the
     // dedup flag as unset and each push a duplicate shipped/delivered message.
-    filtered = await withUserLock(req.userId, () => notifyOrderStatusForUser(req.userId, filtered));
+    filtered = await withUserLock(req.userId, () => notifyOrderStatusForUser(req.userId, filtered, req.messageStore));
     filtered = filtered.map(p => Object.assign({}, p, computeOrderStatus(p)));
     res.json(limit ? filtered.slice(0, limit) : filtered);
 });
@@ -1171,7 +1358,7 @@ app.post('/api/me/checkout', async (req, res) => {
     try {
         const result = await withUserLock(req.userId, async () => {
             const [cartRows, products, addresses, paymentMethods, users] = await Promise.all([
-                readJSON('cart'), readJSON('products'), readJSON('addresses'), readJSON('paymentMethods'), readJSON('users')
+                readJSON('cart'), readJSON('products'), readJSON('addresses'), readJSON('paymentMethods'), readJSON(req.userStore)
             ]);
             const myCart = cartRows.filter(c => c.userId === req.userId);
             if (myCart.length === 0) { const e = new Error('Cart is empty'); e.status = 400; throw e; }
@@ -1239,7 +1426,7 @@ app.post('/api/me/checkout', async (req, res) => {
             let leveledUp = false, newLevel = 0;
             if (userData.pointsToNextLevel <= 0) {
                 if (userData.level === 1) {
-                    const challenges = await readJSON('challenges');
+                    const challenges = await readJSON(req.challengeStore);
                     const reqMet = LEVEL_1_REQUIRED_CONDITIONS.every(cond =>
                         challenges.some(c => c.userId === req.userId && c.condition === cond && c.completed)
                     );
@@ -1259,8 +1446,8 @@ app.post('/api/me/checkout', async (req, res) => {
 
             const updatedUser = Object.assign({}, users[uidx], { balances, userData });
             users[uidx] = updatedUser;
-            await writeJSON('users', users);
-            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -total, 'ecommerce');
+            await writeJSON(req.userStore, users);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -total, 'ecommerce', req.messageStore);
 
             const updatedProducts = products.map(p => {
                 const line = items.find(i => i.productId === p.id);
@@ -1300,7 +1487,11 @@ app.post('/api/me/checkout', async (req, res) => {
 
 // ── Me: challenges  (specific sub-routes MUST be defined before the generic ones)
 app.get('/api/me/challenges/level1', async (req, res) => {
-    const challenges = await getChallengesForUser(req.userId, 'participant');
+    // The 3-way gate (one activity per module) is meaningless for a
+    // standalone single-module account — it has no way to ever satisfy the
+    // other two, so treat it as already met.
+    if (req.appModule) return res.json({ allMet: true, items: [] });
+    const challenges = await getChallengesForUser(req.userId, 'participant', req.challengeStore);
     const defs = [
         { condition: 'first_transfer', title: 'Make your first bank transfer',          link: 'banking.html'   },
         { condition: 'first_purchase', title: 'Complete your first ecommerce purchase', link: 'ecommerce.html' },
@@ -1316,12 +1507,12 @@ app.get('/api/me/challenges/level1', async (req, res) => {
 });
 
 app.post('/api/me/challenges/check', async (req, res) => {
-    const result = await checkAndCompleteChallengesForUser(req.userId, req.body || {});
+    const result = await checkAndCompleteChallengesForUser(req.userId, req.body || {}, req.challengeStore, req.userStore, req.appModule);
     res.json(result);
 });
 
 app.post('/api/me/challenges/purge', async (req, res) => {
-    const all    = await readJSON('challenges');
+    const all    = await readJSON(req.challengeStore);
     const mine   = all.filter(c => c.userId === req.userId);
     const others = all.filter(c => c.userId !== req.userId);
 
@@ -1342,7 +1533,7 @@ app.post('/api/me/challenges/purge', async (req, res) => {
 
     const keepIds = new Set(Array.from(best.values()).map(c => c.id));
     const purged  = mine.filter(c => !keepIds.has(c.id)).length;
-    await writeJSON('challenges', [...others, ...mine.filter(c => keepIds.has(c.id))]);
+    await writeJSON(req.challengeStore, [...others, ...mine.filter(c => keepIds.has(c.id))]);
     res.json({ purged });
 });
 
@@ -1351,10 +1542,10 @@ app.post('/api/me/challenges/purge', async (req, res) => {
 // their challenges without needing the admin-only DELETE /api/admin/challenges,
 // which would otherwise wipe every user's challenges.
 app.post('/api/me/challenges/reset', async (req, res) => {
-    const all    = await readJSON('challenges');
+    const all    = await readJSON(req.challengeStore);
     const others = all.filter(c => c.userId !== req.userId);
-    await writeJSON('challenges', others);
-    await seedChallengesForUser(req.userId);
+    await writeJSON(req.challengeStore, others);
+    await seedChallengesForUser(req.userId, req.challengeStore, req.appModule);
     res.json({ ok: true });
 });
 
@@ -1372,28 +1563,28 @@ app.post('/api/me/reset', async (req, res) => {
         await writeJSON(store, rows.filter(r => r.userId !== req.userId));
     }
 
-    const users = await readJSON('users');
+    const users = await readJSON(req.userStore);
     const idx   = users.findIndex(u => u.id === req.userId);
     if (idx === -1) return res.status(404).json({ error: 'User not found' });
     users[idx] = Object.assign({}, users[idx], {
         userData: Object.assign({}, DEFAULT_USER_DATA),
         balances: Object.assign({}, DEFAULT_BALANCES)
     });
-    await writeJSON('users', users);
+    await writeJSON(req.userStore, users);
 
-    const challenges = await readJSON('challenges');
-    await writeJSON('challenges', challenges.filter(c => c.userId !== req.userId));
-    await seedChallengesForUser(req.userId);
+    const challenges = await readJSON(req.challengeStore);
+    await writeJSON(req.challengeStore, challenges.filter(c => c.userId !== req.userId));
+    await seedChallengesForUser(req.userId, req.challengeStore, req.appModule);
 
     res.json({ ok: true });
 });
 
 app.get('/api/me/challenges', async (req, res) => {
-    res.json(await getChallengesForUser(req.userId, req.userRole || 'participant'));
+    res.json(await getChallengesForUser(req.userId, req.userRole || 'participant', req.challengeStore));
 });
 
 app.post('/api/me/challenges', async (req, res) => {
-    const all    = await readJSON('challenges');
+    const all    = await readJSON(req.challengeStore);
     const record = Object.assign({
         active:    true,
         completed: false,
@@ -1404,55 +1595,55 @@ app.post('/api/me/challenges', async (req, res) => {
         userId: req.userId
     });
     all.push(record);
-    await writeJSON('challenges', all);
+    await writeJSON(req.challengeStore, all);
     res.status(201).json(record);
 });
 
 app.patch('/api/me/challenges/:id', async (req, res) => {
     const id  = Number(req.params.id);
-    const all = await readJSON('challenges');
+    const all = await readJSON(req.challengeStore);
     const idx = all.findIndex(c => c.id === id && c.userId === req.userId);
     if (idx === -1) return res.status(404).json({ error: 'Challenge not found' });
     all[idx] = Object.assign({}, all[idx], req.body, { id, userId: req.userId });
-    await writeJSON('challenges', all);
+    await writeJSON(req.challengeStore, all);
     res.json(all[idx]);
 });
 
 app.delete('/api/me/challenges/:id', async (req, res) => {
     const id  = Number(req.params.id);
-    const all = await readJSON('challenges');
-    await writeJSON('challenges', all.filter(c => !(c.id === id && c.userId === req.userId)));
+    const all = await readJSON(req.challengeStore);
+    await writeJSON(req.challengeStore, all.filter(c => !(c.id === id && c.userId === req.userId)));
     res.json({ ok: true });
 });
 
 // ── Me: messages ──────────────────────────────────────────────────────────────
 app.get('/api/me/messages', async (req, res) => {
-    const all = await readJSON('messages');
+    const all = await readJSON(req.messageStore);
     res.json(all.filter(m => m.recipientId === 'all' || m.recipientId === req.userId));
 });
 
 app.patch('/api/me/messages/:id', async (req, res) => {
     const id  = Number(req.params.id);
-    const all = await readJSON('messages');
+    const all = await readJSON(req.messageStore);
     const idx = all.findIndex(m => m.id === id);
     if (idx === -1) return res.status(404).json({ error: 'Message not found' });
     const readBy = Array.from(all[idx].readBy || []);
     if (!readBy.includes(req.userId)) readBy.push(req.userId);
     all[idx] = Object.assign({}, all[idx], { readBy });
-    await writeJSON('messages', all);
+    await writeJSON(req.messageStore, all);
     res.json(all[idx]);
 });
 
 // ── Me: alert preferences ───────────────────────────────────────────────────
 app.get('/api/me/alert-prefs', async (req, res) => {
-    const users = await readJSON('users');
+    const users = await readJSON(req.userStore);
     const user  = users.find(u => u.id === req.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json(Object.assign({}, DEFAULT_ALERT_PREFS, (user.userData || {}).alertPrefs || {}));
 });
 
 app.put('/api/me/alert-prefs', async (req, res) => {
-    const users = await readJSON('users');
+    const users = await readJSON(req.userStore);
     const idx   = users.findIndex(u => u.id === req.userId);
     if (idx === -1) return res.status(404).json({ error: 'User not found' });
     const body  = req.body || {};
@@ -1464,7 +1655,7 @@ app.put('/api/me/alert-prefs', async (req, res) => {
     };
     const userData = Object.assign({}, DEFAULT_USER_DATA, users[idx].userData || {}, { alertPrefs: prefs });
     users[idx] = Object.assign({}, users[idx], { userData });
-    await writeJSON('users', users);
+    await writeJSON(req.userStore, users);
     res.json(prefs);
 });
 
@@ -1562,7 +1753,7 @@ app.post('/api/me/credit-card/payment', async (req, res) => {
             const payAmt = Math.min(amt, card.balance);
             if (payAmt <= 0) { const e = new Error('Card balance is already zero'); e.status = 409; throw e; }
 
-            const users = await readJSON('users');
+            const users = await readJSON(req.userStore);
             const uidx  = users.findIndex(u => u.id === req.userId);
             if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
             const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
@@ -1572,8 +1763,8 @@ app.post('/api/me/credit-card/payment', async (req, res) => {
             balances.checking = next;
             const updatedUser = Object.assign({}, users[uidx], { balances });
             users[uidx] = updatedUser;
-            await writeJSON('users', users);
-            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -payAmt, 'banking');
+            await writeJSON(req.userStore, users);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -payAmt, 'banking', req.messageStore);
 
             cards[idx] = Object.assign({}, card, { balance: parseFloat((card.balance - payAmt).toFixed(2)) });
             await writeJSON('creditCards', cards);
@@ -1645,7 +1836,7 @@ app.post('/api/me/loan/apply', async (req, res) => {
             loans.push(loan);
             await writeJSON('loans', loans);
 
-            const users = await readJSON('users');
+            const users = await readJSON(req.userStore);
             const uidx  = users.findIndex(u => u.id === req.userId);
             if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
             const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
@@ -1654,8 +1845,8 @@ app.post('/api/me/loan/apply', async (req, res) => {
             balances.checking = next;
             const updatedUser = Object.assign({}, users[uidx], { balances });
             users[uidx] = updatedUser;
-            await writeJSON('users', users);
-            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, amt, 'banking');
+            await writeJSON(req.userStore, users);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, amt, 'banking', req.messageStore);
 
             return { loan, checking: next };
         });
@@ -1677,7 +1868,7 @@ app.post('/api/me/loan/payment', async (req, res) => {
             const payAmt = Math.min(amt, loan.balance);
             if (payAmt <= 0) { const e = new Error('Loan balance is already zero'); e.status = 409; throw e; }
 
-            const users = await readJSON('users');
+            const users = await readJSON(req.userStore);
             const uidx  = users.findIndex(u => u.id === req.userId);
             if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
             const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
@@ -1687,8 +1878,8 @@ app.post('/api/me/loan/payment', async (req, res) => {
             balances.checking = next;
             const updatedUser = Object.assign({}, users[uidx], { balances });
             users[uidx] = updatedUser;
-            await writeJSON('users', users);
-            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -payAmt, 'banking');
+            await writeJSON(req.userStore, users);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -payAmt, 'banking', req.messageStore);
 
             const newBalance = parseFloat((loan.balance - payAmt).toFixed(2));
             const paidOff = newBalance <= 0;
@@ -1762,7 +1953,7 @@ app.post('/api/me/savings-goals/:id/contribute', async (req, res) => {
             if (idx === -1) { const e = new Error('Goal not found'); e.status = 404; throw e; }
             const goal = goals[idx];
 
-            const users = await readJSON('users');
+            const users = await readJSON(req.userStore);
             const uidx  = users.findIndex(u => u.id === req.userId);
             if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
             const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
@@ -1772,8 +1963,8 @@ app.post('/api/me/savings-goals/:id/contribute', async (req, res) => {
             balances.checking = next;
             const updatedUser = Object.assign({}, users[uidx], { balances });
             users[uidx] = updatedUser;
-            await writeJSON('users', users);
-            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -amt, 'banking');
+            await writeJSON(req.userStore, users);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -amt, 'banking', req.messageStore);
 
             const wasComplete = goal.current >= goal.target;
             const newCurrent  = parseFloat((goal.current + amt).toFixed(2));
@@ -1819,7 +2010,7 @@ app.post('/api/me/savings-goals/:id/withdraw', async (req, res) => {
             const wAmt = Math.min(amt, goal.current);
             if (wAmt <= 0) { const e = new Error('Goal balance is already zero'); e.status = 409; throw e; }
 
-            const users = await readJSON('users');
+            const users = await readJSON(req.userStore);
             const uidx  = users.findIndex(u => u.id === req.userId);
             if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
             const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
@@ -1828,8 +2019,8 @@ app.post('/api/me/savings-goals/:id/withdraw', async (req, res) => {
             balances.checking = next;
             const updatedUser = Object.assign({}, users[uidx], { balances });
             users[uidx] = updatedUser;
-            await writeJSON('users', users);
-            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, wAmt, 'banking');
+            await writeJSON(req.userStore, users);
+            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, wAmt, 'banking', req.messageStore);
 
             goals[idx] = Object.assign({}, goal, { current: parseFloat((goal.current - wAmt).toFixed(2)) });
             await writeJSON('savingsGoals', goals);
@@ -1859,13 +2050,13 @@ app.delete('/api/me/savings-goals/:id', async (req, res) => {
             const remaining = goals[idx].current;
 
             if (remaining > 0) {
-                const users = await readJSON('users');
+                const users = await readJSON(req.userStore);
                 const uidx  = users.findIndex(u => u.id === req.userId);
                 if (uidx !== -1) {
                     const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
                     balances.checking = parseFloat((balances.checking + remaining).toFixed(2));
                     users[uidx] = Object.assign({}, users[uidx], { balances });
-                    await writeJSON('users', users);
+                    await writeJSON(req.userStore, users);
                 }
                 const activity = await readJSON('savingsGoalActivity');
                 activity.push({
@@ -1888,7 +2079,7 @@ app.delete('/api/me/savings-goals/:id', async (req, res) => {
 const SCHEDULE_FREQUENCIES = new Set(['once', 'weekly', 'biweekly', 'monthly']);
 
 app.get('/api/me/scheduled-transfers', async (req, res) => {
-    await runDueScheduledTransfers(req.userId);
+    await runDueScheduledTransfers(req.userId, req.userStore, req.messageStore);
     const schedules = await readJSON('scheduledTransfers');
     const mine = schedules.filter(s => s.userId === req.userId).sort((a, b) => (a.nextRunDate || 0) - (b.nextRunDate || 0));
     res.json(mine);
@@ -1921,7 +2112,7 @@ app.post('/api/me/scheduled-transfers', async (req, res) => {
     // A transfer scheduled for right now (or the past) should execute
     // immediately rather than waiting for the next time this user's balance
     // or schedule list happens to be read.
-    await runDueScheduledTransfers(req.userId);
+    await runDueScheduledTransfers(req.userId, req.userStore, req.messageStore);
     const fresh = (await readJSON('scheduledTransfers')).find(s => s.id === record.id);
     res.status(201).json(fresh || record);
 });
@@ -1966,7 +2157,7 @@ app.get('/api/me/statement', async (req, res) => {
     const monthEnd   = new Date(year, mon0 + 1, 1).getTime();
     const now = Date.now();
 
-    const users = await readJSON('users');
+    const users = await readJSON(req.userStore);
     const user  = users.find(u => u.id === req.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
     const balances = Object.assign({}, DEFAULT_BALANCES, user.balances || {});
@@ -2029,7 +2220,7 @@ app.get('/api/me/statement', async (req, res) => {
 
 // ── Me: stats ─────────────────────────────────────────────────────────────────
 app.get('/api/me/stats', async (req, res) => {
-    const users    = await readJSON('users');
+    const users    = await readJSON(req.userStore);
     const user     = users.find(u => u.id === req.userId);
     const userData = user ? (user.userData || Object.assign({}, DEFAULT_USER_DATA)) : Object.assign({}, DEFAULT_USER_DATA);
 
@@ -2147,7 +2338,7 @@ app.post('/api/admin/messages/system', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const { subject, body, recipientId, type, category } = req.body || {};
     if (!subject || !body) return res.status(400).json({ error: 'subject and body required' });
-    const messages = await readJSON('messages');
+    const messages = await readJSON(req.messageStore);
     const record   = {
         id:          nextId(messages),
         senderId:    0,
@@ -2162,7 +2353,7 @@ app.post('/api/admin/messages/system', async (req, res) => {
         readBy:      []
     };
     messages.push(record);
-    await writeJSON('messages', messages);
+    await writeJSON(req.messageStore, messages);
     res.status(201).json(record);
 });
 
@@ -2174,7 +2365,7 @@ app.post('/api/admin/messages/system', async (req, res) => {
 // Pass ?includeSystem=1 to audit everything.
 app.get('/api/admin/messages', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const all = await readJSON('messages');
+    const all = await readJSON(req.messageStore);
     res.json(req.query.includeSystem ? all : all.filter(m => m.senderId !== 0));
 });
 
@@ -2182,8 +2373,8 @@ app.post('/api/admin/messages', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const { subject, body, recipientId, type, senderEmail, category } = req.body || {};
     if (!subject || !body) return res.status(400).json({ error: 'subject and body required' });
-    const messages = await readJSON('messages');
-    const users    = await readJSON('users');
+    const messages = await readJSON(req.messageStore);
+    const users    = await readJSON(req.userStore);
     const sender   = users.find(u => u.id === req.userId);
     const record   = {
         id:          nextId(messages),
@@ -2199,15 +2390,15 @@ app.post('/api/admin/messages', async (req, res) => {
         readBy:      []
     };
     messages.push(record);
-    await writeJSON('messages', messages);
+    await writeJSON(req.messageStore, messages);
     res.status(201).json(record);
 });
 
 app.delete('/api/admin/messages/:id', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const id  = Number(req.params.id);
-    const all = await readJSON('messages');
-    await writeJSON('messages', all.filter(m => m.id !== id));
+    const all = await readJSON(req.messageStore);
+    await writeJSON(req.messageStore, all.filter(m => m.id !== id));
     res.json({ ok: true });
 });
 
@@ -2226,12 +2417,12 @@ app.delete('/api/admin/messages/:id', async (req, res) => {
 app.patch('/api/admin/challenges/:id', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const id  = Number(req.params.id);
-    const all = await readJSON('challenges');
+    const all = await readJSON(req.challengeStore);
     const target = all.find(c => c.id === id);
     if (!target) return res.status(404).json({ error: 'Challenge not found' });
     const { completed, completedAt, id: _ignoredId, userId: _ignoredUserId, ...templatePatch } = req.body || {};
     const updated = all.map(c => c.title === target.title ? Object.assign({}, c, templatePatch) : c);
-    await writeJSON('challenges', updated);
+    await writeJSON(req.challengeStore, updated);
     res.json(updated.find(c => c.id === id));
 });
 
@@ -2240,17 +2431,17 @@ app.patch('/api/admin/challenges/:id', async (req, res) => {
 app.delete('/api/admin/challenges/:id', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const id  = Number(req.params.id);
-    const all = await readJSON('challenges');
+    const all = await readJSON(req.challengeStore);
     const target = all.find(c => c.id === id);
     if (!target) return res.status(404).json({ error: 'Challenge not found' });
-    await writeJSON('challenges', all.filter(c => c.title !== target.title));
+    await writeJSON(req.challengeStore, all.filter(c => c.title !== target.title));
     res.json({ ok: true });
 });
 
 // DELETE /api/admin/challenges — wipe ALL challenges (admin only)
 app.delete('/api/admin/challenges', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    await writeJSON('challenges', []);
+    await writeJSON(req.challengeStore, []);
     res.json({ ok: true });
 });
 
@@ -2268,9 +2459,9 @@ app.post('/api/admin/challenges', async (req, res) => {
     } = req.body || {};
     if (!title) return res.status(400).json({ error: 'title required' });
 
-    const users        = await readJSON('users');
+    const users        = await readJSON(req.userStore);
     const participants = users.filter(u => u.role === 'participant' && u.status === 'approved');
-    const challenges   = await readJSON('challenges');
+    const challenges   = await readJSON(req.challengeStore);
     let id      = nextId(challenges);
     const now   = Date.now();
     const created = participants.map(u => ({
@@ -2291,14 +2482,14 @@ app.post('/api/admin/challenges', async (req, res) => {
         extraConditions: Array.isArray(extraConditions) ? extraConditions : [],
         conditionLogic:  conditionLogic || 'all'
     }));
-    await writeJSON('challenges', challenges.concat(created));
+    await writeJSON(req.challengeStore, challenges.concat(created));
     res.status(201).json(created);
 });
 
 // POST /api/admin/challenges/seed — seed default challenges for every approved participant
 app.post('/api/admin/challenges/seed', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const users = await readJSON('users');
+    const users = await readJSON(req.userStore);
     const participants = users.filter(u => u.role === 'participant' && u.status === 'approved');
     for (const u of participants) await seedChallengesForUser(u.id);
     res.json({ ok: true, seeded: participants.length });
@@ -2307,8 +2498,8 @@ app.post('/api/admin/challenges/seed', async (req, res) => {
 // POST /api/admin/challenges/reseed — add any missing default challenges for every approved participant
 app.post('/api/admin/challenges/reseed', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const challenges   = await readJSON('challenges');
-    const users        = await readJSON('users');
+    const challenges   = await readJSON(req.challengeStore);
+    const users        = await readJSON(req.userStore);
     const participants = users.filter(u => u.role === 'participant' && u.status === 'approved');
     const added        = [];
     let   nextChalId   = nextId(challenges);
@@ -2326,7 +2517,7 @@ app.post('/api/admin/challenges/reseed', async (req, res) => {
         });
     });
 
-    await writeJSON('challenges', challenges);
+    await writeJSON(req.challengeStore, challenges);
     res.json(added);
 });
 
@@ -2481,7 +2672,7 @@ function computeBillCycleStatus(cycle) {
 // a cycle is seen past its grace period, then flags it so it never repeats
 // for that cycle — mirrors the lazy-execution-on-read pattern already used
 // for scheduled transfers, just for a read-only status instead of a payment.
-async function notifyOverdueBillsForUser(userId, cycles) {
+async function notifyOverdueBillsForUser(userId, cycles, messageStore = 'messages') {
     const overdueNow = cycles.filter(c => c.status !== 'paid' && !c.overdueNotified && computeBillCycleStatus(c).overdue);
     if (overdueNow.length === 0) return cycles;
     const all = await readJSON('billCycles');
@@ -2497,7 +2688,7 @@ async function notifyOverdueBillsForUser(userId, cycles) {
             body: 'Your ' + c.name + ' bill of ƒ' + c.amount.toFixed(2) + ' is now overdue. A late fee of ƒ' +
                   info.lateFee.toFixed(2) + ' has been added — total due is ƒ' + info.totalDue.toFixed(2) + '.',
             type: 'warning', category: 'utilities'
-        });
+        }, messageStore);
     }
     return cycles.map(c => overdueNow.some(o => o.id === c.id) ? Object.assign({}, c, { overdueNotified: true }) : c);
 }
@@ -2506,7 +2697,7 @@ app.get('/api/me/bills', async (req, res) => {
     let cycles = await ensureCurrentBillCycles(req.userId);
     // Locked so two concurrent GETs can't both observe the dedup flag as
     // unset and each push a duplicate overdue message.
-    cycles = await withUserLock(req.userId, () => notifyOverdueBillsForUser(req.userId, cycles));
+    cycles = await withUserLock(req.userId, () => notifyOverdueBillsForUser(req.userId, cycles, req.messageStore));
     const enriched = cycles.map(c => Object.assign({}, c, computeBillCycleStatus(c)));
     enriched.sort((a, b) => (a.dueDate || 0) - (b.dueDate || 0));
     res.json(enriched);
@@ -2525,7 +2716,7 @@ app.post('/api/me/bills/:cycleId/pay', async (req, res) => {
             const statusInfo = computeBillCycleStatus(cycle);
             const totalDue    = statusInfo.totalDue;
 
-            const users = await readJSON('users');
+            const users = await readJSON(req.userStore);
             const uidx  = users.findIndex(u => u.id === req.userId);
             if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
             const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
@@ -2551,7 +2742,7 @@ app.post('/api/me/bills/:cycleId/pay', async (req, res) => {
             let leveledUp = false, newLevel = 0;
             if (userData.pointsToNextLevel <= 0) {
                 if (userData.level === 1) {
-                    const challenges = await readJSON('challenges');
+                    const challenges = await readJSON(req.challengeStore);
                     const reqMet = LEVEL_1_REQUIRED_CONDITIONS.every(cond =>
                         challenges.some(c => c.userId === req.userId && c.condition === cond && c.completed)
                     );
@@ -2571,8 +2762,8 @@ app.post('/api/me/bills/:cycleId/pay', async (req, res) => {
 
             const updatedUser = Object.assign({}, users[uidx], { balances, userData });
             users[uidx] = updatedUser;
-            await writeJSON('users', users);
-            await maybeFireBalanceAlerts(updatedUser, account, current, next, -totalDue, 'utilities');
+            await writeJSON(req.userStore, users);
+            await maybeFireBalanceAlerts(updatedUser, account, current, next, -totalDue, 'utilities', req.messageStore);
 
             cycles[idx] = Object.assign({}, cycle, { status: 'paid', paidAt: Date.now(), paidAmount: totalDue, lateFeePaid: statusInfo.lateFee });
             await writeJSON('billCycles', cycles);
@@ -2912,9 +3103,15 @@ app.use((err, _req, res, _next) => {
 // free-tier dyno wakes back up from idle).
 function startScheduledTransferSweep() {
     setInterval(() => {
-        readJSON('users')
-            .then(users => Promise.all(users.map(u => runDueScheduledTransfers(u.id).catch(() => {}))))
-            .catch(() => {});
+        // Only 'users' (shared/legacy) and 'bankingUsers' (standalone Banking
+        // app) ever have scheduled transfers — E-Commerce/Utilities accounts
+        // never create scheduledTransfers rows, so sweeping them would be
+        // harmless but pointless.
+        [['users', 'messages'], ['bankingUsers', 'bankingMessages']].forEach(([userStore, messageStore]) => {
+            readJSON(userStore)
+                .then(users => Promise.all(users.map(u => runDueScheduledTransfers(u.id, userStore, messageStore).catch(() => {}))))
+                .catch(() => {});
+        });
     }, 5 * 60 * 1000);
 }
 

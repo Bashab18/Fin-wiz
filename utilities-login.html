@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digifinwiz Utilities - Login</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <h1 class="login-logo">Digifinwiz Utilities</h1>
+                <p>Welcome back! Please login to your utilities account</p>
+            </div>
+
+            <form id="loginForm" class="login-form">
+                <div class="form-group">
+                    <label>Username or Email</label>
+                    <input type="text" class="form-input" id="loginUsername" placeholder="Enter your username or email" required autocomplete="username">
+                </div>
+
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" class="form-input" id="loginPassword" placeholder="Enter your password" required autocomplete="current-password">
+                </div>
+
+                <!-- Inline error message -->
+                <div id="loginError" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:8px;padding:0.75rem 1rem;font-size:0.875rem;margin-bottom:1rem"></div>
+
+                <button type="submit" id="loginBtn" class="btn btn-primary btn-block">Login</button>
+            </form>
+
+            <div class="login-footer" style="margin-top:1.5rem;text-align:center">
+                <p>Don't have a utilities account? <a href="utilities-register.html" style="color:#6366f1;font-weight:600">Sign up here</a></p>
+            </div>
+        </div>
+
+        <div class="login-illustration">
+            <h2>Stay On Top Of Your Bills</h2>
+            <p>Pay bills, track usage, and manage your utility accounts — all in your own standalone account</p>
+            <div class="illustration-features">
+                <div class="feature-point">✓ Electricity, water &amp; internet bills</div>
+                <div class="feature-point">✓ Usage-based &amp; custom bills</div>
+                <div class="feature-point">✓ Overdue &amp; late-fee tracking</div>
+                <div class="feature-point">✓ Earn rewards while you pay</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>window.APP_MODULE = 'utilities';</script>
+    <script src="module-auth.js"></script>
+    <script src="db.js"></script>
+    <script>
+        var loginError = document.getElementById('loginError');
+        var loginBtn   = document.getElementById('loginBtn');
+
+        function showError(msg) {
+            loginError.textContent = msg;
+            loginError.style.display = 'block';
+        }
+
+        function hideError() {
+            loginError.style.display = 'none';
+        }
+
+        DigifinwizDB.init().catch(function(err) {
+            console.error('DB init error:', err);
+        });
+
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            hideError();
+
+            var usernameOrEmail = document.getElementById('loginUsername').value.trim();
+            var password        = document.getElementById('loginPassword').value;
+
+            if (!usernameOrEmail || !password) {
+                showError('Please enter your username/email and password.');
+                return;
+            }
+
+            loginBtn.disabled    = true;
+            loginBtn.textContent = 'Logging in...';
+
+            DigifinwizDB.moduleLogin('utilities', usernameOrEmail, password).then(function(result) {
+                if (!result.success) {
+                    loginBtn.disabled    = false;
+                    loginBtn.textContent = 'Login';
+                    switch (result.reason) {
+                        case 'not_found':
+                            showError('No utilities account found with that username or email.');
+                            break;
+                        case 'wrong_password':
+                            showError('Incorrect password. Please try again.');
+                            break;
+                        default:
+                            showError('Login failed. Please try again.');
+                    }
+                    return;
+                }
+
+                DigifinwizModuleAuth.setSession(result.user);
+                window.location.replace('utilities.html');
+            }).catch(function(err) {
+                console.error('Login error:', err);
+                loginBtn.disabled    = false;
+                loginBtn.textContent = 'Login';
+                showError('An error occurred. Please try again.');
+            });
+        });
+    </script>
+</body>
+</html>

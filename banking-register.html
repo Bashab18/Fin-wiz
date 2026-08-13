@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digifinwiz Banking - Register</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <h1 class="login-logo">Digifinwiz Banking</h1>
+                <p>Create your banking account to get started</p>
+            </div>
+
+            <form id="registerForm" class="login-form">
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" class="form-input" id="regFullName" placeholder="Enter your full name" required autocomplete="name">
+                </div>
+
+                <div class="form-group">
+                    <label>Username <span style="font-size:0.78rem;color:#94a3b8">(letters, numbers, underscores — 3 to 30 chars)</span></label>
+                    <input type="text" class="form-input" id="regUsername" placeholder="Choose a username" required autocomplete="username" minlength="3" maxlength="30">
+                </div>
+
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" class="form-input" id="regEmail" placeholder="Enter your email" required autocomplete="email">
+                </div>
+
+                <div class="form-group">
+                    <label>Password <span style="font-size:0.78rem;color:#94a3b8">(minimum 6 characters)</span></label>
+                    <input type="password" class="form-input" id="regPassword" placeholder="Create a password" required minlength="6" autocomplete="new-password">
+                </div>
+
+                <div class="form-group">
+                    <label>Confirm Password</label>
+                    <input type="password" class="form-input" id="regConfirmPassword" placeholder="Repeat your password" required autocomplete="new-password">
+                </div>
+
+                <!-- Inline error message -->
+                <div id="registerError" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:8px;padding:0.75rem 1rem;font-size:0.875rem;margin-bottom:1rem"></div>
+
+                <button type="submit" id="registerBtn" class="btn btn-primary btn-block">Create Account</button>
+            </form>
+
+            <div class="login-footer" style="margin-top:1.5rem;text-align:center">
+                <p>Already have a banking account? <a href="banking-login.html" style="color:#6366f1;font-weight:600">Login here</a></p>
+            </div>
+        </div>
+
+        <div class="login-illustration">
+            <h2>Join Digifinwiz Banking</h2>
+            <p>Open your own standalone banking account and start managing your money today</p>
+            <div class="illustration-features">
+                <div class="feature-point">✓ Checking &amp; savings accounts</div>
+                <div class="feature-point">✓ Transfers &amp; scheduled payments</div>
+                <div class="feature-point">✓ Credit cards &amp; loans</div>
+                <div class="feature-point">✓ Complete challenges &amp; earn XP</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>window.APP_MODULE = 'banking';</script>
+    <script src="module-auth.js"></script>
+    <script src="db.js"></script>
+    <script>
+        var registerError = document.getElementById('registerError');
+        var registerBtn   = document.getElementById('registerBtn');
+        var USERNAME_RE   = /^[a-zA-Z0-9_]{3,30}$/;
+
+        function showError(msg) {
+            registerError.textContent = msg;
+            registerError.style.display = 'block';
+        }
+
+        function hideError() {
+            registerError.style.display = 'none';
+        }
+
+        DigifinwizDB.init().catch(function(err) {
+            console.error('DB init error:', err);
+        });
+
+        document.getElementById('registerForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            hideError();
+
+            var fullName        = document.getElementById('regFullName').value.trim();
+            var username        = document.getElementById('regUsername').value.trim();
+            var email           = document.getElementById('regEmail').value.trim();
+            var password        = document.getElementById('regPassword').value;
+            var confirmPassword = document.getElementById('regConfirmPassword').value;
+
+            if (!fullName) { showError('Please enter your full name.'); return; }
+            if (!USERNAME_RE.test(username)) {
+                showError('Username must be 3–30 characters and contain only letters, numbers, or underscores.');
+                return;
+            }
+            if (!email || email.indexOf('@') === -1) { showError('Please enter a valid email address.'); return; }
+            if (password.length < 6) { showError('Password must be at least 6 characters.'); return; }
+            if (password !== confirmPassword) { showError('Passwords do not match.'); return; }
+
+            registerBtn.disabled    = true;
+            registerBtn.textContent = 'Creating account...';
+
+            DigifinwizDB.moduleRegister('banking', { fullName: fullName, username: username, email: email, password: password })
+                .then(function(result) {
+                    DigifinwizModuleAuth.setSession(result.user);
+                    window.location.replace('banking.html');
+                })
+                .catch(function(err) {
+                    registerBtn.disabled    = false;
+                    registerBtn.textContent = 'Create Account';
+                    var msg = err && err.message || '';
+                    if (msg === 'Username already taken' || msg === 'Email already registered') {
+                        showError('That username or email is already registered. Please choose a different one.');
+                    } else {
+                        console.error('Registration error:', err);
+                        showError('Registration failed. Please try again.');
+                    }
+                });
+        });
+    </script>
+</body>
+</html>

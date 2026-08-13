@@ -4,16 +4,18 @@
 const ShopBridge = (() => {
 
     function isAvailable() {
-        return typeof DigifinwizDB !== 'undefined' &&
-               typeof DigifinwizAuth !== 'undefined' &&
-               DigifinwizAuth.isLoggedIn();
+        if (typeof DigifinwizDB === 'undefined') return false;
+        if (typeof DigifinwizModuleAuth !== 'undefined') return DigifinwizModuleAuth.isLoggedIn();
+        return typeof DigifinwizAuth !== 'undefined' && DigifinwizAuth.isLoggedIn();
     }
 
-    // User-scoped localStorage key to isolate per-user data
+    // User-scoped localStorage key to isolate per-user data. Module pages
+    // (window.APP_MODULE set) key off their own module-scoped session.
     function _scopedKey(key) {
         try {
-            var s = JSON.parse(sessionStorage.getItem('bkr_session') || 'null') ||
-                    JSON.parse(localStorage.getItem('bkr_session') || 'null');
+            var sk = 'bkr_session' + (window.APP_MODULE ? '_' + window.APP_MODULE : '');
+            var s = JSON.parse(sessionStorage.getItem(sk) || 'null') ||
+                    JSON.parse(localStorage.getItem(sk) || 'null');
             return s && s.userId ? key + '_u' + s.userId : key;
         } catch(e) { return key; }
     }
@@ -123,6 +125,7 @@ const ShopBridge = (() => {
     }
 
     function getSession() {
+        if (typeof DigifinwizModuleAuth !== 'undefined') return DigifinwizModuleAuth.getSession();
         if (typeof DigifinwizAuth !== 'undefined') return DigifinwizAuth.getSession();
         return null;
     }

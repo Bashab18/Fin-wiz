@@ -5,11 +5,19 @@
 const DigifinwizDB = (() => {
 
     // ── Session helpers ───────────────────────────────────────────────────────
+    // window.APP_MODULE (set inline before this script loads) scopes the
+    // session key to a standalone module account (banking/ecommerce/utilities).
+    // Pages that never set it keep using the original shared 'bkr_session' key.
+    function _sessionKey() {
+        return 'bkr_session' + (window.APP_MODULE ? '_' + window.APP_MODULE : '');
+    }
+
     function _session() {
         try {
-            var s = JSON.parse(sessionStorage.getItem('bkr_session') || 'null');
+            var key = _sessionKey();
+            var s = JSON.parse(sessionStorage.getItem(key) || 'null');
             if (s) return s;
-            return JSON.parse(localStorage.getItem('bkr_session') || 'null');
+            return JSON.parse(localStorage.getItem(key) || 'null');
         } catch (e) { return null; }
     }
 
@@ -17,11 +25,13 @@ const DigifinwizDB = (() => {
         const s = _session();
         const userId = s ? String(s.userId) : '';
         const role   = s ? (s.role || '')   : '';
-        return {
+        const h = {
             'Content-Type': 'application/json',
             'X-User-Id':    userId,
             'X-User-Role':  role
         };
+        if (window.APP_MODULE) h['X-App'] = window.APP_MODULE;
+        return h;
     }
 
     // ── Core fetch wrapper ────────────────────────────────────────────────────
@@ -73,6 +83,15 @@ const DigifinwizDB = (() => {
 
     function notifyAdminsOfRegistration(username, fullName) {
         return _api('POST', '/api/auth/notify-admins', { username, fullName });
+    }
+
+    // ── Module auth (standalone Banking/E-Commerce/Utilities accounts) ────────
+    function moduleRegister(module, opts) {
+        return _api('POST', '/api/' + module + '/auth/register', opts);
+    }
+
+    function moduleLogin(module, usernameOrEmail, password) {
+        return _api('POST', '/api/' + module + '/auth/login', { usernameOrEmail, password });
     }
 
     // ── User lookup helpers (client-side filter over GET /api/users) ──────────
@@ -578,6 +597,8 @@ const DigifinwizDB = (() => {
         createUser,
         recordLastLogin,
         notifyAdminsOfRegistration,
+        moduleRegister,
+        moduleLogin,
 
         // User management
         getAllUsers,

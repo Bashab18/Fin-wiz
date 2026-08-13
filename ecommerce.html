@@ -12,14 +12,7 @@
         <div class="nav-container">
             <div class="logo">Digifinwiz</div>
             <button class="nav-toggle" aria-label="Toggle navigation"><span></span><span></span><span></span></button>
-            <ul class="nav-menu">
-                <li><a href="index.html">Home</a></li>
-                <li><a href="tutorials.html">Tutorials</a></li>
-                <li><a href="challenges.html">Challenges</a></li>
-                <li><a href="about.html">About Us</a></li>
-                <li><a href="admin.html">Admin</a></li>                <li><a href="messages.html">Messages</a></li>
-                <li><a href="profile.html">Profile</a></li>
-            </ul>
+            <ul class="nav-menu"></ul>
         </div>
     </nav>
 
@@ -88,28 +81,7 @@
                 <h3>Jane Doe</h3>
                 <p class="username">janeDoee123</p>
             </div>
-            <p class="sidebar-desc">Visit any of these pages to complete new tasks such as online shopping, paying bills or banking</p>
-            <nav class="sidebar-nav">
-                <a href="ecommerce.html" class="nav-item active">
-                    <span>Ecommerce<sup class="nav-badge" id="sidebarBadgeEcommerce">5</sup></span>
-                    <span class="arrow">→</span>
-                </a>
-                <a href="banking.html" class="nav-item">
-                    <span>Banking<sup class="nav-badge" id="sidebarBadgeBanking" style="display:none">0</sup></span>
-                    <span class="arrow">→</span>
-                </a>
-                <a href="utilities.html" class="nav-item">
-                    <span>Utilities<sup class="nav-badge" id="sidebarBadgeUtilities" style="display:none">0</sup></span>
-                    <span class="arrow">→</span>
-                </a>
-                <a href="profile.html#balances" class="nav-item">
-                    <span>View account balances</span>
-                    <span class="arrow">∨</span>
-                </a>
-                <a href="profile.html#progress" class="nav-item">
-                    <span>View account progress</span>
-                    <span class="arrow">∨</span>
-                </a>            </nav>
+            <p class="sidebar-desc">Shop, track orders, and manage your InStyl account in your Digifinwiz E-Commerce account</p>
         </aside>
 
         <main class="main-content">
@@ -197,7 +169,6 @@
             <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:1.25rem;margin-bottom:1.5rem">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
                     <h2 style="font-size:1rem;font-weight:700;margin:0">🛒 Ecommerce Challenges</h2>
-                    <a href="challenges.html" style="font-size:0.8rem;color:#6366f1;text-decoration:none">View all →</a>
                 </div>
                 <!-- Challenge Summary Bar -->
                 <div class="challenge-summary-grid">
@@ -356,7 +327,8 @@
     </button>
 
     <script src="config.js"></script>
-    <script src="auth.js"></script>
+    <script>window.APP_MODULE = 'ecommerce';</script>
+    <script src="module-auth.js"></script>
     <script src="db.js"></script>
     <script src="shop-bridge.js"></script>
     <script src="script.js"></script>

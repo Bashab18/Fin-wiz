@@ -12,15 +12,7 @@
         <div class="nav-container">
             <div class="logo">Digifinwiz</div>
             <button class="nav-toggle" aria-label="Toggle navigation"><span></span><span></span><span></span></button>
-            <ul class="nav-menu">
-                <li><a href="index.html">Home</a></li>
-                <li><a href="tutorials.html">Tutorials</a></li>
-                <li><a href="challenges.html">Challenges</a></li>
-                <li><a href="about.html">About Us</a></li>
-                <li><a href="admin.html">Admin</a></li>
-                <li><a href="messages.html">Messages</a></li>
-                <li><a href="profile.html">Profile</a></li>
-            </ul>
+            <ul class="nav-menu"></ul>
         </div>
     </nav>
 
@@ -30,15 +22,13 @@
             <div class="shop-logo">DigiBank.</div>
             <nav class="shop-nav">
                 <a href="#" onclick="switchPageTab('banking');return false;" class="active">Banking</a>
-                <a href="profile.html#balances">My Accounts</a>
-                <a href="profile.html#progress">Progress</a>
             </nav>
             <div class="shop-header-right">
                 <div class="shop-icons">
-                    <button class="shop-icon-btn home" onclick="window.location.href='profile.html#progress'" title="My Progress">
+                    <button class="shop-icon-btn home" onclick="switchPageTab('dashboard');return false;" title="My Progress">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
                     </button>
-                    <button class="shop-icon-btn bookmark" onclick="window.location.href='profile.html#balances'" title="Account Balances">
+                    <button class="shop-icon-btn bookmark" onclick="switchPageTab('dashboard');return false;" title="Account Balances">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
                     </button>
                     <button class="shop-icon-btn cart" onclick="switchPageTab('banking');setTimeout(function(){document.getElementById('transferForm').scrollIntoView({behavior:'smooth'})},50)" title="Quick Transfer">
@@ -82,29 +72,7 @@
                 <h3 id="sidebarName">Loading…</h3>
                 <p class="username" id="sidebarUsername"></p>
             </div>
-            <p class="sidebar-desc">Visit any of these pages to complete new tasks such as online shopping, paying bills or banking</p>
-            <nav class="sidebar-nav">
-                <a href="ecommerce.html" class="nav-item">
-                    <span>Ecommerce<sup class="nav-badge" id="sidebarBadgeEcommerce">5</sup></span>
-                    <span class="arrow">→</span>
-                </a>
-                <a href="banking.html" class="nav-item active">
-                    <span>Banking<sup class="nav-badge" id="sidebarBadgeBanking" style="display:none">0</sup></span>
-                    <span class="arrow">→</span>
-                </a>
-                <a href="utilities.html" class="nav-item">
-                    <span>Utilities<sup class="nav-badge" id="sidebarBadgeUtilities" style="display:none">0</sup></span>
-                    <span class="arrow">→</span>
-                </a>
-                <a href="profile.html#balances" class="nav-item">
-                    <span>View account balances</span>
-                    <span class="arrow">∨</span>
-                </a>
-                <a href="profile.html#progress" class="nav-item">
-                    <span>View account progress</span>
-                    <span class="arrow">∨</span>
-                </a>
-            </nav>
+            <p class="sidebar-desc">Manage transfers, credit cards, loans, savings goals and more in your Digifinwiz Banking account</p>
         </aside>
 
         <main class="main-content">
@@ -227,7 +195,6 @@
                             <div style="display:flex;flex-direction:column;gap:0.5rem">
                                 <a href="#" onclick="switchPageTab('banking');return false;" class="btn btn-block" style="text-align:left">💸 Send Money</a>
                                 <a href="#" onclick="switchPageTab('scheduled');return false;" class="btn btn-block" style="text-align:left">🔁 Schedule a Transfer</a>
-                                <a href="utilities.html" class="btn btn-block" style="text-align:left">🧾 Pay a Bill</a>
                                 <a href="#" onclick="switchPageTab('statements');return false;" class="btn btn-block" style="text-align:left">📄 View Statements</a>
                             </div>
                         </div>
@@ -257,7 +224,6 @@
                 <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:1.25rem;margin-bottom:1.5rem">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
                         <h2 style="font-size:1rem;font-weight:700;margin:0">🏦 Banking Challenges</h2>
-                        <a href="challenges.html" style="font-size:0.8rem;color:var(--color-primary-500);text-decoration:none;font-weight:600">View all →</a>
                     </div>
                     <div class="challenge-summary-grid">
                         <div class="csg-item"><div class="csg-val" style="color:#10b981" id="chalDoneCount">—</div><div class="csg-lbl">Completed</div></div>
@@ -632,7 +598,7 @@
             <div class="page-tab-panel" id="panel-alerts">
                 <div class="banking-section full-width">
                     <h2>🔔 Alert Preferences</h2>
-                    <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1.25rem">Alerts are delivered to your <a href="messages.html">Messages inbox</a>.</p>
+                    <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1.25rem">Alerts are delivered to your Messages inbox.</p>
                     <form id="alertPrefsForm">
                         <div class="alert-pref-row">
                             <label class="autopay-switch"><input type="checkbox" id="alertLowBalEnabled"><span class="autopay-slider"></span></label>
@@ -653,7 +619,8 @@
     </div>
 
     <script src="config.js"></script>
-    <script src="auth.js"></script>
+    <script>window.APP_MODULE = 'banking';</script>
+    <script src="module-auth.js"></script>
     <script src="db.js"></script>
     <script src="script.js"></script>
     <script src="banking.js"></script>
