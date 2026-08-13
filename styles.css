@@ -2234,22 +2234,108 @@ body {
 }
 
 /* ============================================
-   LOGIN PAGE
+   AUTH PAGES (login / register) — full-bleed
+   glassmorphism card over a module-themed
+   illustrated background.
    ============================================ */
-.login-container {
+.auth-page {
     min-height: 100vh;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-6);
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-800, #3730a3) 100%);
 }
 
-.login-card {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    padding: var(--space-12);
-    max-width: 480px;
-    margin: 0 auto;
+.auth-page--brand {
+    background: linear-gradient(135deg, #6366f1 0%, #4338ca 55%, #312e81 100%);
+}
+
+.auth-page--banking {
+    background: linear-gradient(135deg, #1e40af 0%, #0e7490 60%, #0f766e 100%);
+}
+
+.auth-page--ecommerce {
+    background: linear-gradient(135deg, #db2777 0%, #c026d3 45%, #ea580c 100%);
+}
+
+.auth-page--utilities {
+    background: linear-gradient(135deg, #0f766e 0%, #0891b2 55%, #f59e0b 100%);
+}
+
+/* Decorative background layer: soft blurred blobs + a fine dot grid,
+   plus large low-opacity line-art motifs themed per module. Purely
+   decorative — aria-hidden, no interactive content. */
+.auth-bg-decor {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.auth-bg-decor::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(255,255,255,0.16) 1px, transparent 1px);
+    background-size: 28px 28px;
+    opacity: 0.5;
+}
+
+.auth-blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(70px);
+}
+
+.auth-blob-1 { width: 460px; height: 460px; top: -140px; left: -120px; background: rgba(255,255,255,0.22); }
+.auth-blob-2 { width: 380px; height: 380px; bottom: -160px; right: -100px; background: rgba(255,255,255,0.16); }
+.auth-blob-3 { width: 300px; height: 300px; top: 55%; right: 10%; background: rgba(255,255,255,0.10); }
+
+.auth-motif {
+    position: absolute;
+    color: rgba(255,255,255,0.16);
+}
+
+.auth-motif-1 { width: 260px; height: 260px; top: 8%; right: 8%; transform: rotate(-12deg); }
+.auth-motif-2 { width: 200px; height: 200px; bottom: 6%; left: 6%; transform: rotate(10deg); }
+
+@media (max-width: 640px) {
+    .auth-motif-1 { width: 160px; height: 160px; }
+    .auth-motif-2 { width: 130px; height: 130px; }
+}
+
+.auth-glass-card {
+    position: relative;
+    z-index: 1;
     width: 100%;
+    max-width: 440px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: var(--radius-2xl);
+    box-shadow: 0 25px 70px -15px rgba(0, 0, 0, 0.4), 0 1px 0 rgba(255, 255, 255, 0.4) inset;
+    padding: var(--space-10) var(--space-8);
+    animation: authCardIn 0.5s ease both;
+}
+
+@keyframes authCardIn {
+    from { opacity: 0; transform: translateY(18px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.auth-dev-hint {
+    margin-top: var(--space-4);
+    padding: var(--space-3);
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px dashed rgba(99, 102, 241, 0.3);
+    border-radius: var(--radius-md);
+    font-size: 0.78rem;
+    color: var(--color-gray-500);
+    text-align: center;
 }
 
 .login-header {
@@ -2356,50 +2442,6 @@ body {
 
 .login-footer a:hover {
     text-decoration: underline;
-}
-
-.login-illustration {
-    background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-700) 100%);
-    color: white;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    padding: var(--space-12);
-    position: relative;
-    overflow: hidden;
-}
-
-.login-illustration::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(circle at 20% 80%, rgba(255,255,255,0.08) 0%, transparent 50%),
-                radial-gradient(circle at 80% 20%, rgba(255,255,255,0.05) 0%, transparent 50%);
-}
-
-.login-illustration h2 {
-    font-size: var(--text-4xl);
-    margin-bottom: var(--space-4);
-    position: relative;
-    font-weight: 700;
-}
-
-.login-illustration p {
-    font-size: var(--text-lg);
-    margin-bottom: var(--space-8);
-    opacity: 0.9;
-    position: relative;
-}
-
-.illustration-features {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-    position: relative;
-}
-
-.feature-point {
-    font-size: var(--text-lg);
 }
 
 /* ============================================
@@ -3397,12 +3439,8 @@ body {
         grid-template-columns: 1fr;
     }
 
-    .login-container {
-        grid-template-columns: 1fr;
-    }
-
-    .login-illustration {
-        display: none;
+    .auth-glass-card {
+        padding: var(--space-8) var(--space-6);
     }
 
     .leaderboard-row {
