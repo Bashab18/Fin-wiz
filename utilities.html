@@ -12,15 +12,7 @@
         <div class="nav-container">
             <div class="logo">Digifinwiz</div>
             <button class="nav-toggle" aria-label="Toggle navigation"><span></span><span></span><span></span></button>
-            <ul class="nav-menu">
-                <li><a href="index.html">Home</a></li>
-                <li><a href="tutorials.html">Tutorials</a></li>
-                <li><a href="challenges.html">Challenges</a></li>
-                <li><a href="about.html">About Us</a></li>
-                <li><a href="admin.html">Admin</a></li>
-                <li><a href="messages.html">Messages</a></li>
-                <li><a href="profile.html">Profile</a></li>
-            </ul>
+            <ul class="nav-menu"></ul>
         </div>
     </nav>
 
@@ -31,11 +23,10 @@
             <nav class="shop-nav">
                 <a href="#" onclick="switchUtilPageTab('bills');return false;" class="active">Bills</a>
                 <a href="#" onclick="switchUtilPageTab('history');return false;">History</a>
-                <a href="profile.html#progress">My Account</a>
             </nav>
             <div class="shop-header-right">
                 <div class="shop-icons">
-                    <button class="shop-icon-btn home" onclick="window.location.href='profile.html#progress'" title="My Progress">
+                    <button class="shop-icon-btn home" onclick="switchUtilPageTab('bills');return false;" title="My Progress">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
                     </button>
                     <button class="shop-icon-btn bookmark" onclick="switchUtilPageTab('history')" title="Payment History">
@@ -82,29 +73,7 @@
                 <h3 id="sidebarName">Loading…</h3>
                 <p class="username" id="sidebarUsername"></p>
             </div>
-            <p class="sidebar-desc">Visit any of these pages to complete new tasks such as online shopping, paying bills or banking</p>
-            <nav class="sidebar-nav">
-                <a href="ecommerce.html" class="nav-item">
-                    <span>Ecommerce<sup class="nav-badge" id="sidebarBadgeEcommerce">5</sup></span>
-                    <span class="arrow">→</span>
-                </a>
-                <a href="banking.html" class="nav-item">
-                    <span>Banking<sup class="nav-badge" id="sidebarBadgeBanking" style="display:none">0</sup></span>
-                    <span class="arrow">→</span>
-                </a>
-                <a href="utilities.html" class="nav-item active">
-                    <span>Utilities<sup class="nav-badge" id="sidebarBadgeUtilities" style="display:none">0</sup></span>
-                    <span class="arrow">→</span>
-                </a>
-                <a href="profile.html#balances" class="nav-item">
-                    <span>View account balances</span>
-                    <span class="arrow">∨</span>
-                </a>
-                <a href="profile.html#progress" class="nav-item">
-                    <span>View account progress</span>
-                    <span class="arrow">∨</span>
-                </a>
-            </nav>
+            <p class="sidebar-desc">Pay bills, track usage, and manage your utility accounts in your Digifinwiz Utilities account</p>
         </aside>
 
         <main class="main-content">
@@ -208,7 +177,6 @@
                 <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:1.25rem;margin-bottom:1.5rem">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
                         <h2 style="font-size:1rem;font-weight:700;margin:0">⚡ Utility Challenges</h2>
-                        <a href="challenges.html" style="font-size:0.8rem;color:var(--color-primary-500);text-decoration:none;font-weight:600">View all →</a>
                     </div>
                     <div class="challenge-summary-grid">
                         <div class="csg-item"><div class="csg-val" style="color:#10b981" id="utilChalDoneCount">—</div><div class="csg-lbl">Completed</div></div>
@@ -275,7 +243,8 @@
     </div>
 
     <script src="config.js"></script>
-    <script src="auth.js"></script>
+    <script>window.APP_MODULE = 'utilities';</script>
+    <script src="module-auth.js"></script>
     <script src="db.js"></script>
     <script src="script.js"></script>
     <script src="utilities.js"></script>
