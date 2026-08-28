@@ -659,7 +659,7 @@ async function checkAndCompleteChallengesForUser(userId, context, challengeStore
 app.use(cors({
     origin:      ALLOWED_ORIGIN,
     methods:     ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'X-User-Id', 'X-User-Role']
+    allowedHeaders: ['Content-Type', 'X-User-Id', 'X-User-Role', 'X-App']
 }));
 app.use(express.json());
 app.use(express.static(__dirname));
