@@ -444,6 +444,32 @@ async function seedDefaultAdmin() {
     console.log('DigifinwizDB: default admin created (admin / Admin1234)');
 }
 
+// Seeds a default 'admin' login (admin / Admin1234) into one of the
+// standalone module user stores. Unlike seedDefaultAdmin() above, this is
+// just an ordinary account with that username/password — module accounts
+// have no role/status/approval concept at all, so there's nothing
+// privileged about it beyond being a memorable, pre-existing credential
+// for each app.
+async function seedDefaultModuleAdmin(userStore, challengeStore, category) {
+    const users = await readJSON(userStore);
+    if (users.some(u => u.username === 'admin')) return;
+    const user = {
+        id:           nextId(users),
+        fullName:     'Administrator',
+        username:     'admin',
+        email:        'admin@digifinwiz.local',
+        passwordHash: simpleHash('Admin1234'),
+        createdAt:    Date.now(),
+        lastLogin:    null,
+        userData:     Object.assign({}, DEFAULT_USER_DATA),
+        balances:     Object.assign({}, DEFAULT_BALANCES)
+    };
+    users.push(user);
+    await writeJSON(userStore, users);
+    await seedChallengesForUser(user.id, challengeStore, category);
+    console.log('DigifinwizDB: default admin created for ' + userStore + ' (admin / Admin1234)');
+}
+
 // ── Challenge helpers ─────────────────────────────────────────────────────────
 async function getChallengesForUser(userId, role, challengeStore = 'challenges') {
     const all      = await readJSON(challengeStore);
@@ -3118,6 +3144,9 @@ function startScheduledTransferSweep() {
 async function start() {
     await initStorage();
     await seedDefaultAdmin();
+    await seedDefaultModuleAdmin('bankingUsers', 'bankingChallenges', 'banking');
+    await seedDefaultModuleAdmin('ecommerceUsers', 'ecommerceChallenges', 'ecommerce');
+    await seedDefaultModuleAdmin('utilitiesUsers', 'utilitiesChallenges', 'utilities');
     await seedDefaultBills();
     await seedDefaultProducts();
     startScheduledTransferSweep();
