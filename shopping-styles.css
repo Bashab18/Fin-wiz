@@ -67,6 +67,7 @@ body.instyl-theme .amz-search-btn {
 }
 
 body.instyl-theme .shop-icon-btn {
+    position: relative;
     color: #fff;
 }
 
@@ -76,6 +77,23 @@ body.instyl-theme .shop-icon-btn:hover {
 
 body.instyl-theme .shop-icon-btn.home svg {
     fill: #fff;
+}
+
+body.instyl-theme .amz-icon-badge {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
+    border-radius: 999px;
+    background: #f08804;
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+    pointer-events: none;
 }
 
 body.instyl-theme .amz-navstrip {
@@ -297,6 +315,7 @@ body.instyl-theme .btn-primary:hover {
     font-size: 32px;
     font-weight: bold;
     color: #000;
+    text-decoration: none;
 }
 
 .shop-nav {
