@@ -11,17 +11,8 @@
     <script src="module-auth.js"></script>
 </head>
 <body class="instyl-theme">
-    <nav class="navbar">
-        <div class="nav-container">
-            <div class="logo">Digifinwiz</div>
-            <button class="nav-toggle" aria-label="Toggle navigation"><span></span><span></span><span></span></button>
-            <ul class="nav-menu">
-                <li><a href="ecommerce.html" class="active">Store</a></li>
-            </ul>
-        </div>
-    </nav>
     <header class="shop-header">
-        <div class="shop-container">
+        <div class="shop-container amz-unified-bar">
             <div class="shop-logo">InStyl.</div>
             <nav class="shop-nav">
                 <a href="ecommerce.html">Shop All</a>
@@ -31,6 +22,19 @@
                 <a href="ecommerce.html?category=outdoors">Outdoors</a>
                 <a href="ecommerce.html?category=cooking">Cooking</a>
             </nav>
+            <div class="amz-progress-compact" title="Game progress">
+                <span class="amz-progress-level">Lvl <strong>2/50</strong></span>
+                <div class="amz-progress-mini"><div class="amz-progress-mini-fill" style="width: 40%"></div></div>
+                <span class="amz-progress-pct">40% completed</span>
+                <span class="amz-progress-stat">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg>
+                    <span>1400 XP</span>
+                </span>
+                <span class="amz-progress-stat coins">
+                    <div class="coin-icon">&#402;</div>
+                    <span>3400</span>
+                </span>
+            </div>
             <div class="shop-header-right">
                 <div class="shop-search-box">
                     <input type="text" placeholder="Search...">
@@ -57,37 +61,10 @@
                         </svg>
                     </button>
                 </div>
+                <a href="#" class="amz-header-logout" data-logout title="Logout">Logout</a>
             </div>
         </div>
     </header>
-
-    <!-- Game Progress Bar -->
-    <div class="game-progress-bar">
-        <div class="shop-container">
-            <div class="progress-content">
-                <div class="progress-left">
-                    <span class="progress-label">GAME PROGRESS</span>
-                    <span class="level-info">Level <strong>2/50</strong></span>
-                </div>
-                <div class="progress-bar-container">
-                    <div class="progress-bar" style="width: 40%"></div>
-                </div>
-                <span class="progress-text">40% completed</span>
-                <div class="progress-stats">
-                    <div class="stat">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
-                        </svg>
-                        <span>1400 XP</span>
-                    </div>
-                    <div class="stat coins">
-                        <div class="coin-icon">&#402;</div>
-                        <span>3400</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Main Content -->
     <div class="shop-main-content">
