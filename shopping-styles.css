@@ -64,8 +64,8 @@ body.instyl-theme .amz-header-logout:hover {
 
 body.instyl-theme .shop-search-box {
     flex: 1;
-    max-width: 640px;
-    margin: 0 24px;
+    max-width: 220px;
+    margin: 0;
     display: flex;
 }
 
@@ -115,22 +115,43 @@ body.instyl-theme .amz-icon-badge {
     pointer-events: none;
 }
 
-body.instyl-theme .amz-navstrip {
-    background: #232f3e;
+/* ── Game progress bar: dark slate + gold fill (still used, unchanged, by
+   the shop-*.html account pages, which keep the classic 3-strip layout) ── */
+body.instyl-theme .game-progress-bar {
+    background: linear-gradient(135deg, #232f3e 0%, #37475a 100%);
+    border-bottom: 3px solid #febd69;
 }
 
-body.instyl-theme .amz-navstrip .shop-nav {
+body.instyl-theme .progress-bar {
+    background: linear-gradient(90deg, #febd69 0%, #f0c14b 100%);
+}
+
+/* ── Unified header bar: logo + categories + game progress + search +
+   account/cart + logout all in one row instead of three stacked strips ── */
+body.instyl-theme .amz-unified-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+body.instyl-theme .amz-unified-bar .shop-nav {
+    flex: 0 0 auto;
     margin-left: 0;
-    padding: 10px 0;
+    gap: 10px;
 }
 
-body.instyl-theme .amz-navstrip .shop-nav a {
+body.instyl-theme .amz-unified-bar .shop-header-right {
+    gap: 12px;
+}
+
+body.instyl-theme .amz-unified-bar .shop-nav a {
     color: #fff;
-    font-size: 14px;
+    font-size: 13px;
     padding: 4px 2px;
+    white-space: nowrap;
 }
 
-body.instyl-theme .amz-navstrip .shop-nav a:hover {
+body.instyl-theme .amz-unified-bar .shop-nav a:hover {
     color: #febd69;
 }
 
@@ -139,14 +160,79 @@ body.instyl-theme .shop-nav a.active {
     border-bottom-color: #febd69;
 }
 
-/* ── Game progress bar: dark slate + gold fill ────────────────────────── */
-body.instyl-theme .game-progress-bar {
-    background: linear-gradient(135deg, #232f3e 0%, #37475a 100%);
-    border-bottom: 3px solid #febd69;
+body.instyl-theme .amz-unified-bar .shop-header-right {
+    margin-left: auto;
 }
 
-body.instyl-theme .progress-bar {
+@media (max-width: 1180px) {
+    body.instyl-theme .amz-unified-bar {
+        flex-wrap: wrap;
+        row-gap: 10px;
+    }
+    body.instyl-theme .amz-unified-bar .shop-header-right {
+        margin-left: 0;
+        flex: 1 1 100%;
+        justify-content: flex-end;
+    }
+}
+
+/* Compact game-progress readout that lives inside the unified bar (the
+   full-width version with its own strip is still used by shop-*.html and
+   the other modules, so that markup/CSS is untouched). */
+body.instyl-theme .amz-progress-compact {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    color: #fff;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+body.instyl-theme .amz-progress-level strong {
+    color: #febd69;
+}
+
+body.instyl-theme .amz-progress-mini {
+    width: 70px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+body.instyl-theme .amz-progress-mini-fill {
+    height: 100%;
     background: linear-gradient(90deg, #febd69 0%, #f0c14b 100%);
+    border-radius: 999px;
+}
+
+body.instyl-theme .amz-progress-pct {
+    opacity: 0.85;
+}
+
+body.instyl-theme .amz-progress-stat {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+body.instyl-theme .amz-progress-stat svg {
+    fill: #fff;
+}
+
+body.instyl-theme .amz-progress-stat .coin-icon {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+    color: #333;
+    font-size: 10px;
+    font-weight: 700;
+    font-style: italic;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* ── Department / price / rating filter rail ──────────────────────────── */
