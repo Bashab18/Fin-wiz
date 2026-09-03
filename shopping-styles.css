@@ -63,14 +63,16 @@ body.instyl-theme .amz-header-logout:hover {
 }
 
 body.instyl-theme .shop-search-box {
-    flex: 1;
-    max-width: 220px;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 160px;
     margin: 0;
     display: flex;
 }
 
 body.instyl-theme .shop-search-box input {
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 0;
     border: none;
     border-radius: 4px 0 0 4px;
     padding: 10px 14px;
@@ -131,17 +133,21 @@ body.instyl-theme .progress-bar {
 body.instyl-theme .amz-unified-bar {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 10px;
 }
 
 body.instyl-theme .amz-unified-bar .shop-nav {
     flex: 0 0 auto;
     margin-left: 0;
-    gap: 10px;
+    gap: 6px;
+}
+
+body.instyl-theme .amz-unified-bar .shop-icon-btn {
+    padding: 6px;
 }
 
 body.instyl-theme .amz-unified-bar .shop-header-right {
-    gap: 12px;
+    gap: 10px;
 }
 
 body.instyl-theme .amz-unified-bar .shop-nav a {
