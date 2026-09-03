@@ -7,45 +7,52 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="auth-page auth-page--ecommerce">
-        <div class="auth-bg-decor" aria-hidden="true">
-            <div class="auth-blob auth-blob-1"></div>
-            <div class="auth-blob auth-blob-2"></div>
-            <div class="auth-blob auth-blob-3"></div>
-            <svg class="auth-motif auth-motif-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.6"><path d="M6 7h12l1 14H5L6 7z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg>
-            <svg class="auth-motif auth-motif-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.6"><path d="M6 7h12l1 14H5L6 7z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg>
+    <div class="auth-page auth-page--ecommerce auth-page--diagonal">
+        <div class="auth-diagonal-form">
+            <div class="auth-diagonal-form-inner">
+                <div class="login-header">
+                    <h1 class="login-logo">Welcome Back</h1>
+                    <p>Please login to your shopping account</p>
+                </div>
+
+                <form id="loginForm" class="login-form">
+                    <div class="form-group">
+                        <label>Username or Email</label>
+                        <input type="text" class="form-input" id="loginUsername" placeholder="Enter your username or email" required autocomplete="username">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" class="form-input" id="loginPassword" placeholder="Enter your password" required autocomplete="current-password">
+                    </div>
+
+                    <!-- Inline error message -->
+                    <div id="loginError" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:8px;padding:0.75rem 1rem;font-size:0.875rem;margin-bottom:1rem"></div>
+
+                    <button type="submit" id="loginBtn" class="btn btn-primary btn-block">Login</button>
+                </form>
+
+                <div class="login-footer" style="margin-top:1.5rem;text-align:center">
+                    <p>Don't have a shopping account? <a href="ecommerce-register.html" style="color:#6366f1;font-weight:600">Sign up here</a></p>
+                </div>
+
+                <!-- Dev hint -->
+                <div class="auth-dev-hint">
+                    Default admin: <strong>admin</strong> / <strong>Admin1234</strong>
+                </div>
+            </div>
         </div>
 
-        <div class="auth-glass-card">
-            <div class="login-header">
-                <h1 class="login-logo">Digifinwiz E-Commerce</h1>
-                <p>Welcome back! Please login to your shopping account</p>
+        <div class="auth-diagonal-visual">
+            <div class="auth-bg-decor" aria-hidden="true">
+                <div class="auth-blob auth-blob-1"></div>
+                <div class="auth-blob auth-blob-2"></div>
+                <svg class="auth-motif auth-motif-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.6"><path d="M6 7h12l1 14H5L6 7z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg>
             </div>
-
-            <form id="loginForm" class="login-form">
-                <div class="form-group">
-                    <label>Username or Email</label>
-                    <input type="text" class="form-input" id="loginUsername" placeholder="Enter your username or email" required autocomplete="username">
-                </div>
-
-                <div class="form-group">
-                    <label>Password</label>
-                    <input type="password" class="form-input" id="loginPassword" placeholder="Enter your password" required autocomplete="current-password">
-                </div>
-
-                <!-- Inline error message -->
-                <div id="loginError" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:8px;padding:0.75rem 1rem;font-size:0.875rem;margin-bottom:1rem"></div>
-
-                <button type="submit" id="loginBtn" class="btn btn-primary btn-block">Login</button>
-            </form>
-
-            <div class="login-footer" style="margin-top:1.5rem;text-align:center">
-                <p>Don't have a shopping account? <a href="ecommerce-register.html" style="color:#6366f1;font-weight:600">Sign up here</a></p>
-            </div>
-
-            <!-- Dev hint -->
-            <div class="auth-dev-hint">
-                Default admin: <strong>admin</strong> / <strong>Admin1234</strong>
+            <div class="auth-diagonal-visual-content">
+                <div class="auth-diagonal-logo">Digifinwiz E-Commerce</div>
+                <div class="auth-diagonal-tagline">Shop smarter.<br>Earn more.</div>
+                <p>Browse products, manage orders, and practise smart spending — all in your own standalone shopping account</p>
             </div>
         </div>
     </div>
