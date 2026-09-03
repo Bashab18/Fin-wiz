@@ -140,6 +140,12 @@ function renderCart() {
 
     if (cartCount)  cartCount.textContent = unitCount;
 
+    var headerCartBadge = document.getElementById('headerCartBadge');
+    if (headerCartBadge) {
+        headerCartBadge.textContent = unitCount;
+        headerCartBadge.style.display = unitCount > 0 ? '' : 'none';
+    }
+
     if (cart.length === 0) {
         if (cartItems) cartItems.innerHTML = '<p style="color:#64748b;padding:1rem">Your cart is empty</p>';
         if (cartTotal) cartTotal.textContent = 'ƒ0.00';
