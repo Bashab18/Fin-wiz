@@ -147,23 +147,6 @@
             ═══════════════════════════════════════════════════════ -->
             <div class="page-tab-panel active" id="panel-shop">
 
-            <!-- Challenge Tracker -->
-            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:1.25rem;margin-bottom:1.5rem">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
-                    <h2 style="font-size:1rem;font-weight:700;margin:0">🛒 Ecommerce Challenges</h2>
-                </div>
-                <!-- Challenge Summary Bar -->
-                <div class="challenge-summary-grid">
-                    <div class="csg-item"><div class="csg-val" style="color:#10b981" id="ecoChalDoneCount">—</div><div class="csg-lbl">Completed</div></div>
-                    <div class="csg-item"><div class="csg-val" style="color:#007185" id="ecoChalPendingCount">—</div><div class="csg-lbl">In Progress</div></div>
-                    <div class="csg-item"><div class="csg-val" style="color:#f59e0b" id="ecoChalTotalXp">—</div><div class="csg-lbl">Total XP</div></div>
-                    <div class="csg-item"><div class="csg-val" style="color:#8b5cf6" id="ecoChalEarnedXp">—</div><div class="csg-lbl">XP Earned</div></div>
-                </div>
-                <div id="ecommerceChallengesList" style="display:flex;flex-direction:column;gap:0.6rem">
-                    <p style="color:#64748b;font-size:0.875rem">Loading challenges...</p>
-                </div>
-            </div>
-
             <!-- Amazon-style department / price / rating filter rail + results -->
             <div class="amz-shop-layout">
                 <aside class="amz-filter-rail">
@@ -578,78 +561,6 @@
         renderRecommendations();
     }
 
-    // ── Challenge Tracker ─────────────────────────────────────────────────────
-    function loadEcommerceChallenges() {
-        if (typeof DigifinwizDB === 'undefined') return;
-        Promise.all([
-            DigifinwizDB.getChallenges(),
-            DigifinwizDB.getPurchases(1000)
-        ]).then(function(res) {
-            var challenges = res[0];
-            var purchases = res[1];
-            var ecom = challenges.filter(function(c){ return c.active && c.category === 'ecommerce'; });
-            var container = document.getElementById('ecommerceChallengesList');
-            if (!container) return;
-
-            // Populate challenge summary bar
-            var totalXpAvail = ecom.reduce(function(s,c){ return s+(c.points||0); }, 0);
-            var doneList = ecom.filter(function(c){ return c.completed; });
-            var earnedXp = doneList.reduce(function(s,c){ return s+(c.points||0); }, 0);
-            var pending = ecom.filter(function(c){ return !c.completed; });
-            var set = function(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; };
-            set('ecoChalDoneCount', doneList.length + '/' + ecom.length);
-            set('ecoChalPendingCount', pending.length);
-            set('ecoChalTotalXp', '+' + totalXpAvail + ' XP');
-            set('ecoChalEarnedXp', '+' + earnedXp + ' XP');
-
-            if (ecom.length === 0) {
-                container.innerHTML = '<p style="color:#64748b;font-size:0.875rem">No ecommerce challenges yet.</p>';
-                return;
-            }
-            var totalSpent = purchases.reduce(function(s,p){ return s+(p.total||0); }, 0);
-            var totalItems = purchases.reduce(function(s,p){ return s+sumQty(p.items); }, 0);
-            var maxItems = purchases.reduce(function(mx,p){ return Math.max(mx, sumQty(p.items)); }, 0);
-            container.innerHTML = ecom.map(function(c) {
-                var pct = 0;
-                var progressLabel = '';
-                if (c.completed) {
-                    pct = 100;
-                } else if (c.condition === 'first_purchase') {
-                    pct = purchases.length > 0 ? 100 : 0;
-                    progressLabel = purchases.length > 0 ? 'First purchase made!' : 'Make your first purchase';
-                } else if (c.condition === 'purchase_items') {
-                    pct = Math.min(100, Math.round((maxItems / (c.conditionValue||1)) * 100));
-                    progressLabel = 'Best order: ' + maxItems + ' / ' + (c.conditionValue||0) + ' items';
-                } else if (c.condition === 'total_spent_ecom') {
-                    pct = Math.min(100, Math.round((totalSpent / (c.conditionValue||1)) * 100));
-                    progressLabel = 'ƒ' + totalSpent.toFixed(0) + ' / ƒ' + (c.conditionValue||0) + ' spent';
-                } else if (c.condition === 'transaction_count') {
-                    pct = Math.min(100, Math.round((purchases.length / (c.conditionValue||1)) * 100));
-                    progressLabel = purchases.length + ' / ' + (c.conditionValue||0) + ' orders';
-                } else if (c.condition === 'manual') {
-                    pct = 0;
-                    progressLabel = 'Complete manually';
-                }
-                var done = c.completed;
-                var barColor = done ? '#10b981' : (pct >= 75 ? '#10b981' : (pct >= 40 ? '#f59e0b' : '#007185'));
-                var completedDate = done && c.completedAt ? new Date(c.completedAt).toLocaleDateString() : null;
-                return '<div style="background:' + (done?'#f0fdf4':'#f8fafc') + ';border:1px solid ' + (done?'#bbf7d0':'#e2e8f0') + ';border-radius:10px;padding:0.875rem">' +
-                    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.5rem">' +
-                    '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.875rem">' + (done?'✅ ':'⏳ ') + escHE(c.title) + '</div>' +
-                    '<div style="font-size:0.75rem;color:#64748b;margin-top:0.15rem">' + escHE(c.description||'') + '</div></div>' +
-                    '<span style="background:' + (done?'#dcfce7':'#fef3c7') + ';color:' + (done?'#16a34a':'#d97706') + ';padding:2px 8px;border-radius:12px;font-size:0.72rem;font-weight:700;margin-left:0.5rem;white-space:nowrap">+' + (c.points||0) + ' XP</span>' +
-                    '</div>' +
-                    '<div style="background:#e2e8f0;border-radius:4px;height:7px;overflow:hidden">' +
-                    '<div style="background:' + barColor + ';width:' + pct + '%;height:100%;transition:width 0.6s ease;border-radius:4px"></div></div>' +
-                    '<div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#94a3b8;margin-top:0.25rem">' +
-                    '<span>' + (done && completedDate ? 'Completed ' + completedDate : done ? 'Completed!' : pct + '% complete') + '</span>' +
-                    (progressLabel && !done ? '<span style="color:#007185;font-weight:600">' + escHE(progressLabel) + '</span>' : '') +
-                    '</div>' +
-                    '</div>';
-            }).join('');
-        }).catch(function(){});
-    }
-
     // Category icon heuristic based on item names
     var ECO_ICON_MAP = {
         'headphones':'🎧','watch':'⌚','controller':'🎮','phone':'📱','smart':'⌚',
@@ -746,7 +657,6 @@
     }
 
     function refreshEcoPage() {
-        loadEcommerceChallenges();
         loadOrderHistory();
         loadEcoStats();
         if (typeof updateBalanceLabel === 'function') updateBalanceLabel();
