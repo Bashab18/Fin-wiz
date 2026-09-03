@@ -408,12 +408,120 @@ body.instyl-theme .btn-primary:hover {
     background-color: white;
     border-bottom: 1px solid #e0e0e0;
     padding: 15px 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
 }
 
 .shop-header .shop-container {
     display: flex;
     align-items: center;
     justify-content: space-between;
+}
+
+/* ── Unified header bar: logo + tabs + game progress + icons + logout all
+   in one row instead of stacked strips (used by banking.html/utilities.html
+   on the default light header; ecommerce.html's dark palette overrides
+   these under body.instyl-theme below). ────────────────────────────────── */
+.amz-unified-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.amz-unified-bar .shop-nav {
+    flex: 0 0 auto;
+    margin-left: 0;
+    gap: 10px;
+}
+
+.amz-unified-bar .shop-header-right {
+    margin-left: auto;
+    gap: 12px;
+}
+
+@media (max-width: 1180px) {
+    .amz-unified-bar {
+        flex-wrap: wrap;
+        row-gap: 10px;
+    }
+    .amz-unified-bar .shop-header-right {
+        margin-left: 0;
+        flex: 1 1 100%;
+        justify-content: flex-end;
+    }
+}
+
+.amz-progress-compact {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    color: #334155;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.amz-progress-level strong {
+    color: var(--color-primary-600);
+}
+
+.amz-progress-mini {
+    width: 70px;
+    height: 6px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.amz-progress-mini-fill {
+    height: 100%;
+    background: var(--color-primary-500);
+    border-radius: 999px;
+}
+
+.amz-progress-pct {
+    opacity: 0.75;
+}
+
+.amz-progress-stat {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.amz-progress-stat svg {
+    fill: var(--color-primary-500);
+}
+
+.amz-progress-stat .coin-icon {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+    color: #333;
+    font-size: 10px;
+    font-weight: 700;
+    font-style: italic;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.amz-header-logout {
+    margin-left: 4px;
+    padding: 0.4rem 0.6rem;
+    color: #dc2626;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    border-radius: 6px;
+}
+
+.amz-header-logout:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    color: #b91c1c;
 }
 
 .shop-logo {

@@ -8,22 +8,31 @@
     <link rel="stylesheet" href="shopping-styles.css">
 </head>
 <body>
-    <nav class="navbar">
-        <div class="nav-container">
-            <div class="logo">Digifinwiz</div>
-            <button class="nav-toggle" aria-label="Toggle navigation"><span></span><span></span><span></span></button>
-            <ul class="nav-menu"></ul>
-        </div>
-    </nav>
-
-    <!-- DigiPay Sub-Header -->
+    <!-- DigiPay Header — logo, tabs, game progress, account icons, and logout
+         are all one unified bar instead of three stacked strips. -->
     <header class="shop-header">
-        <div class="shop-container">
+        <div class="shop-container amz-unified-bar">
             <div class="shop-logo">DigiPay.</div>
+
             <nav class="shop-nav">
                 <a href="#" onclick="switchUtilPageTab('bills');return false;" class="active">Bills</a>
                 <a href="#" onclick="switchUtilPageTab('history');return false;">History</a>
             </nav>
+
+            <div class="amz-progress-compact" title="Game progress">
+                <span class="amz-progress-level">Lvl <strong id="utilProgressLevel">1/50</strong></span>
+                <div class="amz-progress-mini"><div class="amz-progress-mini-fill" id="utilProgressFill" style="width: 0%"></div></div>
+                <span class="amz-progress-pct" id="utilProgressText">0% completed</span>
+                <span class="amz-progress-stat">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg>
+                    <span id="utilProgressXP">0 XP</span>
+                </span>
+                <span class="amz-progress-stat coins">
+                    <div class="coin-icon">&#402;</div>
+                    <span id="utilProgressCoins">0</span>
+                </span>
+            </div>
+
             <div class="shop-header-right">
                 <div class="shop-icons">
                     <button class="shop-icon-btn home" onclick="switchUtilPageTab('bills');return false;" title="My Progress">
@@ -36,33 +45,10 @@
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
                     </button>
                 </div>
+                <a href="#" class="amz-header-logout" data-logout title="Logout">Logout</a>
             </div>
         </div>
     </header>
-
-    <!-- DigiPay Game Progress Bar -->
-    <div class="game-progress-bar">
-        <div class="shop-container">
-            <div class="progress-content">
-                <div class="progress-left">
-                    <span class="progress-label">GAME PROGRESS</span>
-                    <span class="level-info">Level <strong id="utilProgressLevel">1/50</strong></span>
-                </div>
-                <div class="progress-bar-container"><div class="progress-bar" id="utilProgressFill" style="width: 0%"></div></div>
-                <span class="progress-text" id="utilProgressText">0% completed</span>
-                <div class="progress-stats">
-                    <div class="stat">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg>
-                        <span id="utilProgressXP">0 XP</span>
-                    </div>
-                    <div class="stat coins">
-                        <div class="coin-icon">&#402;</div>
-                        <span id="utilProgressCoins">0</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <div class="container container--full-width">
 
