@@ -10,6 +10,29 @@ body {
     color: var(--color-gray-800, #333);
 }
 
+/* InStyl brand identity — recolors every shared component that keys off the
+   app-wide primary token (buttons, links, focus states, badges, nav) to the
+   pink/fuchsia palette used on the ecommerce auth pages, so the shop feels
+   like its own storefront rather than a re-skinned banking screen. */
+body.instyl-theme {
+    --color-primary-50:  #fdf2f8;
+    --color-primary-100: #fce7f3;
+    --color-primary-200: #fbcfe8;
+    --color-primary-300: #f9a8d4;
+    --color-primary-400: #f472b6;
+    --color-primary-500: #ec4899;
+    --color-primary-600: #db2777;
+    --color-primary-700: #be185d;
+    --color-primary-800: #9d174d;
+    --shadow-colored: 0 4px 14px rgba(219, 39, 119, 0.25);
+}
+
+body.instyl-theme .shop-logo {
+    font-style: italic;
+    letter-spacing: -0.01em;
+    color: var(--color-primary-600);
+}
+
 .shop-container {
     max-width: 1400px;
     margin: 0 auto;
