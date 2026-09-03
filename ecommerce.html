@@ -54,7 +54,7 @@
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
                         <span class="amz-icon-badge" id="headerWishlistBadge" style="display:none">0</span>
                     </button>
-                    <button class="shop-icon-btn cart" onclick="scrollToCart()" title="View Cart">
+                    <button class="shop-icon-btn cart" onclick="window.location.href='shop-cart.html'" title="View Cart">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
                         <span class="amz-icon-badge" id="headerCartBadge" style="display:none">0</span>
                     </button>
@@ -229,65 +229,6 @@
                 <div id="wishlistPanelGrid" class="wishlist-panel-grid"></div>
             </div>
 
-            <!-- Shopping Cart -->
-            <div class="cart-summary" id="cartSummary" style="margin-top:1.5rem">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-                    <h2 style="margin:0">Shopping Cart <span class="cart-count" id="cartCount" style="background:#f08804;color:#fff;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:0.8rem;margin-left:0.25rem">0</span></h2>
-                    <div style="display:flex;align-items:center;gap:0.75rem">
-                        <span style="font-size:0.8rem;color:#64748b">Items earn <strong style="color:#10b981">+45 XP</strong> each</span>
-                        <button class="btn-clear-cart" id="clearCartBtn" onclick="clearCartAndReload()" style="display:none">Clear Cart</button>
-                    </div>
-                </div>
-                <div id="cartItems"></div>
-                <!-- Cart order summary breakdown -->
-                <div class="cart-breakdown" style="border-top:1px solid #e2e8f0;margin-top:0.5rem;padding-top:0.35rem">
-                    <div class="cart-bdown-row">
-                        <span>Subtotal (<span id="cartItemCount">0</span> item<span id="cartItemCountSuffix">s</span>)</span>
-                        <span class="bval" id="cartSubtotal">ƒ0.00</span>
-                    </div>
-                    <div class="cart-bdown-row tax-row">
-                        <span>Estimated Tax <span style="font-size:0.7rem;color:#94a3b8">(5% — info only)</span></span>
-                        <span class="bval" id="cartTax">ƒ0.00</span>
-                    </div>
-                    <div class="cart-bdown-row total-row">
-                        <strong>Total</strong>
-                        <span class="bval" id="cartTotal">ƒ0.00</span>
-                    </div>
-                </div>
-                <div style="display:flex;justify-content:space-between;padding-bottom:0.75rem;font-size:0.85rem;color:#64748b;margin-top:0.35rem">
-                    <span>Points you'll earn:</span>
-                    <span id="cartXpPreview" style="color:#10b981;font-weight:600">+0 XP</span>
-                </div>
-                <!-- Promo Code Section -->
-                <div style="margin-bottom:0.75rem">
-                    <button type="button" id="promoToggleBtn" onclick="togglePromoInput()" style="background:none;border:none;color:var(--color-primary-500);font-size:0.82rem;font-weight:600;cursor:pointer;padding:0.2rem 0;font-family:var(--font-sans)">🏷️ Have a promo code?</button>
-                    <div id="promoInputWrap" style="display:none;margin-top:0.5rem">
-                        <div style="display:flex;gap:0.5rem">
-                            <input type="text" id="promoCodeInput" class="form-input" placeholder="Enter code (e.g. SAVE10)" style="flex:1;padding:0.45rem 0.75rem;font-size:0.85rem;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
-                            <button type="button" class="btn btn-primary" style="font-size:0.85rem;padding:0.45rem 1rem;white-space:nowrap" onclick="applyPromoCode()">Apply</button>
-                        </div>
-                        <div id="promoMsg" style="font-size:0.78rem;margin-top:0.35rem;display:none"></div>
-                    </div>
-                </div>
-                <!-- Promo discount row (hidden until code applied) -->
-                <div id="promoDiscountRow" style="display:none;justify-content:space-between;padding-bottom:0.5rem;font-size:0.875rem;color:#10b981;font-weight:600;border-bottom:1px solid #e2e8f0;margin-bottom:0.3rem">
-                    <span id="promoDiscountLabel">Discount</span>
-                    <span id="promoDiscountAmt"></span>
-                </div>
-                <button class="btn btn-primary btn-block" onclick="checkout()" id="checkoutBtn" disabled>Checkout & Earn XP</button>
-            </div>
-
-            <!-- Order History -->
-            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:1.25rem;margin-top:1.5rem">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-                    <h2 style="font-size:1rem;font-weight:700;margin:0">📦 Order History</h2>
-                    <span id="orderHistoryCount" style="font-size:0.8rem;color:#64748b"></span>
-                </div>
-                <div id="orderHistory">
-                    <p style="color:#64748b;font-size:0.875rem;text-align:center;padding:1rem">No orders yet. Start shopping!</p>
-                </div>
-            </div>
-
             </div><!-- /panel-shop -->
 
         </main>
@@ -295,7 +236,7 @@
 
     <!-- Floating View Cart button — appears when cart has items -->
     <button id="floatCartBtn"
-        onclick="scrollToCart()"
+        onclick="window.location.href='shop-cart.html'"
         style="display:none;position:fixed;bottom:1.75rem;right:1.75rem;
                background:linear-gradient(135deg,#667eea,#764ba2);
                color:#fff;border:none;border-radius:50px;
@@ -561,58 +502,6 @@
         renderRecommendations();
     }
 
-    // Category icon heuristic based on item names
-    var ECO_ICON_MAP = {
-        'headphones':'🎧','watch':'⌚','controller':'🎮','phone':'📱','smart':'⌚',
-        'shirt':'👔','dress':'👗','jeans':'👖','jacket':'🧥','sweatshirt':'👕',
-        'shoes':'👟','bag':'👜','backpack':'🎒','sunglasses':'🕶️','handbag':'👜'
-    };
-    function getOrderIcon(items) {
-        if (!items || items.length === 0) return '📦';
-        var nameLower = (items[0].name || '').toLowerCase();
-        var keys = Object.keys(ECO_ICON_MAP);
-        for (var i = 0; i < keys.length; i++) {
-            if (nameLower.indexOf(keys[i]) > -1) return ECO_ICON_MAP[keys[i]];
-        }
-        return items.length >= 4 ? '📦' : items.length >= 2 ? '🛒' : '🎁';
-    }
-
-    function loadOrderHistory() {
-        DigifinwizDB.getPurchases(20).then(function(purchases) {
-            var container = document.getElementById('orderHistory');
-            var countEl   = document.getElementById('orderHistoryCount');
-            if (!container) return;
-            if (countEl) countEl.textContent = purchases.length + ' order' + (purchases.length !== 1 ? 's' : '');
-            if (purchases.length === 0) {
-                container.innerHTML = '<p style="color:#64748b;font-size:0.875rem;text-align:center;padding:1rem">No orders yet. Start shopping!</p>';
-                return;
-            }
-            container.innerHTML = purchases.map(function(p, idx) {
-                var itemCount = sumQty(p.items);
-                var icon      = getOrderIcon(p.items);
-                var orderNum  = p.orderId || ('ORD-' + String(purchases.length - idx).padStart(4, '0'));
-                var itemNames = p.items ? p.items.map(function(i){ return escHE(i.name); }).join(', ') : '—';
-                var status    = p.status || 'processing';
-                var statusIcon = { processing: '⏳', shipped: '📦', out_for_delivery: '🚚', delivered: '✓' }[status] || '⏳';
-                return '<div style="display:flex;align-items:center;gap:0.75rem;padding:0.875rem 0;border-bottom:1px solid #f1f5f9">' +
-                    '<div style="width:42px;height:42px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0">' + icon + '</div>' +
-                    '<div style="flex:1;min-width:0">' +
-                        '<div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.15rem">' +
-                            '<span style="font-weight:600;font-size:0.875rem">' + itemCount + ' item' + (itemCount !== 1 ? 's' : '') + ' purchased</span>' +
-                            '<span class="order-status-badge order-status-' + status + '">' + statusIcon + ' ' + escHE(p.statusLabel || 'Processing') + '</span>' +
-                        '</div>' +
-                        '<div style="font-size:0.75rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + itemNames + '</div>' +
-                        '<div style="font-size:0.7rem;color:#94a3b8;margin-top:0.1rem">' + escHE(p.date||'') + ' · ' + escHE(orderNum) + '</div>' +
-                    '</div>' +
-                    '<div style="text-align:right;flex-shrink:0">' +
-                        '<div style="font-weight:700;color:#1e293b">ƒ' + Number(p.total||0).toFixed(2) + '</div>' +
-                        '<div style="font-size:0.72rem;color:#10b981;margin-top:0.1rem">+' + (p.pointsEarned||0) + ' XP</div>' +
-                    '</div>' +
-                    '</div>';
-            }).join('');
-        }).catch(function(){});
-    }
-
     function loadEcoStats() {
         DigifinwizDB.getPurchases(1000).then(function(purchases) {
             var totalSpent = purchases.reduce(function(s,p){ return s+(p.total||0); }, 0);
@@ -657,7 +546,6 @@
     }
 
     function refreshEcoPage() {
-        loadOrderHistory();
         loadEcoStats();
         if (typeof updateBalanceLabel === 'function') updateBalanceLabel();
     }
@@ -845,63 +733,6 @@
             switchEcoPageTab(sessionStorage.getItem('eco_page_tab') || 'shop');
         }
     });
-
-    // ── Promo codes ────────────────────────────────────────────────────────
-    var PROMO_CODES = {
-        'SAVE10':  { type:'pct',  value:10, label:'10% off' },
-        'SAVE20':  { type:'pct',  value:20, label:'20% off' },
-        'WELCOME': { type:'flat', value:15, label:'ƒ15 off' },
-        'STUDENT': { type:'pct',  value:5,  label:'5% student discount' }
-    };
-    var activePromo = null;
-
-    function togglePromoInput() {
-        var wrap = document.getElementById('promoInputWrap');
-        if (!wrap) return;
-        var showing = wrap.style.display !== 'none';
-        wrap.style.display = showing ? 'none' : '';
-        var btn = document.getElementById('promoToggleBtn');
-        if (btn) btn.textContent = showing ? '🏷️ Have a promo code?' : '🏷️ Hide promo code';
-    }
-
-    function applyPromoCode() {
-        var code = ((document.getElementById('promoCodeInput') || {}).value || '').trim().toUpperCase();
-        var msgEl = document.getElementById('promoMsg');
-        var promo = PROMO_CODES[code];
-        if (!promo) {
-            if (msgEl) { msgEl.style.display=''; msgEl.style.color='#ef4444'; msgEl.textContent='❌ Invalid code. Try SAVE10, SAVE20, or WELCOME.'; }
-            return;
-        }
-        activePromo = { code: code, type: promo.type, value: promo.value, label: promo.label };
-        if (msgEl) { msgEl.style.display=''; msgEl.style.color='#10b981'; msgEl.textContent='✓ Code "' + code + '" applied — ' + promo.label + '!'; }
-        updateCartWithPromo();
-        if (typeof showNotification === 'function') showNotification('Promo "' + code + '" applied! ' + promo.label, 'success');
-    }
-
-    function updateCartWithPromo() {
-        var rawTotal = (typeof cart !== 'undefined' ? cart : []).reduce(function(s,i){ return s+i.price*(i.quantity||1); }, 0);
-        var discount = 0;
-        if (activePromo) {
-            if (activePromo.type === 'pct')  discount = rawTotal * (activePromo.value / 100);
-            if (activePromo.type === 'flat') discount = Math.min(activePromo.value, rawTotal);
-        }
-        // Keep the same estimated-tax convention as renderCart() so Total
-        // still equals Subtotal + Tax − Discount on screen after a promo apply.
-        var estTax = rawTotal * 0.05;
-        var finalTotal = Math.max(0, rawTotal + estTax - discount);
-        var totalEl = document.getElementById('cartTotal');
-        if (totalEl) totalEl.textContent = 'ƒ' + finalTotal.toFixed(2);
-        var discRow = document.getElementById('promoDiscountRow');
-        var discLbl = document.getElementById('promoDiscountLabel');
-        var discAmt = document.getElementById('promoDiscountAmt');
-        if (activePromo && discount > 0) {
-            if (discRow) discRow.style.display = 'flex';
-            if (discLbl) discLbl.textContent = 'Promo: ' + activePromo.code;
-            if (discAmt) discAmt.textContent = '−ƒ' + discount.toFixed(2);
-        } else {
-            if (discRow) discRow.style.display = 'none';
-        }
-    }
 
     // ── Wishlist quick panel ──────────────────────────────────────────────
     function toggleWishlistPanel(forceOpen) {

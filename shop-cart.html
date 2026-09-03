@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InStyl - Shopping Cart</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="shopping-styles.css">
+    <script src="config.js"></script>
+    <script>window.APP_MODULE = 'ecommerce';</script>
+    <script src="module-auth.js"></script>
+</head>
+<body class="instyl-theme">
+    <header class="shop-header">
+        <div class="shop-container amz-unified-bar">
+            <div class="shop-logo">InStyl.</div>
+            <nav class="shop-nav">
+                <a href="ecommerce.html?sale=true">On Sale</a>
+                <a href="ecommerce.html?category=women">Women</a>
+                <a href="ecommerce.html?category=men">Men</a>
+                <a href="ecommerce.html?category=outdoors">Outdoors</a>
+                <a href="ecommerce.html?category=cooking">Cooking</a>
+                <a href="ecommerce.html?category=electronics">Electronics</a>
+                <a href="ecommerce.html?category=accessories">Accessories</a>
+            </nav>
+            <div class="amz-progress-compact" title="Game progress">
+                <span class="amz-progress-level">Lvl <strong>2/50</strong></span>
+                <div class="amz-progress-mini"><div class="amz-progress-mini-fill" style="width: 40%"></div></div>
+                <span class="amz-progress-pct">40% completed</span>
+                <span class="amz-progress-stat">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg>
+                    <span>1400 XP</span>
+                </span>
+                <span class="amz-progress-stat coins">
+                    <div class="coin-icon">&#402;</div>
+                    <span>3400</span>
+                </span>
+            </div>
+            <div class="shop-header-right">
+                <div class="shop-search-box">
+                    <input type="text" placeholder="Search...">
+                </div>
+                <div class="shop-icons">
+                    <button class="shop-icon-btn home" onclick="window.location.href='shop-account.html'">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+                        </svg>
+                    </button>
+                    <button class="shop-icon-btn user">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                        </svg>
+                    </button>
+                    <button class="shop-icon-btn bookmark" onclick="window.location.href='shop-saved-items.html'">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/>
+                        </svg>
+                    </button>
+                    <button class="shop-icon-btn cart" onclick="window.location.href='shop-cart.html'">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/>
+                        </svg>
+                        <span class="amz-icon-badge" id="headerCartBadge" style="display:none">0</span>
+                    </button>
+                </div>
+                <a href="#" class="amz-header-logout" data-logout title="Logout">Logout</a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="shop-main-content">
+        <div class="shop-container">
+            <!-- Sidebar -->
+            <aside class="shop-sidebar">
+                <nav class="shop-sidebar-nav">
+                    <a href="shop-account.html" class="shop-nav-item">Account Summary</a>
+                    <a href="shop-profile.html" class="shop-nav-item">Profile</a>
+                    <a href="shop-change-password.html" class="shop-nav-item">Change Password</a>
+                    <a href="shop-address-book.html" class="shop-nav-item">Address Book</a>
+                    <a href="shop-order-history.html" class="shop-nav-item">Order History</a>
+                    <a href="shop-order-status.html" class="shop-nav-item">Order Status</a>
+                    <a href="shop-wallet.html" class="shop-nav-item">Wallet</a>
+                    <a href="shop-saved-items.html" class="shop-nav-item">Saved Items</a>
+                    <a href="shop-cart.html" class="shop-nav-item active">Cart</a>
+                    <a href="ecommerce.html" class="shop-nav-item back-link">&#8592; Back to Store</a>
+                </nav>
+            </aside>
+
+            <!-- Content Area -->
+            <main class="shop-content-area">
+                <div class="shop-page-header">
+                    <h1>Shopping Cart</h1>
+                </div>
+
+                <div class="cart-summary" id="cartSummary">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+                        <h2 style="margin:0">Shopping Cart <span class="cart-count" id="cartCount" style="background:#f08804;color:#fff;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:0.8rem;margin-left:0.25rem">0</span></h2>
+                        <div style="display:flex;align-items:center;gap:0.75rem">
+                            <span style="font-size:0.8rem;color:#64748b">Items earn <strong style="color:#10b981">+45 XP</strong> each</span>
+                            <button class="btn-clear-cart" id="clearCartBtn" onclick="clearCartAndReload()" style="display:none">Clear Cart</button>
+                        </div>
+                    </div>
+                    <div id="cartItems"></div>
+                    <!-- Cart order summary breakdown -->
+                    <div class="cart-breakdown" style="border-top:1px solid #e2e8f0;margin-top:0.5rem;padding-top:0.35rem">
+                        <div class="cart-bdown-row">
+                            <span>Subtotal (<span id="cartItemCount">0</span> item<span id="cartItemCountSuffix">s</span>)</span>
+                            <span class="bval" id="cartSubtotal">ƒ0.00</span>
+                        </div>
+                        <div class="cart-bdown-row tax-row">
+                            <span>Estimated Tax <span style="font-size:0.7rem;color:#94a3b8">(5% — info only)</span></span>
+                            <span class="bval" id="cartTax">ƒ0.00</span>
+                        </div>
+                        <div class="cart-bdown-row total-row">
+                            <strong>Total</strong>
+                            <span class="bval" id="cartTotal">ƒ0.00</span>
+                        </div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;padding-bottom:0.75rem;font-size:0.85rem;color:#64748b;margin-top:0.35rem">
+                        <span>Points you'll earn:</span>
+                        <span id="cartXpPreview" style="color:#10b981;font-weight:600">+0 XP</span>
+                    </div>
+                    <!-- Promo Code Section -->
+                    <div style="margin-bottom:0.75rem">
+                        <button type="button" id="promoToggleBtn" onclick="togglePromoInput()" style="background:none;border:none;color:var(--color-primary-500);font-size:0.82rem;font-weight:600;cursor:pointer;padding:0.2rem 0;font-family:var(--font-sans)">🏷️ Have a promo code?</button>
+                        <div id="promoInputWrap" style="display:none;margin-top:0.5rem">
+                            <div style="display:flex;gap:0.5rem">
+                                <input type="text" id="promoCodeInput" class="form-input" placeholder="Enter code (e.g. SAVE10)" style="flex:1;padding:0.45rem 0.75rem;font-size:0.85rem;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+                                <button type="button" class="btn btn-primary" style="font-size:0.85rem;padding:0.45rem 1rem;white-space:nowrap" onclick="applyPromoCode()">Apply</button>
+                            </div>
+                            <div id="promoMsg" style="font-size:0.78rem;margin-top:0.35rem;display:none"></div>
+                        </div>
+                    </div>
+                    <!-- Promo discount row (hidden until code applied) -->
+                    <div id="promoDiscountRow" style="display:none;justify-content:space-between;padding-bottom:0.5rem;font-size:0.875rem;color:#10b981;font-weight:600;border-bottom:1px solid #e2e8f0;margin-bottom:0.3rem">
+                        <span id="promoDiscountLabel">Discount</span>
+                        <span id="promoDiscountAmt"></span>
+                    </div>
+                    <button class="btn btn-primary btn-block" onclick="checkout()" id="checkoutBtn" disabled>Checkout & Earn XP</button>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="db.js"></script>
+    <script src="script.js"></script>
+    <script src="ecommerce.js"></script>
+    <script>
+    // ── Promo codes ────────────────────────────────────────────────────────
+    var PROMO_CODES = {
+        'SAVE10':  { type:'pct',  value:10, label:'10% off' },
+        'SAVE20':  { type:'pct',  value:20, label:'20% off' },
+        'WELCOME': { type:'flat', value:15, label:'ƒ15 off' },
+        'STUDENT': { type:'pct',  value:5,  label:'5% student discount' }
+    };
+    var activePromo = null;
+
+    function togglePromoInput() {
+        var wrap = document.getElementById('promoInputWrap');
+        if (!wrap) return;
+        var showing = wrap.style.display !== 'none';
+        wrap.style.display = showing ? 'none' : '';
+        var btn = document.getElementById('promoToggleBtn');
+        if (btn) btn.textContent = showing ? '🏷️ Have a promo code?' : '🏷️ Hide promo code';
+    }
+
+    function applyPromoCode() {
+        var code = ((document.getElementById('promoCodeInput') || {}).value || '').trim().toUpperCase();
+        var msgEl = document.getElementById('promoMsg');
+        var promo = PROMO_CODES[code];
+        if (!promo) {
+            if (msgEl) { msgEl.style.display=''; msgEl.style.color='#ef4444'; msgEl.textContent='❌ Invalid code. Try SAVE10, SAVE20, or WELCOME.'; }
+            return;
+        }
+        activePromo = { code: code, type: promo.type, value: promo.value, label: promo.label };
+        if (msgEl) { msgEl.style.display=''; msgEl.style.color='#10b981'; msgEl.textContent='✓ Code "' + code + '" applied — ' + promo.label + '!'; }
+        updateCartWithPromo();
+        if (typeof showNotification === 'function') showNotification('Promo "' + code + '" applied! ' + promo.label, 'success');
+    }
+
+    function updateCartWithPromo() {
+        var rawTotal = (typeof cart !== 'undefined' ? cart : []).reduce(function(s,i){ return s+i.price*(i.quantity||1); }, 0);
+        var discount = 0;
+        if (activePromo) {
+            if (activePromo.type === 'pct')  discount = rawTotal * (activePromo.value / 100);
+            if (activePromo.type === 'flat') discount = Math.min(activePromo.value, rawTotal);
+        }
+        // Keep the same estimated-tax convention as renderCart() so Total
+        // still equals Subtotal + Tax − Discount on screen after a promo apply.
+        var estTax = rawTotal * 0.05;
+        var finalTotal = Math.max(0, rawTotal + estTax - discount);
+        var totalEl = document.getElementById('cartTotal');
+        if (totalEl) totalEl.textContent = 'ƒ' + finalTotal.toFixed(2);
+        var discRow = document.getElementById('promoDiscountRow');
+        var discLbl = document.getElementById('promoDiscountLabel');
+        var discAmt = document.getElementById('promoDiscountAmt');
+        if (activePromo && discount > 0) {
+            if (discRow) discRow.style.display = 'flex';
+            if (discLbl) discLbl.textContent = 'Promo: ' + activePromo.code;
+            if (discAmt) discAmt.textContent = '−ƒ' + discount.toFixed(2);
+        } else {
+            if (discRow) discRow.style.display = 'none';
+        }
+    }
+    </script>
+</body>
+</html>
