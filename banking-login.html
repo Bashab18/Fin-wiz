@@ -7,45 +7,58 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="auth-page auth-page--banking">
-        <div class="auth-bg-decor" aria-hidden="true">
-            <div class="auth-blob auth-blob-1"></div>
-            <div class="auth-blob auth-blob-2"></div>
-            <div class="auth-blob auth-blob-3"></div>
-            <svg class="auth-motif auth-motif-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.6"><path d="M3 21h18M4 21V10l8-6 8 6v11M4 10h16M7 21v-7M12 21v-7M17 21v-7"/></svg>
-            <svg class="auth-motif auth-motif-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.6"><path d="M3 21h18M4 21V10l8-6 8 6v11M4 10h16M7 21v-7M12 21v-7M17 21v-7"/></svg>
+    <div class="auth-page auth-page--banking auth-page--split">
+        <div class="auth-split-visual">
+            <div class="auth-bg-decor" aria-hidden="true">
+                <div class="auth-blob auth-blob-1"></div>
+                <div class="auth-blob auth-blob-2"></div>
+                <svg class="auth-motif auth-motif-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.6"><path d="M3 21h18M4 21V10l8-6 8 6v11M4 10h16M7 21v-7M12 21v-7M17 21v-7"/></svg>
+            </div>
+            <div class="auth-split-visual-content">
+                <div class="auth-split-logo">Digifinwiz Banking</div>
+                <h2>Bank With Confidence</h2>
+                <p>Manage transfers, credit cards, loans, and savings goals — all in your own standalone banking account</p>
+                <div class="auth-split-features">
+                    <div class="auth-split-feature">✓ Checking &amp; savings accounts</div>
+                    <div class="auth-split-feature">✓ Transfers &amp; scheduled payments</div>
+                    <div class="auth-split-feature">✓ Credit cards &amp; loans</div>
+                    <div class="auth-split-feature">✓ Savings goals &amp; alerts</div>
+                </div>
+            </div>
         </div>
 
-        <div class="auth-glass-card">
-            <div class="login-header">
-                <h1 class="login-logo">Digifinwiz Banking</h1>
-                <p>Welcome back! Please login to your banking account</p>
-            </div>
-
-            <form id="loginForm" class="login-form">
-                <div class="form-group">
-                    <label>Username or Email</label>
-                    <input type="text" class="form-input" id="loginUsername" placeholder="Enter your username or email" required autocomplete="username">
+        <div class="auth-split-form">
+            <div class="auth-split-form-inner">
+                <div class="login-header">
+                    <h1 class="login-logo">Welcome Back</h1>
+                    <p>Please login to your banking account</p>
                 </div>
 
-                <div class="form-group">
-                    <label>Password</label>
-                    <input type="password" class="form-input" id="loginPassword" placeholder="Enter your password" required autocomplete="current-password">
+                <form id="loginForm" class="login-form">
+                    <div class="form-group">
+                        <label>Username or Email</label>
+                        <input type="text" class="form-input" id="loginUsername" placeholder="Enter your username or email" required autocomplete="username">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" class="form-input" id="loginPassword" placeholder="Enter your password" required autocomplete="current-password">
+                    </div>
+
+                    <!-- Inline error message -->
+                    <div id="loginError" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:8px;padding:0.75rem 1rem;font-size:0.875rem;margin-bottom:1rem"></div>
+
+                    <button type="submit" id="loginBtn" class="btn btn-primary btn-block">Login</button>
+                </form>
+
+                <div class="login-footer" style="margin-top:1.5rem;text-align:center">
+                    <p>Don't have a banking account? <a href="banking-register.html" style="color:#6366f1;font-weight:600">Sign up here</a></p>
                 </div>
 
-                <!-- Inline error message -->
-                <div id="loginError" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:8px;padding:0.75rem 1rem;font-size:0.875rem;margin-bottom:1rem"></div>
-
-                <button type="submit" id="loginBtn" class="btn btn-primary btn-block">Login</button>
-            </form>
-
-            <div class="login-footer" style="margin-top:1.5rem;text-align:center">
-                <p>Don't have a banking account? <a href="banking-register.html" style="color:#6366f1;font-weight:600">Sign up here</a></p>
-            </div>
-
-            <!-- Dev hint -->
-            <div class="auth-dev-hint">
-                Default admin: <strong>admin</strong> / <strong>Admin1234</strong>
+                <!-- Dev hint -->
+                <div class="auth-dev-hint">
+                    Default admin: <strong>admin</strong> / <strong>Admin1234</strong>
+                </div>
             </div>
         </div>
     </div>

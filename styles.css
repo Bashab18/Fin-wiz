@@ -2338,6 +2338,200 @@ body {
     text-align: center;
 }
 
+/* ── Banking: split-screen (illustration panel + solid form panel) ──────── */
+.auth-page--split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
+    padding: 0;
+}
+
+.auth-split-visual {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-12);
+    color: white;
+}
+
+.auth-split-visual-content {
+    position: relative;
+    z-index: 1;
+    max-width: 440px;
+}
+
+.auth-split-logo {
+    font-size: var(--text-3xl);
+    font-weight: 700;
+    font-style: italic;
+    margin-bottom: var(--space-6);
+}
+
+.auth-split-visual-content h2 {
+    font-size: var(--text-3xl);
+    font-weight: 700;
+    margin-bottom: var(--space-4);
+    line-height: 1.2;
+}
+
+.auth-split-visual-content p {
+    font-size: var(--text-lg);
+    opacity: 0.9;
+    margin-bottom: var(--space-8);
+}
+
+.auth-split-features {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.auth-split-feature {
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.auth-split-form {
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-10);
+}
+
+.auth-split-form-inner {
+    width: 100%;
+    max-width: 400px;
+    animation: authCardIn 0.5s ease both;
+}
+
+@media (max-width: 900px) {
+    .auth-page--split {
+        grid-template-columns: 1fr;
+    }
+    .auth-split-visual {
+        padding: var(--space-8) var(--space-6);
+        min-height: 200px;
+    }
+    .auth-split-visual-content h2 {
+        font-size: var(--text-2xl);
+    }
+}
+
+/* ── E-Commerce: diagonal editorial split ────────────────────────────────── */
+.auth-page--diagonal {
+    display: grid;
+    grid-template-columns: 1fr 1.15fr;
+    padding: 0;
+}
+
+.auth-diagonal-form {
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-10);
+    position: relative;
+    z-index: 2;
+}
+
+.auth-diagonal-form-inner {
+    width: 100%;
+    max-width: 400px;
+    animation: authCardIn 0.5s ease both;
+}
+
+.auth-diagonal-visual {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-12);
+    color: white;
+    text-align: center;
+    clip-path: polygon(8% 0, 100% 0, 100% 100%, 0% 100%);
+}
+
+.auth-diagonal-visual-content {
+    position: relative;
+    z-index: 1;
+}
+
+.auth-diagonal-logo {
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    font-style: italic;
+    margin-bottom: var(--space-4);
+    opacity: 0.95;
+}
+
+.auth-diagonal-tagline {
+    font-size: clamp(1.75rem, 3.4vw, 2.75rem);
+    font-weight: 800;
+    line-height: 1.15;
+    margin-bottom: var(--space-4);
+}
+
+.auth-diagonal-visual-content p {
+    font-size: var(--text-lg);
+    opacity: 0.9;
+}
+
+@media (max-width: 900px) {
+    .auth-page--diagonal {
+        grid-template-columns: 1fr;
+    }
+    .auth-diagonal-visual {
+        clip-path: none;
+        padding: var(--space-8) var(--space-6);
+        min-height: 200px;
+    }
+}
+
+/* ── Utilities: solid card with accent bar + feature chip strip ─────────── */
+.auth-utilities-stack {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-5);
+    width: 100%;
+    max-width: 440px;
+}
+
+.auth-solid-card {
+    width: 100%;
+    background: #fff;
+    border-top: 6px solid #0891b2;
+    border-radius: var(--radius-2xl);
+    box-shadow: 0 25px 70px -15px rgba(0, 0, 0, 0.35);
+    padding: var(--space-10) var(--space-8);
+    animation: authCardIn 0.5s ease both;
+}
+
+.auth-chip-strip {
+    display: flex;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.auth-chip {
+    background: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-full);
+    font-size: 0.85rem;
+    font-weight: 600;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
 .login-header {
     text-align: center;
     margin-bottom: var(--space-8);
