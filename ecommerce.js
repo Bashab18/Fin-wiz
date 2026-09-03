@@ -35,6 +35,13 @@ function withCartOpLock(productName, fn) {
 }
 
 function addToCart(productName, price, btnEl) {
+    // Amazon-style product cards offer a quantity stepper next to the
+    // button; pull the chosen amount from it when present (quick-view's
+    // add-to-cart button has no stepper nearby, so it stays a plain +1).
+    var qty = 1;
+    var qtyInput = btnEl && btnEl.parentElement && btnEl.parentElement.querySelector('.amz-qty-input');
+    if (qtyInput) qty = Math.max(1, parseInt(qtyInput.value, 10) || 1);
+
     // Animate the button immediately for perceived responsiveness
     if (btnEl) {
         btnEl.textContent = '✓ Added!';
@@ -45,16 +52,17 @@ function addToCart(productName, price, btnEl) {
         var existing = findCartRow(productName);
         var upsert = existing
             ? DigifinwizDB.removeCartItem(existing.id).then(function() {
-                  return DigifinwizDB.addCartItem({ name: productName, price: price, quantity: (existing.quantity || 1) + 1 });
+                  return DigifinwizDB.addCartItem({ name: productName, price: price, quantity: (existing.quantity || 1) + qty });
               })
-            : DigifinwizDB.addCartItem({ name: productName, price: price, quantity: 1 });
+            : DigifinwizDB.addCartItem({ name: productName, price: price, quantity: qty });
         return upsert.then(function() {
             return DigifinwizDB.getCart();
         }).then(function(items) {
             cart = items;
             renderCart();
             scrollToCart();
-            showNotification(productName + ' added to cart!', 'success');
+            if (qtyInput) qtyInput.value = 1;
+            showNotification((qty > 1 ? qty + '× ' : '') + productName + ' added to cart!', 'success');
         }).catch(function(err) { console.error('addToCart:', err); });
     });
 }

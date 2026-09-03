@@ -11,26 +11,267 @@ body {
 }
 
 /* InStyl brand identity — recolors every shared component that keys off the
-   app-wide primary token (buttons, links, focus states, badges, nav) to the
-   pink/fuchsia palette used on the ecommerce auth pages, so the shop feels
-   like its own storefront rather than a re-skinned banking screen. */
+   app-wide primary token (links, focus states, sidebar highlights) to a
+   teal-blue reminiscent of a big-box marketplace's link color, then layers
+   on marketplace-specific chrome (dark header/nav strip, gold CTA buttons,
+   a department/price/rating filter rail) that has no equivalent token in
+   the shared design system, so the shop reads as its own storefront rather
+   than a re-skinned banking screen. */
 body.instyl-theme {
-    --color-primary-50:  #fdf2f8;
-    --color-primary-100: #fce7f3;
-    --color-primary-200: #fbcfe8;
-    --color-primary-300: #f9a8d4;
-    --color-primary-400: #f472b6;
-    --color-primary-500: #ec4899;
-    --color-primary-600: #db2777;
-    --color-primary-700: #be185d;
-    --color-primary-800: #9d174d;
-    --shadow-colored: 0 4px 14px rgba(219, 39, 119, 0.25);
+    --color-primary-50:  #e9f7f9;
+    --color-primary-100: #d3eff2;
+    --color-primary-200: #a7dfe6;
+    --color-primary-300: #7bcfd9;
+    --color-primary-400: #3aa9b7;
+    --color-primary-500: #00879b;
+    --color-primary-600: #007185;
+    --color-primary-700: #005a6a;
+    --color-primary-800: #00434f;
+    --shadow-colored: 0 4px 14px rgba(240, 173, 30, 0.35);
 }
 
+/* ── Header: dark top bar + secondary category strip ─────────────────── */
 body.instyl-theme .shop-logo {
-    font-style: italic;
+    font-style: normal;
     letter-spacing: -0.01em;
-    color: var(--color-primary-600);
+    color: #fff;
+}
+
+body.instyl-theme .shop-header {
+    background: #131921;
+    border-bottom: none;
+    padding: 10px 0;
+}
+
+body.instyl-theme .shop-search-box {
+    flex: 1;
+    max-width: 640px;
+    margin: 0 24px;
+    display: flex;
+}
+
+body.instyl-theme .shop-search-box input {
+    flex: 1;
+    border: none;
+    border-radius: 4px 0 0 4px;
+    padding: 10px 14px;
+}
+
+body.instyl-theme .amz-search-btn {
+    background: linear-gradient(180deg, #febd69 0%, #f3a847 100%);
+    border: none;
+    border-radius: 0 4px 4px 0;
+    padding: 0 16px;
+    font-size: 1.05rem;
+    cursor: pointer;
+}
+
+body.instyl-theme .shop-icon-btn {
+    color: #fff;
+}
+
+body.instyl-theme .shop-icon-btn:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+body.instyl-theme .shop-icon-btn.home svg {
+    fill: #fff;
+}
+
+body.instyl-theme .amz-navstrip {
+    background: #232f3e;
+}
+
+body.instyl-theme .amz-navstrip .shop-nav {
+    margin-left: 0;
+    padding: 10px 0;
+}
+
+body.instyl-theme .amz-navstrip .shop-nav a {
+    color: #fff;
+    font-size: 14px;
+    padding: 4px 2px;
+}
+
+body.instyl-theme .amz-navstrip .shop-nav a:hover {
+    color: #febd69;
+}
+
+body.instyl-theme .shop-nav a.active {
+    color: #fff;
+    border-bottom-color: #febd69;
+}
+
+/* ── Game progress bar: dark slate + gold fill ────────────────────────── */
+body.instyl-theme .game-progress-bar {
+    background: linear-gradient(135deg, #232f3e 0%, #37475a 100%);
+    border-bottom: 3px solid #febd69;
+}
+
+body.instyl-theme .progress-bar {
+    background: linear-gradient(90deg, #febd69 0%, #f0c14b 100%);
+}
+
+/* ── Department / price / rating filter rail ──────────────────────────── */
+body.instyl-theme .amz-shop-layout {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.25rem;
+}
+
+body.instyl-theme .amz-filter-rail {
+    width: 230px;
+    flex-shrink: 0;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1rem;
+}
+
+body.instyl-theme .amz-filter-group + .amz-filter-group {
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+body.instyl-theme .amz-filter-title {
+    margin: 0 0 0.6rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #0f172a;
+}
+
+body.instyl-theme .amz-filter-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+body.instyl-theme .amz-filter-item {
+    padding: 0.4rem 0.5rem;
+    font-size: 0.85rem;
+    color: #334155;
+    border-radius: 6px;
+    cursor: pointer;
+    user-select: none;
+}
+
+body.instyl-theme .amz-filter-item:hover {
+    background: #f1f5f9;
+}
+
+body.instyl-theme .amz-filter-item.active {
+    background: var(--color-primary-50);
+    color: var(--color-primary-700);
+    font-weight: 700;
+}
+
+body.instyl-theme .amz-results-column {
+    flex: 1;
+    min-width: 0;
+}
+
+@media (max-width: 800px) {
+    body.instyl-theme .amz-shop-layout {
+        flex-direction: column;
+    }
+    body.instyl-theme .amz-filter-rail {
+        width: 100%;
+    }
+}
+
+/* ── Product cards: marketplace price/rating/CTA treatment ───────────── */
+body.instyl-theme .product-info h3 {
+    color: #007185;
+}
+
+body.instyl-theme .product-card:hover .product-info h3 {
+    color: #c7511f;
+    text-decoration: underline;
+}
+
+body.instyl-theme .product-rating .stars {
+    color: #ffa41c;
+}
+
+body.instyl-theme .product-price {
+    color: #0f1111;
+    font-weight: 700;
+    font-size: 1.05rem;
+}
+
+body.instyl-theme .amz-discount-badge {
+    margin-left: 0.35rem;
+    color: #cc0c39;
+    font-weight: 700;
+    font-size: 0.78rem;
+}
+
+body.instyl-theme .product-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.4rem;
+}
+
+body.instyl-theme .amz-add-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+body.instyl-theme .amz-qty-stepper {
+    display: flex;
+    align-items: stretch;
+    border: 1px solid #d5d9d9;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #f0f2f2;
+}
+
+body.instyl-theme .amz-qty-btn {
+    width: 26px;
+    border: none;
+    background: #f0f2f2;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #0f1111;
+}
+
+body.instyl-theme .amz-qty-btn:hover {
+    background: #e3e6e6;
+}
+
+body.instyl-theme .amz-qty-input {
+    width: 32px;
+    border: none;
+    border-left: 1px solid #d5d9d9;
+    border-right: 1px solid #d5d9d9;
+    text-align: center;
+    font-size: 0.85rem;
+    background: #fff;
+    -moz-appearance: textfield;
+}
+
+body.instyl-theme .amz-qty-input::-webkit-outer-spin-button,
+body.instyl-theme .amz-qty-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* ── Gold "Add to Cart" / checkout CTA, marketplace-style ─────────────── */
+body.instyl-theme .btn-primary {
+    background: linear-gradient(180deg, #f7dfa5 0%, #f0c14b 100%);
+    border: 1px solid #a88734;
+    color: #0f1111;
+    font-weight: 600;
+}
+
+body.instyl-theme .btn-primary:hover {
+    background: linear-gradient(180deg, #f5d78e 0%, #eeb933 100%);
 }
 
 .shop-container {
