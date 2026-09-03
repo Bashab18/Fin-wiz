@@ -40,7 +40,7 @@
                     <button class="shop-icon-btn bookmark" onclick="window.location.href='shop-saved-items.html'">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
                     </button>
-                    <button class="shop-icon-btn cart"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg></button>
+                    <button class="shop-icon-btn cart" onclick="window.location.href='shop-cart.html'"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg></button>
                 </div>
                 <a href="#" class="amz-header-logout" data-logout title="Logout">Logout</a>
             </div>
@@ -59,6 +59,7 @@
                     <a href="shop-order-status.html" class="shop-nav-item">Order Status</a>
                     <a href="shop-wallet.html" class="shop-nav-item">Wallet</a>
                     <a href="shop-saved-items.html" class="shop-nav-item">Saved Items</a>
+                    <a href="shop-cart.html" class="shop-nav-item">Cart</a>
                     <a href="ecommerce.html" class="shop-nav-item back-link">&#8592; Back to Store</a>
                 </nav>
             </aside>
@@ -66,116 +67,13 @@
             <main class="shop-content-area">
                 <div class="shop-page-header"><h1>Order History</h1></div>
 
-                <div class="order-filters">
-                    <input type="text" class="search-input" placeholder="Search orders...">
-                    <select class="filter-select">
-                        <option value="all">All Orders</option>
-                        <option value="last30">Last 30 Days</option>
-                        <option value="last90">Last 90 Days</option>
-                        <option value="lastyear">Last Year</option>
-                    </select>
-                </div>
-
-                <div class="orders-list" id="ordersList">
-                    <div class="order-item">
-                        <div class="order-header">
-                            <div class="order-info">
-                                <span class="order-number">Order #12345678</span>
-                                <span class="order-date">Placed on Jan 15, 2026</span>
-                            </div>
-                            <div class="order-total">
-                                <span class="total-label">Total:</span>
-                                <span class="total-amount">$156.99</span>
-                            </div>
-                        </div>
-                        <div class="order-body">
-                            <div class="order-products">
-                                <div class="product-item">
-                                    <div class="product-image"><div class="placeholder-image">IMG</div></div>
-                                    <div class="product-details">
-                                        <h4>Premium Cotton T-Shirt</h4>
-                                        <p>Size: M | Color: Navy Blue</p>
-                                        <p class="product-price">$29.99 x 2</p>
-                                    </div>
-                                </div>
-                                <div class="product-item">
-                                    <div class="product-image"><div class="placeholder-image">IMG</div></div>
-                                    <div class="product-details">
-                                        <h4>Denim Jeans</h4>
-                                        <p>Size: 32 | Color: Dark Wash</p>
-                                        <p class="product-price">$79.99</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="order-status-badge delivered">Delivered on Jan 20, 2026</div>
-                        </div>
-                        <div class="order-actions">
-                            <button class="btn btn-secondary">View Details</button>
-                            <button class="btn btn-secondary">Buy Again</button>
-                            <button class="btn btn-secondary">Leave Review</button>
-                        </div>
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:1.25rem">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+                        <h2 style="font-size:1rem;font-weight:700;margin:0">📦 Your Orders</h2>
+                        <span id="orderHistoryCount" style="font-size:0.8rem;color:#64748b"></span>
                     </div>
-
-                    <div class="order-item">
-                        <div class="order-header">
-                            <div class="order-info">
-                                <span class="order-number">Order #12345677</span>
-                                <span class="order-date">Placed on Jan 10, 2026</span>
-                            </div>
-                            <div class="order-total">
-                                <span class="total-label">Total:</span>
-                                <span class="total-amount">$89.99</span>
-                            </div>
-                        </div>
-                        <div class="order-body">
-                            <div class="order-products">
-                                <div class="product-item">
-                                    <div class="product-image"><div class="placeholder-image">IMG</div></div>
-                                    <div class="product-details">
-                                        <h4>Running Shoes</h4>
-                                        <p>Size: 10 | Color: Black/White</p>
-                                        <p class="product-price">$89.99</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="order-status-badge delivered">Delivered on Jan 13, 2026</div>
-                        </div>
-                        <div class="order-actions">
-                            <button class="btn btn-secondary">View Details</button>
-                            <button class="btn btn-secondary">Buy Again</button>
-                            <button class="btn btn-secondary">Leave Review</button>
-                        </div>
-                    </div>
-
-                    <div class="order-item">
-                        <div class="order-header">
-                            <div class="order-info">
-                                <span class="order-number">Order #12345676</span>
-                                <span class="order-date">Placed on Dec 28, 2025</span>
-                            </div>
-                            <div class="order-total">
-                                <span class="total-label">Total:</span>
-                                <span class="total-amount">$234.50</span>
-                            </div>
-                        </div>
-                        <div class="order-body">
-                            <div class="order-products">
-                                <div class="product-item">
-                                    <div class="product-image"><div class="placeholder-image">IMG</div></div>
-                                    <div class="product-details">
-                                        <h4>Winter Jacket</h4>
-                                        <p>Size: L | Color: Black</p>
-                                        <p class="product-price">$234.50</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="order-status-badge delivered">Delivered on Jan 2, 2026</div>
-                        </div>
-                        <div class="order-actions">
-                            <button class="btn btn-secondary">View Details</button>
-                            <button class="btn btn-secondary">Buy Again</button>
-                            <button class="btn btn-secondary">Leave Review</button>
-                        </div>
+                    <div id="orderHistory">
+                        <p style="color:#64748b;font-size:0.875rem;text-align:center;padding:1rem">Loading orders&hellip;</p>
                     </div>
                 </div>
             </main>
@@ -185,5 +83,72 @@
     <script src="db.js"></script>
     <script src="shop-bridge.js"></script>
     <script src="shopping-script.js"></script>
+    <script>
+    function escHE(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+            return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+        });
+    }
+    function sumQty(items) {
+        return (items || []).reduce(function(s, i) { return s + (i.quantity || 1); }, 0);
+    }
+
+    // Category icon heuristic based on item names
+    var ECO_ICON_MAP = {
+        'headphones':'🎧','watch':'⌚','controller':'🎮','phone':'📱','smart':'⌚',
+        'shirt':'👔','dress':'👗','jeans':'👖','jacket':'🧥','sweatshirt':'👕',
+        'shoes':'👟','bag':'👜','backpack':'🎒','sunglasses':'🕶️','handbag':'👜'
+    };
+    function getOrderIcon(items) {
+        if (!items || items.length === 0) return '📦';
+        var nameLower = (items[0].name || '').toLowerCase();
+        var keys = Object.keys(ECO_ICON_MAP);
+        for (var i = 0; i < keys.length; i++) {
+            if (nameLower.indexOf(keys[i]) > -1) return ECO_ICON_MAP[keys[i]];
+        }
+        return items.length >= 4 ? '📦' : items.length >= 2 ? '🛒' : '🎁';
+    }
+
+    function loadOrderHistory() {
+        if (typeof DigifinwizDB === 'undefined') return;
+        DigifinwizDB.getPurchases(20).then(function(purchases) {
+            var container = document.getElementById('orderHistory');
+            var countEl   = document.getElementById('orderHistoryCount');
+            if (!container) return;
+            if (countEl) countEl.textContent = purchases.length + ' order' + (purchases.length !== 1 ? 's' : '');
+            if (purchases.length === 0) {
+                container.innerHTML = '<p style="color:#64748b;font-size:0.875rem;text-align:center;padding:1rem">No orders yet. Start shopping!</p>';
+                return;
+            }
+            container.innerHTML = purchases.map(function(p, idx) {
+                var itemCount = sumQty(p.items);
+                var icon      = getOrderIcon(p.items);
+                var orderNum  = p.orderId || ('ORD-' + String(purchases.length - idx).padStart(4, '0'));
+                var itemNames = p.items ? p.items.map(function(i){ return escHE(i.name); }).join(', ') : '—';
+                var status    = p.status || 'processing';
+                var statusIcon = { processing: '⏳', shipped: '📦', out_for_delivery: '🚚', delivered: '✓' }[status] || '⏳';
+                return '<div style="display:flex;align-items:center;gap:0.75rem;padding:0.875rem 0;border-bottom:1px solid #f1f5f9">' +
+                    '<div style="width:42px;height:42px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0">' + icon + '</div>' +
+                    '<div style="flex:1;min-width:0">' +
+                        '<div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.15rem">' +
+                            '<span style="font-weight:600;font-size:0.875rem">' + itemCount + ' item' + (itemCount !== 1 ? 's' : '') + ' purchased</span>' +
+                            '<span class="order-status-badge order-status-' + status + '">' + statusIcon + ' ' + escHE(p.statusLabel || 'Processing') + '</span>' +
+                        '</div>' +
+                        '<div style="font-size:0.75rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + itemNames + '</div>' +
+                        '<div style="font-size:0.7rem;color:#94a3b8;margin-top:0.1rem">' + escHE(p.date||'') + ' · ' + escHE(orderNum) + '</div>' +
+                    '</div>' +
+                    '<div style="text-align:right;flex-shrink:0">' +
+                        '<div style="font-weight:700;color:#1e293b">ƒ' + Number(p.total||0).toFixed(2) + '</div>' +
+                        '<div style="font-size:0.72rem;color:#10b981;margin-top:0.1rem">+' + (p.pointsEarned||0) + ' XP</div>' +
+                    '</div>' +
+                    '</div>';
+            }).join('');
+        }).catch(function(){});
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        DigifinwizDB.init().then(loadOrderHistory);
+    });
+    </script>
 </body>
 </html>

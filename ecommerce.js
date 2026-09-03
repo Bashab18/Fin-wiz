@@ -60,7 +60,6 @@ function addToCart(productName, price, btnEl) {
         }).then(function(items) {
             cart = items;
             renderCart();
-            scrollToCart();
             if (qtyInput) qtyInput.value = 1;
             showNotification((qty > 1 ? qty + '× ' : '') + productName + ' added to cart!', 'success');
         }).catch(function(err) { console.error('addToCart:', err); });
@@ -117,14 +116,6 @@ function removeAllOfItem(productName) {
             })
             .catch(function(err) { console.error('removeAllOfItem:', err); });
     });
-}
-
-// ── Scroll to cart ────────────────────────────────────────────────────────────
-function scrollToCart() {
-    var cartEl = document.getElementById('cartItems');
-    if (cartEl) {
-        cartEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
 }
 
 // ── Cart UI ───────────────────────────────────────────────────────────────────
