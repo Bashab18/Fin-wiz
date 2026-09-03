@@ -20,18 +20,10 @@
     <header class="shop-header">
         <div class="shop-container">
             <div class="shop-logo">InStyl.</div>
-            <nav class="shop-nav">
-                <a href="#" onclick="shopNavFilter('all');return false;" class="active">Shop All</a>
-                <a href="#" onclick="shopNavFilter('sale');return false;">On Sale</a>
-                <a href="#" onclick="shopNavFilter('women');return false;">Women</a>
-                <a href="#" onclick="shopNavFilter('men');return false;">Men</a>
-                <a href="#" onclick="shopNavFilter('outdoors');return false;">Outdoors</a>
-                <a href="#" onclick="shopNavFilter('cooking');return false;">Cooking</a>
-                <a href="shop-account.html">My Account</a>
-            </nav>
             <div class="shop-header-right">
                 <div class="shop-search-box">
                     <input type="text" placeholder="Search products..." oninput="document.getElementById('productSearch').value=this.value;applyFilters()">
+                    <button type="button" class="amz-search-btn" onclick="document.getElementById('productsGrid').scrollIntoView({behavior:'smooth'})" aria-label="Search">🔍</button>
                 </div>
                 <div class="shop-icons">
                     <button class="shop-icon-btn home" onclick="window.location.href='shop-account.html'" title="My Account">
@@ -47,6 +39,21 @@
             </div>
         </div>
     </header>
+
+    <!-- InStyl Category Strip -->
+    <div class="amz-navstrip">
+        <div class="shop-container">
+            <nav class="shop-nav">
+                <a href="#" onclick="shopNavFilter('all');return false;" class="active">Shop All</a>
+                <a href="#" onclick="shopNavFilter('sale');return false;">On Sale</a>
+                <a href="#" onclick="shopNavFilter('women');return false;">Women</a>
+                <a href="#" onclick="shopNavFilter('men');return false;">Men</a>
+                <a href="#" onclick="shopNavFilter('outdoors');return false;">Outdoors</a>
+                <a href="#" onclick="shopNavFilter('cooking');return false;">Cooking</a>
+                <a href="shop-account.html">My Account</a>
+            </nav>
+        </div>
+    </div>
 
     <!-- InStyl Game Progress Bar -->
     <div class="game-progress-bar">
@@ -72,17 +79,7 @@
         </div>
     </div>
 
-    <div class="container">
-        <aside class="sidebar">
-            <div class="user-profile">
-                <div class="avatar">
-                    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Crect fill='%23667eea' width='80' height='80'/%3E%3Ctext x='50%25' y='50%25' font-size='32' fill='white' text-anchor='middle' dy='.3em'%3EJD%3C/text%3E%3C/svg%3E" alt="Jane Doe">
-                </div>
-                <h3>Jane Doe</h3>
-                <p class="username">janeDoee123</p>
-            </div>
-            <p class="sidebar-desc">Shop, track orders, and manage your InStyl account in your Digifinwiz E-Commerce account</p>
-        </aside>
+    <div class="container container--full-width">
 
         <main class="main-content">
             <div class="page-header">
@@ -173,7 +170,7 @@
                 <!-- Challenge Summary Bar -->
                 <div class="challenge-summary-grid">
                     <div class="csg-item"><div class="csg-val" style="color:#10b981" id="ecoChalDoneCount">—</div><div class="csg-lbl">Completed</div></div>
-                    <div class="csg-item"><div class="csg-val" style="color:#db2777" id="ecoChalPendingCount">—</div><div class="csg-lbl">In Progress</div></div>
+                    <div class="csg-item"><div class="csg-val" style="color:#007185" id="ecoChalPendingCount">—</div><div class="csg-lbl">In Progress</div></div>
                     <div class="csg-item"><div class="csg-val" style="color:#f59e0b" id="ecoChalTotalXp">—</div><div class="csg-lbl">Total XP</div></div>
                     <div class="csg-item"><div class="csg-val" style="color:#8b5cf6" id="ecoChalEarnedXp">—</div><div class="csg-lbl">XP Earned</div></div>
                 </div>
@@ -182,52 +179,68 @@
                 </div>
             </div>
 
-            <!-- Filter buttons + Sort dropdown -->
-            <div class="shop-filters">
-                <div style="display:flex;gap:0.75rem;flex-wrap:wrap;flex:1">
-                    <button class="filter-btn active" onclick="setCategory('all', event)">All Items</button>
-                    <button class="filter-btn" onclick="setCategory('women', event)">Women</button>
-                    <button class="filter-btn" onclick="setCategory('men', event)">Men</button>
-                    <button class="filter-btn" onclick="setCategory('outdoors', event)">Outdoors</button>
-                    <button class="filter-btn" onclick="setCategory('cooking', event)">Cooking</button>
-                    <button class="filter-btn" onclick="setCategory('electronics', event)">Electronics</button>
-                    <button class="filter-btn" onclick="setCategory('accessories', event)">Accessories</button>
-                    <button class="filter-btn" onclick="setCategory('sale', event)">On Sale</button>
+            <!-- Amazon-style department / price / rating filter rail + results -->
+            <div class="amz-shop-layout">
+                <aside class="amz-filter-rail">
+                    <div class="amz-filter-group">
+                        <h4 class="amz-filter-title">Department</h4>
+                        <ul class="amz-filter-list" id="amzDeptFilters">
+                            <li class="amz-filter-item active" onclick="setCategory('all', event)">All Items</li>
+                            <li class="amz-filter-item" onclick="setCategory('women', event)">Women</li>
+                            <li class="amz-filter-item" onclick="setCategory('men', event)">Men</li>
+                            <li class="amz-filter-item" onclick="setCategory('outdoors', event)">Outdoors</li>
+                            <li class="amz-filter-item" onclick="setCategory('cooking', event)">Cooking</li>
+                            <li class="amz-filter-item" onclick="setCategory('electronics', event)">Electronics</li>
+                            <li class="amz-filter-item" onclick="setCategory('accessories', event)">Accessories</li>
+                            <li class="amz-filter-item" onclick="setCategory('sale', event)">On Sale</li>
+                        </ul>
+                    </div>
+                    <div class="amz-filter-group">
+                        <h4 class="amz-filter-title">Price</h4>
+                        <ul class="amz-filter-list" id="amzPriceFilters">
+                            <li class="amz-filter-item active" onclick="setPriceFilter('all', this)">Any Price</li>
+                            <li class="amz-filter-item" onclick="setPriceFilter('u50', this)">Under ƒ50</li>
+                            <li class="amz-filter-item" onclick="setPriceFilter('50-150', this)">ƒ50 – ƒ150</li>
+                            <li class="amz-filter-item" onclick="setPriceFilter('o150', this)">Over ƒ150</li>
+                        </ul>
+                    </div>
+                    <div class="amz-filter-group">
+                        <h4 class="amz-filter-title">Customer Rating</h4>
+                        <ul class="amz-filter-list" id="amzRatingFilters">
+                            <li class="amz-filter-item active" onclick="setRatingFilter(0, this)">Any Rating</li>
+                            <li class="amz-filter-item" onclick="setRatingFilter(4, this)">★★★★ &amp; Up</li>
+                            <li class="amz-filter-item" onclick="setRatingFilter(3, this)">★★★ &amp; Up</li>
+                        </ul>
+                    </div>
+                </aside>
+
+                <div class="amz-results-column">
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem">
+                        <span class="product-count-info" id="productCountInfo">Loading&hellip;</span>
+                        <div style="display:flex;align-items:center;gap:0.75rem">
+                            <span id="wishlistCountInfo" onclick="toggleWishlistPanel(true)" style="font-size:0.78rem;color:#ec4899;font-weight:600;display:none;cursor:pointer;user-select:none" title="View saved items">♥ <span id="wishlistCount">0</span> saved ↓</span>
+                            <select class="sort-select" id="productSort" onchange="applyFilters()">
+                                <option value="default">Sort: Featured</option>
+                                <option value="price-asc">Price: Low → High</option>
+                                <option value="price-desc">Price: High → Low</option>
+                                <option value="name-asc">Name: A → Z</option>
+                                <option value="name-desc">Name: Z → A</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Search bar -->
+                    <div class="search-bar-wrapper">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="productSearch" class="product-search-input"
+                            placeholder="Search by name or brand..." oninput="applyFilters()" autocomplete="off">
+                        <button class="search-clear-btn" id="searchClearBtn" onclick="clearSearch()" style="display:none" aria-label="Clear search">×</button>
+                    </div>
+
+                    <div class="products-grid" id="productsGrid">
+                        <p style="grid-column:1/-1;text-align:center;color:#64748b;padding:2rem;font-size:0.9rem">Loading products&hellip;</p>
+                    </div>
                 </div>
-                <select class="sort-select" id="productSort" onchange="applyFilters()">
-                    <option value="default">Sort: Default</option>
-                    <option value="price-asc">Price: Low → High</option>
-                    <option value="price-desc">Price: High → Low</option>
-                    <option value="name-asc">Name: A → Z</option>
-                    <option value="name-desc">Name: Z → A</option>
-                </select>
-            </div>
-
-            <!-- Price range filter pills -->
-            <div class="price-pills-wrap">
-                <span class="price-pill-label">Price:</span>
-                <button class="price-pill active" onclick="setPriceFilter('all',this)">All</button>
-                <button class="price-pill" onclick="setPriceFilter('u50',this)">Under ƒ50</button>
-                <button class="price-pill" onclick="setPriceFilter('50-150',this)">ƒ50 – ƒ150</button>
-                <button class="price-pill" onclick="setPriceFilter('o150',this)">Over ƒ150</button>
-            </div>
-
-            <!-- Product count indicator -->
-            <div style="display:flex;justify-content:space-between;align-items:center;margin:0.4rem 0 0.3rem;padding:0 0.25rem">
-                <span class="product-count-info" id="productCountInfo">Loading&hellip;</span>
-                <span id="wishlistCountInfo" onclick="toggleWishlistPanel(true)" style="font-size:0.78rem;color:#ec4899;font-weight:600;display:none;cursor:pointer;user-select:none" title="View saved items">♥ <span id="wishlistCount">0</span> saved ↓</span>
-            </div>
-
-            <!-- Search bar -->
-            <div class="search-bar-wrapper">
-                <span class="search-icon">🔍</span>
-                <input type="text" id="productSearch" class="product-search-input"
-                    placeholder="Search by name or brand..." oninput="applyFilters()" autocomplete="off">
-                <button class="search-clear-btn" id="searchClearBtn" onclick="clearSearch()" style="display:none" aria-label="Clear search">×</button>
-            </div>
-
-            <div class="products-grid" id="productsGrid">
-                <p style="grid-column:1/-1;text-align:center;color:#64748b;padding:2rem;font-size:0.9rem">Loading products&hellip;</p>
             </div>
 
             <!-- Recently Viewed / Recommendations -->
@@ -251,7 +264,7 @@
             <!-- Shopping Cart -->
             <div class="cart-summary" id="cartSummary" style="margin-top:1.5rem">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-                    <h2 style="margin:0">Shopping Cart <span class="cart-count" id="cartCount" style="background:#db2777;color:#fff;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:0.8rem;margin-left:0.25rem">0</span></h2>
+                    <h2 style="margin:0">Shopping Cart <span class="cart-count" id="cartCount" style="background:#f08804;color:#fff;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:0.8rem;margin-left:0.25rem">0</span></h2>
                     <div style="display:flex;align-items:center;gap:0.75rem">
                         <span style="font-size:0.8rem;color:#64748b">Items earn <strong style="color:#10b981">+45 XP</strong> each</span>
                         <button class="btn-clear-cart" id="clearCartBtn" onclick="clearCartAndReload()" style="display:none">Clear Cart</button>
@@ -391,9 +404,11 @@
         // as static markup that this render would otherwise wipe out.
         var cardsHtml = products.map(function(p) {
             var gradient = GRADIENT_PALETTE[p.id % GRADIENT_PALETTE.length];
+            var discountPct = p.originalPrice ? Math.round((1 - (p.price / p.originalPrice)) * 100) : 0;
             var priceHtml = (p.originalPrice
                 ? '<span style="text-decoration:line-through;color:#94a3b8;font-size:0.78rem;margin-right:0.35rem">ƒ' + Number(p.originalPrice).toFixed(2) + '</span>'
-                : '') + 'ƒ' + Number(p.price).toFixed(2);
+                : '') + 'ƒ' + Number(p.price).toFixed(2) +
+                (discountPct > 0 ? '<span class="amz-discount-badge">-' + discountPct + '%</span>' : '');
             return '<div class="product-card" data-category="' + escHE(p.category) + '" data-price="' + p.price + '" data-name="' + escHE(p.name) + '" data-badge="' + escHE(p.badge || '') + '" data-rating="' + p.rating + '" data-stock="' + p.stock + '">' +
                 '<div class="product-image" style="background: ' + gradient + ';">' +
                     '<span class="product-icon">' + p.icon + '</span>' +
@@ -405,8 +420,15 @@
                     '<div class="product-rating" data-rating="' + p.rating + '"><span class="stars"></span><span class="rating-value">' + p.rating + '</span></div>' +
                     '<p class="product-description">' + escHE(p.description) + '</p>' +
                     '<div class="product-footer">' +
-                        '<span class="product-price">' + priceHtml + '</span>' +
-                        "<button class=\"btn btn-primary btn-sm\" onclick='addToCart(" + jsAttr(p.name) + ',' + p.price + ",this)'>Add to Cart</button>" +
+                        '<div><span class="product-price">' + priceHtml + '</span></div>' +
+                        '<div class="amz-add-row">' +
+                            '<div class="amz-qty-stepper">' +
+                                '<button type="button" class="amz-qty-btn" onclick="var i=this.parentElement.children[1];if(+i.value>1)i.value=+i.value-1;">-</button>' +
+                                '<input type="number" class="amz-qty-input" value="1" min="1" max="99" aria-label="Quantity">' +
+                                '<button type="button" class="amz-qty-btn" onclick="var i=this.parentElement.children[1];i.value=+i.value+1;">+</button>' +
+                            '</div>' +
+                            "<button class=\"btn btn-primary btn-sm\" onclick='addToCart(" + jsAttr(p.name) + ',' + p.price + ",this)'>Add to Cart</button>" +
+                        '</div>' +
                     '</div>' +
                 '</div>' +
                 '</div>';
@@ -416,19 +438,30 @@
     }
 
     // ── Filter / Search / Sort ─────────────────────────────────────────────────
-    var currentCategory   = 'all';
+    var currentCategory    = 'all';
     var currentPriceFilter = 'all';
+    var currentMinRating   = 0;
 
     function setCategory(category, evt) {
         currentCategory = category;
-        document.querySelectorAll('.filter-btn').forEach(function(b){ b.classList.remove('active'); });
+        var list = document.getElementById('amzDeptFilters');
+        if (list) list.querySelectorAll('.amz-filter-item').forEach(function(b){ b.classList.remove('active'); });
         if (evt && evt.target) evt.target.classList.add('active');
         applyFilters();
     }
 
     function setPriceFilter(range, btn) {
         currentPriceFilter = range;
-        document.querySelectorAll('.price-pill').forEach(function(b){ b.classList.remove('active'); });
+        var list = document.getElementById('amzPriceFilters');
+        if (list) list.querySelectorAll('.amz-filter-item').forEach(function(b){ b.classList.remove('active'); });
+        if (btn) btn.classList.add('active');
+        applyFilters();
+    }
+
+    function setRatingFilter(minStars, btn) {
+        currentMinRating = minStars;
+        var list = document.getElementById('amzRatingFilters');
+        if (list) list.querySelectorAll('.amz-filter-item').forEach(function(b){ b.classList.remove('active'); });
         if (btn) btn.classList.add('active');
         applyFilters();
     }
@@ -462,7 +495,8 @@
             var name   = (card.dataset.name || '').toLowerCase();
             var brand  = ((card.querySelector('.product-brand') || {}).textContent || '').toLowerCase();
             var srchOk = !searchText || name.indexOf(searchText) > -1 || brand.indexOf(searchText) > -1;
-            card.style.display = (catOk && priceOk && srchOk) ? '' : 'none';
+            var ratingOk = !currentMinRating || parseFloat(card.dataset.rating || 0) >= currentMinRating;
+            card.style.display = (catOk && priceOk && ratingOk && srchOk) ? '' : 'none';
         });
 
         // 2. Sort visible cards
@@ -612,7 +646,7 @@
                     progressLabel = 'Complete manually';
                 }
                 var done = c.completed;
-                var barColor = done ? '#10b981' : (pct >= 75 ? '#10b981' : (pct >= 40 ? '#f59e0b' : '#db2777'));
+                var barColor = done ? '#10b981' : (pct >= 75 ? '#10b981' : (pct >= 40 ? '#f59e0b' : '#007185'));
                 var completedDate = done && c.completedAt ? new Date(c.completedAt).toLocaleDateString() : null;
                 return '<div style="background:' + (done?'#f0fdf4':'#f8fafc') + ';border:1px solid ' + (done?'#bbf7d0':'#e2e8f0') + ';border-radius:10px;padding:0.875rem">' +
                     '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.5rem">' +
@@ -624,7 +658,7 @@
                     '<div style="background:' + barColor + ';width:' + pct + '%;height:100%;transition:width 0.6s ease;border-radius:4px"></div></div>' +
                     '<div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#94a3b8;margin-top:0.25rem">' +
                     '<span>' + (done && completedDate ? 'Completed ' + completedDate : done ? 'Completed!' : pct + '% complete') + '</span>' +
-                    (progressLabel && !done ? '<span style="color:#db2777;font-weight:600">' + escHE(progressLabel) + '</span>' : '') +
+                    (progressLabel && !done ? '<span style="color:#007185;font-weight:600">' + escHE(progressLabel) + '</span>' : '') +
                     '</div>' +
                     '</div>';
             }).join('');
@@ -768,7 +802,7 @@
     }
 
     function shopNavFilter(category) {
-        var btn = document.querySelector('.filter-btn[onclick*="\'' + category + '\'"]');
+        var btn = document.querySelector('#amzDeptFilters .amz-filter-item[onclick*="\'' + category + '\'"]');
         if (btn) { btn.click(); } else { setCategory(category, null); }
     }
 
@@ -788,7 +822,7 @@
             catCounts[cat] = (catCounts[cat] || 0) + 1;
             if (c.dataset.badge === 'Sale') catCounts.sale++;
         });
-        document.querySelectorAll('.filter-btn').forEach(function(btn) {
+        document.querySelectorAll('#amzDeptFilters .amz-filter-item').forEach(function(btn) {
             var onclick = btn.getAttribute('onclick') || '';
             var m = onclick.match(/setCategory\('(\w+)'/);
             if (m && catCounts[m[1]] !== undefined) {

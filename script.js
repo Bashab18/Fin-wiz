@@ -152,6 +152,20 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 3000);
     };
 
+    // ── Sidebar profile card (admin only) ────────────────────────────────────
+    // The avatar/name/description block at the top of the sidebar is only
+    // shown to admin accounts now; participants keep just the nav links
+    // below it.
+    (function hideSidebarProfileForParticipants() {
+        if (typeof DigifinwizAuth === 'undefined') return;
+        var session = DigifinwizAuth.getSession();
+        if (!session || !session.loggedIn || session.role !== 'participant') return;
+        var profile = document.querySelector('.user-profile');
+        var desc    = document.querySelector('.sidebar-desc');
+        if (profile) profile.style.display = 'none';
+        if (desc)    desc.style.display    = 'none';
+    })();
+
     // ── Admin Inbox (participants only) ──────────────────────────────────────
     (function loadInbox() {
         if (typeof DigifinwizAuth === 'undefined' || typeof DigifinwizDB === 'undefined') return;
