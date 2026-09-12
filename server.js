@@ -2175,39 +2175,60 @@ app.post('/api/me/scheduled-transfers', async (req, res) => {
     if (!SCHEDULE_FREQUENCIES.has(frequency)) return res.status(400).json({ error: 'Invalid frequency' });
     if (!startDate || isNaN(startDate)) return res.status(400).json({ error: 'Valid start date required' });
 
-    const schedules = await readJSON(req.scheduledTransferStore);
-    const record = {
-        id: nextId(schedules), userId: req.userId, fromAccount, recipient, account, amount,
-        description: String(body.description || '').trim(), frequency,
-        nextRunDate: startDate, active: true, createdAt: Date.now(), lastRunAt: null, lastRunStatus: null
-    };
-    schedules.push(record);
-    await writeJSON(req.scheduledTransferStore, schedules);
+    try {
+        const record = await withUserLock(req.userId, async () => {
+            const schedules = await readJSON(req.scheduledTransferStore);
+            const rec = {
+                id: nextId(schedules), userId: req.userId, fromAccount, recipient, account, amount,
+                description: String(body.description || '').trim(), frequency,
+                nextRunDate: startDate, active: true, createdAt: Date.now(), lastRunAt: null, lastRunStatus: null
+            };
+            schedules.push(rec);
+            await writeJSON(req.scheduledTransferStore, schedules);
+            return rec;
+        });
 
-    // A transfer scheduled for right now (or the past) should execute
-    // immediately rather than waiting for the next time this user's balance
-    // or schedule list happens to be read.
-    await runDueScheduledTransfers(req.userId, req.userStore, req.messageStore, req.scheduledTransferStore, req.transactionStore);
-    const fresh = (await readJSON(req.scheduledTransferStore)).find(s => s.id === record.id);
-    res.status(201).json(fresh || record);
+        // A transfer scheduled for right now (or the past) should execute
+        // immediately rather than waiting for the next time this user's balance
+        // or schedule list happens to be read.
+        await runDueScheduledTransfers(req.userId, req.userStore, req.messageStore, req.scheduledTransferStore, req.transactionStore);
+        const fresh = (await readJSON(req.scheduledTransferStore)).find(s => s.id === record.id);
+        res.status(201).json(fresh || record);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
 });
 
+// Pause/resume and delete both do a read-modify-write on the same
+// per-user schedule array that executeOneScheduledTransfer mutates under
+// withUserLock (it runs opportunistically on every balances/schedules
+// fetch), so without the same lock here a click on "Pause" landing next
+// to a due occurrence executing can lose one of the two writes.
 app.patch('/api/me/scheduled-transfers/:id', async (req, res) => {
     const id = Number(req.params.id);
-    const schedules = await readJSON(req.scheduledTransferStore);
-    const idx = schedules.findIndex(s => s.id === id && s.userId === req.userId);
-    if (idx === -1) return res.status(404).json({ error: 'Scheduled transfer not found' });
-    const patch = {};
-    if (req.body && req.body.active !== undefined) patch.active = !!req.body.active;
-    schedules[idx] = Object.assign({}, schedules[idx], patch);
-    await writeJSON(req.scheduledTransferStore, schedules);
-    res.json(schedules[idx]);
+    try {
+        const schedule = await withUserLock(req.userId, async () => {
+            const schedules = await readJSON(req.scheduledTransferStore);
+            const idx = schedules.findIndex(s => s.id === id && s.userId === req.userId);
+            if (idx === -1) { const e = new Error('Scheduled transfer not found'); e.status = 404; throw e; }
+            const patch = {};
+            if (req.body && req.body.active !== undefined) patch.active = !!req.body.active;
+            schedules[idx] = Object.assign({}, schedules[idx], patch);
+            await writeJSON(req.scheduledTransferStore, schedules);
+            return schedules[idx];
+        });
+        res.json(schedule);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
 });
 
 app.delete('/api/me/scheduled-transfers/:id', async (req, res) => {
     const id = Number(req.params.id);
-    const schedules = await readJSON(req.scheduledTransferStore);
-    await writeJSON(req.scheduledTransferStore, schedules.filter(s => !(s.id === id && s.userId === req.userId)));
+    await withUserLock(req.userId, async () => {
+        const schedules = await readJSON(req.scheduledTransferStore);
+        await writeJSON(req.scheduledTransferStore, schedules.filter(s => !(s.id === id && s.userId === req.userId)));
+    });
     res.json({ ok: true });
 });
 

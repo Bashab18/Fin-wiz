@@ -465,10 +465,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!name) { showNotification('Enter a goal name.', 'error'); return; }
         if (!target || target < 10) { showNotification('Target must be at least ƒ10.', 'error'); return; }
         withBankingActionLock(function() {
+            // No XP here: unlike every other rewarded action in this tab,
+            // creating a goal moves no money and can be deleted and redone
+            // for free, so it can't carry a flat reward without becoming
+            // an infinite-XP exploit. Contributing (below) already costs
+            // real, capped money and is where the reward belongs.
             return DigifinwizDB.createSavingsGoal(name, target).then(function() {
-                return awardXP(20);
-            }).then(function() {
-                showNotification('Goal created! +20 XP', 'success');
+                showNotification('Goal created!', 'success');
                 goalCreateForm.reset();
                 loadGoalsTab();
             }).catch(function(err) {

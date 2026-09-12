@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="shopping-styles.css">
 </head>
-<body>
+<body class="digibank-theme">
     <!-- DigiBank Header — logo, tab, game progress, account icons, and logout
          are all one unified bar instead of three stacked strips. -->
     <header class="shop-header">
@@ -980,6 +980,11 @@
             var hdrEl = document.getElementById('bankHeaderBalance');
             if (hdrEl) hdrEl.textContent = 'ƒ' + tot.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
         }).catch(function(){});
+        // Every money action (card/loan payment, goal contribute/withdraw,
+        // scheduled transfer) already calls this function to refresh the
+        // dashboard, but the Transfer tab's own account-selector cards are
+        // only otherwise updated by a transfer itself — keep them in sync too.
+        if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
     }
 
     /* ── Full refresh ───────────────────────────────────────────────── */
