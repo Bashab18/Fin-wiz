@@ -681,7 +681,7 @@ function renderDashAccountsSummary(balances, session) {
             '</div>';
     }).join('');
     el.innerHTML =
-        '<h2 style="margin:0 0 0.25rem">🏦 ' + greeting + '</h2>' +
+        '<h2 style="margin:0 0 0.25rem">' + greeting + '</h2>' +
         '<p style="color:var(--color-gray-500);font-size:0.85rem;margin:0 0 1rem">Here\'s your account overview.</p>' +
         '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem">' + cards + '</div>';
 }
