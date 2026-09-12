@@ -327,6 +327,36 @@ body {
     margin-left: 4px;
 }
 
+/* ── Banking module: left account/section rail (real-bank layout) instead
+   of the app's horizontal pill tabs, reusing the shared .sidebar/.nav-item
+   look so it automatically inherits whichever theme's --color-primary-*
+   is active. ──────────────────────────────────────────────────────────── */
+.bank-layout {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-6);
+}
+
+.bank-sidebar {
+    width: 230px;
+    flex-shrink: 0;
+}
+
+.bank-content {
+    flex: 1;
+    min-width: 0;
+}
+
+@media (max-width: 900px) {
+    .bank-layout {
+        flex-direction: column;
+    }
+    .bank-sidebar {
+        width: 100%;
+        position: static;
+    }
+}
+
 /* ============================================
    MAIN CONTENT
    ============================================ */

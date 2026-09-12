@@ -241,6 +241,197 @@ body.instyl-theme .amz-progress-stat .coin-icon {
     justify-content: center;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   DigiBank brand identity — same technique as InStyl above: recolor every
+   shared component that keys off the app-wide primary token (buttons, tab
+   highlights, links, progress fill) to a trust-blue, then layer a dark navy
+   header + brass/gold accents on the shared chrome that has no design-system
+   token, so Banking reads as its own institution instead of a re-skinned
+   shop. Scoped to header/nav/progress only — banking.html has no search box,
+   product grid, or filter rail, so none of InStyl's shop-specific rules
+   below need a banking equivalent. ═══════════════════════════════════════ */
+body.digibank-theme {
+    --color-primary-50:  #eaf1fb;
+    --color-primary-100: #d3e3f7;
+    --color-primary-200: #a7c7ef;
+    --color-primary-300: #7aabe7;
+    --color-primary-400: #3d7cd1;
+    --color-primary-500: #1c56a8;
+    --color-primary-600: #164685;
+    --color-primary-700: #123a6c;
+    --color-primary-800: #0d2b52;
+    --shadow-colored: 0 4px 14px rgba(201, 154, 46, 0.35);
+}
+
+body.digibank-theme .shop-logo {
+    font-style: normal;
+    letter-spacing: -0.01em;
+    color: #fff;
+}
+
+body.digibank-theme .shop-header {
+    background: #0a1f3d;
+    border-bottom: none;
+    padding: 10px 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+body.digibank-theme .amz-header-logout {
+    margin-left: 4px;
+    padding: 0.4rem 0.6rem;
+    color: #fca5a5;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    border-radius: 6px;
+}
+
+body.digibank-theme .amz-header-logout:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #f87171;
+}
+
+body.digibank-theme .shop-icon-btn {
+    position: relative;
+    color: #fff;
+}
+
+body.digibank-theme .shop-icon-btn:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+body.digibank-theme .shop-icon-btn.home svg,
+body.digibank-theme .shop-icon-btn.bookmark svg,
+body.digibank-theme .shop-icon-btn.cart svg {
+    fill: #fff;
+}
+
+body.digibank-theme .amz-icon-badge {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
+    border-radius: 999px;
+    background: #c99a2e;
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+    pointer-events: none;
+}
+
+body.digibank-theme .amz-unified-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+body.digibank-theme .amz-unified-bar .shop-nav {
+    flex: 0 0 auto;
+    margin-left: 0;
+    gap: 6px;
+}
+
+body.digibank-theme .amz-unified-bar .shop-icon-btn {
+    padding: 6px;
+}
+
+body.digibank-theme .amz-unified-bar .shop-header-right {
+    gap: 10px;
+    margin-left: auto;
+}
+
+body.digibank-theme .amz-unified-bar .shop-nav a {
+    color: #fff;
+    font-size: 13px;
+    padding: 4px 2px;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+}
+
+body.digibank-theme .amz-unified-bar .shop-nav a:hover {
+    color: #f6d365;
+}
+
+body.digibank-theme .shop-nav a.active {
+    color: #fff;
+    border-bottom-color: #f6d365;
+}
+
+@media (max-width: 1180px) {
+    body.digibank-theme .amz-unified-bar {
+        flex-wrap: wrap;
+        row-gap: 10px;
+    }
+    body.digibank-theme .amz-unified-bar .shop-header-right {
+        margin-left: 0;
+        flex: 1 1 100%;
+        justify-content: flex-end;
+    }
+}
+
+body.digibank-theme .amz-progress-compact {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    color: #fff;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+body.digibank-theme .amz-progress-level strong {
+    color: #f6d365;
+}
+
+body.digibank-theme .amz-progress-mini {
+    width: 70px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+body.digibank-theme .amz-progress-mini-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #f6d365 0%, #c99a2e 100%);
+    border-radius: 999px;
+}
+
+body.digibank-theme .amz-progress-pct {
+    opacity: 0.85;
+}
+
+body.digibank-theme .amz-progress-stat {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+body.digibank-theme .amz-progress-stat svg {
+    fill: #fff;
+}
+
+body.digibank-theme .amz-progress-stat .coin-icon {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #f6d365 0%, #c99a2e 100%);
+    color: #333;
+    font-size: 10px;
+    font-weight: 700;
+    font-style: italic;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 /* ── Department / price / rating filter rail ──────────────────────────── */
 body.instyl-theme .amz-shop-layout {
     display: flex;

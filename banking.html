@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="shopping-styles.css">
 </head>
-<body>
+<body class="digibank-theme">
     <!-- DigiBank Header — logo, tab, game progress, account icons, and logout
          are all one unified bar instead of three stacked strips. -->
     <header class="shop-header">
@@ -58,80 +58,72 @@
                         <h1>Banking &amp; Money Transfer</h1>
                         <p>Transfer money, manage your accounts, and earn XP with every transaction</p>
                     </div>
-                    <div style="background:linear-gradient(135deg,#667eea,#764ba2);border-radius:var(--radius-xl);padding:0.75rem 1.25rem;color:white;text-align:right">
-                        <div style="font-size:0.75rem;opacity:0.85">Total Balance</div>
+                    <div style="background:var(--color-primary-700);border-radius:var(--radius-lg);padding:0.75rem 1.25rem;color:white;text-align:right">
+                        <div style="font-size:0.72rem;opacity:0.8;text-transform:uppercase;letter-spacing:0.05em">Total Balance</div>
                         <div style="font-size:1.4rem;font-weight:700" id="bankHeaderBalance">ƒ0.00</div>
                     </div>
                 </div>
             </div>
 
-            <!-- ── Account Balance Cards (always visible) ──────────── -->
+            <!-- ── Account Balance Cards (always visible) — plain statement-style
+                 tiles with a colored accent bar instead of full-color gradient
+                 fills, matching how a real bank's account summary reads. ──── -->
             <div id="balanceCardsGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:1.5rem">
-                <div style="background:linear-gradient(135deg,#667eea,#764ba2);border-radius:var(--radius-xl);padding:1.25rem;color:white">
-                    <div style="font-size:0.72rem;opacity:0.85;margin-bottom:0.25rem;text-transform:uppercase;letter-spacing:0.05em">Checking Account</div>
-                    <div style="font-size:1.6rem;font-weight:700" id="balanceChecking">ƒ—</div>
-                    <div style="font-size:0.7rem;opacity:0.7;margin-top:0.3rem">Available balance</div>
+                <div style="background:var(--color-surface);border:1px solid var(--color-border);border-left:4px solid var(--color-primary-600);border-radius:var(--radius-lg);padding:1.25rem">
+                    <div style="font-size:0.72rem;color:var(--color-gray-500);margin-bottom:0.25rem;text-transform:uppercase;letter-spacing:0.05em">Checking Account</div>
+                    <div style="font-size:1.6rem;font-weight:700;color:var(--color-gray-800)" id="balanceChecking">ƒ—</div>
+                    <div style="font-size:0.7rem;color:var(--color-gray-400);margin-top:0.3rem">Available balance</div>
                 </div>
-                <div style="background:linear-gradient(135deg,#10b981,#059669);border-radius:var(--radius-xl);padding:1.25rem;color:white">
-                    <div style="font-size:0.72rem;opacity:0.85;margin-bottom:0.25rem;text-transform:uppercase;letter-spacing:0.05em">Savings Account</div>
-                    <div style="font-size:1.6rem;font-weight:700" id="balanceSavings">ƒ—</div>
-                    <div style="font-size:0.7rem;opacity:0.7;margin-top:0.3rem">Available balance</div>
+                <div style="background:var(--color-surface);border:1px solid var(--color-border);border-left:4px solid #2f855a;border-radius:var(--radius-lg);padding:1.25rem">
+                    <div style="font-size:0.72rem;color:var(--color-gray-500);margin-bottom:0.25rem;text-transform:uppercase;letter-spacing:0.05em">Savings Account</div>
+                    <div style="font-size:1.6rem;font-weight:700;color:var(--color-gray-800)" id="balanceSavings">ƒ—</div>
+                    <div style="font-size:0.7rem;color:var(--color-gray-400);margin-top:0.3rem">Available balance</div>
                 </div>
-                <div style="background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:var(--radius-xl);padding:1.25rem;color:white">
-                    <div style="font-size:0.72rem;opacity:0.85;margin-bottom:0.25rem;text-transform:uppercase;letter-spacing:0.05em">Total Transferred</div>
-                    <div style="font-size:1.6rem;font-weight:700" id="totalTransferred">ƒ—</div>
-                    <div style="font-size:0.7rem;opacity:0.7;margin-top:0.3rem">All-time outgoing</div>
+                <div style="background:var(--color-surface);border:1px solid var(--color-border);border-left:4px solid #b7862c;border-radius:var(--radius-lg);padding:1.25rem">
+                    <div style="font-size:0.72rem;color:var(--color-gray-500);margin-bottom:0.25rem;text-transform:uppercase;letter-spacing:0.05em">Total Transferred</div>
+                    <div style="font-size:1.6rem;font-weight:700;color:var(--color-gray-800)" id="totalTransferred">ƒ—</div>
+                    <div style="font-size:0.7rem;color:var(--color-gray-400);margin-top:0.3rem">All-time outgoing</div>
                 </div>
-                <div style="background:linear-gradient(135deg,#3b82f6,#2563eb);border-radius:var(--radius-xl);padding:1.25rem;color:white">
-                    <div style="font-size:0.72rem;opacity:0.85;margin-bottom:0.25rem;text-transform:uppercase;letter-spacing:0.05em">Transfers Made</div>
-                    <div style="font-size:1.6rem;font-weight:700" id="transferCount">—</div>
-                    <div style="font-size:0.7rem;opacity:0.7;margin-top:0.3rem">Total transactions</div>
+                <div style="background:var(--color-surface);border:1px solid var(--color-border);border-left:4px solid var(--color-gray-400);border-radius:var(--radius-lg);padding:1.25rem">
+                    <div style="font-size:0.72rem;color:var(--color-gray-500);margin-bottom:0.25rem;text-transform:uppercase;letter-spacing:0.05em">Transfers Made</div>
+                    <div style="font-size:1.6rem;font-weight:700;color:var(--color-gray-800)" id="transferCount">—</div>
+                    <div style="font-size:0.7rem;color:var(--color-gray-400);margin-top:0.3rem">Total transactions</div>
                 </div>
             </div>
 
             <!-- Balance split bar -->
-            <div id="balanceSplitRow" style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:0.875rem 1.25rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:1rem">
+            <div id="balanceSplitRow" style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:0.875rem 1.25rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:1rem">
                 <div style="flex:1">
                     <div style="display:flex;justify-content:space-between;font-size:0.75rem;font-weight:600;margin-bottom:0.4rem">
-                        <span style="color:#667eea">🏦 Checking <span id="splitCheckingPct">—%</span></span>
-                        <span style="color:#10b981">Savings <span id="splitSavingsPct">—%</span> 💰</span>
+                        <span style="color:var(--color-primary-600)">Checking <span id="splitCheckingPct">—%</span></span>
+                        <span style="color:#2f855a">Savings <span id="splitSavingsPct">—%</span></span>
                     </div>
                     <div style="height:10px;border-radius:99px;overflow:hidden;background:#e2e8f0;display:flex">
-                        <div id="splitCheckingBar" style="height:100%;background:linear-gradient(90deg,#667eea,#764ba2);transition:width 0.6s ease;border-radius:99px 0 0 99px"></div>
-                        <div id="splitSavingsBar"  style="height:100%;background:linear-gradient(90deg,#10b981,#059669);transition:width 0.6s ease;border-radius:0 99px 99px 0;flex:1"></div>
+                        <div id="splitCheckingBar" style="height:100%;background:var(--color-primary-600);transition:width 0.6s ease;border-radius:99px 0 0 99px"></div>
+                        <div id="splitSavingsBar"  style="height:100%;background:#2f855a;transition:width 0.6s ease;border-radius:0 99px 99px 0;flex:1"></div>
                     </div>
                     <div style="font-size:0.7rem;color:var(--color-gray-400);margin-top:0.3rem;text-align:center" id="splitTotalLabel">Total across accounts: ƒ—</div>
                 </div>
             </div>
 
-            <!-- ── Page Tab Navigation ─────────────────────────────── -->
-            <div class="page-tabs" style="flex-wrap:wrap">
-                <button class="page-tab-btn active" id="tab-btn-dashboard" onclick="switchPageTab('dashboard')">
-                    🏠 Dashboard
-                </button>
-                <button class="page-tab-btn" id="tab-btn-banking" onclick="switchPageTab('banking')">
-                    🏦 Transfer
-                </button>
-                <button class="page-tab-btn" id="tab-btn-scheduled" onclick="switchPageTab('scheduled')">
-                    🔁 Scheduled
-                </button>
-                <button class="page-tab-btn" id="tab-btn-creditcard" onclick="switchPageTab('creditcard')">
-                    💳 Credit Card
-                </button>
-                <button class="page-tab-btn" id="tab-btn-loans" onclick="switchPageTab('loans')">
-                    🏠 Loans
-                </button>
-                <button class="page-tab-btn" id="tab-btn-goals" onclick="switchPageTab('goals')">
-                    🎯 Goals
-                </button>
-                <button class="page-tab-btn" id="tab-btn-statements" onclick="switchPageTab('statements')">
-                    📄 Statements
-                </button>
-                <button class="page-tab-btn" id="tab-btn-alerts" onclick="switchPageTab('alerts')">
-                    🔔 Alerts
-                </button>
-            </div>
+            <!-- ── Account navigation + content, like a real online-banking
+                 portal's left account/section rail instead of an app-style
+                 pill tab bar ─────────────────────────────────────────── -->
+            <div class="bank-layout">
+            <aside class="sidebar bank-sidebar">
+                <nav class="sidebar-nav">
+                    <a href="#" class="nav-item active" id="tab-btn-dashboard" onclick="switchPageTab('dashboard');return false;">Dashboard</a>
+                    <a href="#" class="nav-item" id="tab-btn-banking" onclick="switchPageTab('banking');return false;">Transfer Money</a>
+                    <a href="#" class="nav-item" id="tab-btn-scheduled" onclick="switchPageTab('scheduled');return false;">Scheduled Transfers</a>
+                    <a href="#" class="nav-item" id="tab-btn-creditcard" onclick="switchPageTab('creditcard');return false;">Credit Card</a>
+                    <a href="#" class="nav-item" id="tab-btn-loans" onclick="switchPageTab('loans');return false;">Loans</a>
+                    <a href="#" class="nav-item" id="tab-btn-goals" onclick="switchPageTab('goals');return false;">Savings Goals</a>
+                    <a href="#" class="nav-item" id="tab-btn-statements" onclick="switchPageTab('statements');return false;">Statements</a>
+                    <a href="#" class="nav-item" id="tab-btn-alerts" onclick="switchPageTab('alerts');return false;">Alerts</a>
+                </nav>
+            </aside>
 
+            <div class="bank-content">
             <!-- ═══════════════════════════════════════════════════════
                  DASHBOARD TAB
             ═══════════════════════════════════════════════════════ -->
@@ -150,7 +142,7 @@
 
                         <div class="banking-section full-width" style="margin-top:1.5rem">
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
-                                <h2 style="margin:0">🔁 Upcoming Transfers</h2>
+                                <h2 style="margin:0">Upcoming Transfers</h2>
                                 <a href="#" onclick="switchPageTab('scheduled');return false;" style="font-size:0.8rem;color:var(--color-primary-500);text-decoration:none;font-weight:600">Manage →</a>
                             </div>
                             <div id="dashUpcomingSchedule"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">No upcoming transfers.</p></div>
@@ -160,7 +152,7 @@
                     <div>
                         <div class="banking-section full-width">
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
-                                <h2 style="margin:0">🎯 Goals</h2>
+                                <h2 style="margin:0">Goals</h2>
                                 <a href="#" onclick="switchPageTab('goals');return false;" style="font-size:0.8rem;color:var(--color-primary-500);text-decoration:none;font-weight:600">View all →</a>
                             </div>
                             <div id="dashGoalsSummary"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">No goals yet.</p></div>
@@ -169,22 +161,22 @@
                         <div class="banking-section full-width" style="margin-top:1.5rem">
                             <h2 style="margin:0 0 0.75rem">Quick Actions</h2>
                             <div style="display:flex;flex-direction:column;gap:0.5rem">
-                                <a href="#" onclick="switchPageTab('banking');return false;" class="btn btn-block" style="text-align:left">💸 Send Money</a>
-                                <a href="#" onclick="switchPageTab('scheduled');return false;" class="btn btn-block" style="text-align:left">🔁 Schedule a Transfer</a>
-                                <a href="#" onclick="switchPageTab('statements');return false;" class="btn btn-block" style="text-align:left">📄 View Statements</a>
+                                <a href="#" onclick="switchPageTab('banking');return false;" class="btn btn-block" style="text-align:left">Send Money</a>
+                                <a href="#" onclick="switchPageTab('scheduled');return false;" class="btn btn-block" style="text-align:left">Schedule a Transfer</a>
+                                <a href="#" onclick="switchPageTab('statements');return false;" class="btn btn-block" style="text-align:left">View Statements</a>
                             </div>
                         </div>
 
                         <div class="banking-section full-width" style="margin-top:1.5rem">
-                            <h2 style="margin:0 0 0.75rem">🏧 Branches &amp; ATMs</h2>
+                            <h2 style="margin:0 0 0.75rem">Branches &amp; ATMs</h2>
                             <div id="dashBranchLocator"></div>
                         </div>
 
                         <div class="banking-section full-width" style="margin-top:1.5rem">
-                            <h2 style="margin:0 0 0.75rem">❓ Support</h2>
+                            <h2 style="margin:0 0 0.75rem">Support</h2>
                             <div style="font-size:0.85rem;color:var(--color-gray-600);line-height:1.6">
                                 <p style="margin:0 0 0.5rem">Need help with your account?</p>
-                                <p style="margin:0">📞 1-800-555-0199 &nbsp;•&nbsp; ✉️ support@digifinwiz.bank<br>Mon–Fri, 8am–8pm</p>
+                                <p style="margin:0">1-800-555-0199 &nbsp;•&nbsp; support@digifinwiz.bank<br>Mon–Fri, 8am–8pm</p>
                             </div>
                         </div>
                     </div>
@@ -590,6 +582,8 @@
                     </form>
                 </div>
             </div><!-- /panel-alerts -->
+            </div><!-- /bank-content -->
+            </div><!-- /bank-layout -->
 
         </main>
     </div>
@@ -980,6 +974,11 @@
             var hdrEl = document.getElementById('bankHeaderBalance');
             if (hdrEl) hdrEl.textContent = 'ƒ' + tot.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
         }).catch(function(){});
+        // Every money action (card/loan payment, goal contribute/withdraw,
+        // scheduled transfer) already calls this function to refresh the
+        // dashboard, but the Transfer tab's own account-selector cards are
+        // only otherwise updated by a transfer itself — keep them in sync too.
+        if (typeof updateBalanceDisplay === 'function') updateBalanceDisplay();
     }
 
     /* ── Full refresh ───────────────────────────────────────────────── */
