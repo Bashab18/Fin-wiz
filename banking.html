@@ -191,7 +191,7 @@
                 <!-- Challenge Tracker -->
                 <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:1.25rem;margin-bottom:1.5rem">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
-                        <h2 style="font-size:1rem;font-weight:700;margin:0">🏦 Banking Challenges</h2>
+                        <h2 style="font-size:1rem;font-weight:700;margin:0">Banking Challenges</h2>
                     </div>
                     <div class="challenge-summary-grid">
                         <div class="csg-item"><div class="csg-val" style="color:#10b981" id="chalDoneCount">—</div><div class="csg-lbl">Completed</div></div>
@@ -221,12 +221,12 @@
                                     <button type="button" class="acct-sel-card active" id="acctCard-checking" onclick="selectFromAccount('checking')">
                                         <div class="acct-sel-card-label">Checking</div>
                                         <div class="acct-sel-card-balance" id="acctBal-checking">ƒ—</div>
-                                        <div class="acct-sel-card-type">🏦 Day-to-day account</div>
+                                        <div class="acct-sel-card-type">Day-to-day account</div>
                                     </button>
                                     <button type="button" class="acct-sel-card" id="acctCard-savings" onclick="selectFromAccount('savings')">
                                         <div class="acct-sel-card-label">Savings</div>
                                         <div class="acct-sel-card-balance" id="acctBal-savings">ƒ—</div>
-                                        <div class="acct-sel-card-type">💰 Savings account</div>
+                                        <div class="acct-sel-card-type">Savings account</div>
                                     </button>
                                 </div>
                             </div>
@@ -306,7 +306,7 @@
                     <div class="banking-section">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
                             <h2 style="margin:0">Recent Transactions</h2>
-                            <span id="txCountBadge" style="background:#ede9fe;color:#7c3aed;padding:2px 10px;border-radius:12px;font-size:0.8rem;font-weight:600"></span>
+                            <span id="txCountBadge" style="background:var(--color-gray-100);color:var(--color-gray-600);padding:2px 10px;border-radius:12px;font-size:0.8rem;font-weight:600"></span>
                         </div>
                         <!-- Today's activity bar -->
                         <div class="tx-today-bar" id="txTodayBar" style="display:none">
@@ -336,59 +336,59 @@
                 <!-- Transfer Activity Summary -->
                 <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:1.25rem;margin-top:1.5rem">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-                        <h2 style="font-size:1rem;font-weight:700;margin:0">📊 Transfer Activity Summary</h2>
-                        <span id="txCountBadge2" style="background:#ede9fe;color:#7c3aed;padding:2px 10px;border-radius:12px;font-size:0.8rem;font-weight:600"></span>
+                        <h2 style="font-size:1rem;font-weight:700;margin:0">Transfer Activity Summary</h2>
+                        <span id="txCountBadge2" style="background:var(--color-gray-100);color:var(--color-gray-600);padding:2px 10px;border-radius:12px;font-size:0.8rem;font-weight:600"></span>
                     </div>
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0.75rem;margin-bottom:0.75rem">
-                        <div style="text-align:center;background:#f5f3ff;border-radius:10px;padding:0.875rem;border:1px solid #e0e7ff">
-                            <div style="font-size:1.4rem;font-weight:700;color:#6366f1" id="statTxCount">—</div>
+                        <div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.875rem;border:1px solid var(--color-border)">
+                            <div style="font-size:1.4rem;font-weight:700;color:var(--color-gray-800)" id="statTxCount">—</div>
                             <div style="font-size:0.75rem;color:var(--color-gray-500);margin-top:0.2rem">Total Transfers</div>
                         </div>
-                        <div style="text-align:center;background:#fffbeb;border-radius:10px;padding:0.875rem;border:1px solid #fde68a">
-                            <div style="font-size:1.4rem;font-weight:700;color:#d97706" id="statTxTotal">—</div>
+                        <div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.875rem;border:1px solid var(--color-border)">
+                            <div style="font-size:1.4rem;font-weight:700;color:var(--color-gray-800)" id="statTxTotal">—</div>
                             <div style="font-size:0.75rem;color:var(--color-gray-500);margin-top:0.2rem">Total Sent</div>
                         </div>
-                        <div style="text-align:center;background:#f0fdf4;border-radius:10px;padding:0.875rem;border:1px solid #bbf7d0">
-                            <div style="font-size:1.4rem;font-weight:700;color:#10b981" id="statTxPts">—</div>
+                        <div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.875rem;border:1px solid var(--color-border)">
+                            <div style="font-size:1.4rem;font-weight:700;color:#2f855a" id="statTxPts">—</div>
                             <div style="font-size:0.75rem;color:var(--color-gray-500);margin-top:0.2rem">XP Earned</div>
                         </div>
-                        <div style="text-align:center;background:#eff6ff;border-radius:10px;padding:0.875rem;border:1px solid #bfdbfe">
-                            <div style="font-size:1.4rem;font-weight:700;color:#3b82f6" id="statNextMilestone">—</div>
+                        <div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.875rem;border:1px solid var(--color-border)">
+                            <div style="font-size:1.4rem;font-weight:700;color:var(--color-primary-600)" id="statNextMilestone">—</div>
                             <div style="font-size:0.75rem;color:var(--color-gray-500);margin-top:0.2rem">Next Milestone</div>
                         </div>
                     </div>
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0.75rem;margin-bottom:0.75rem">
-                        <div style="text-align:center;background:#fdf4ff;border-radius:10px;padding:0.875rem;border:1px solid #e9d5ff">
-                            <div style="font-size:1.4rem;font-weight:700;color:#a855f7" id="statTxLargest">—</div>
+                        <div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.875rem;border:1px solid var(--color-border)">
+                            <div style="font-size:1.4rem;font-weight:700;color:var(--color-gray-800)" id="statTxLargest">—</div>
                             <div style="font-size:0.75rem;color:var(--color-gray-500);margin-top:0.2rem">Largest Transfer</div>
                         </div>
-                        <div style="text-align:center;background:#fff7ed;border-radius:10px;padding:0.875rem;border:1px solid #fed7aa">
-                            <div style="font-size:1.4rem;font-weight:700;color:#f97316" id="statTxAvg">—</div>
+                        <div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.875rem;border:1px solid var(--color-border)">
+                            <div style="font-size:1.4rem;font-weight:700;color:var(--color-gray-800)" id="statTxAvg">—</div>
                             <div style="font-size:0.75rem;color:var(--color-gray-500);margin-top:0.2rem">Average Transfer</div>
                         </div>
-                        <div style="text-align:center;background:#f0fdf4;border-radius:10px;padding:0.875rem;border:1px solid #bbf7d0">
-                            <div style="font-size:1.4rem;font-weight:700;color:#059669" id="statTxChecking">—</div>
+                        <div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.875rem;border:1px solid var(--color-border)">
+                            <div style="font-size:1.4rem;font-weight:700;color:var(--color-primary-600)" id="statTxChecking">—</div>
                             <div style="font-size:0.75rem;color:var(--color-gray-500);margin-top:0.2rem">From Checking</div>
                         </div>
-                        <div style="text-align:center;background:#ecfdf5;border-radius:10px;padding:0.875rem;border:1px solid #a7f3d0">
-                            <div style="font-size:1.4rem;font-weight:700;color:#047857" id="statTxSavings">—</div>
+                        <div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.875rem;border:1px solid var(--color-border)">
+                            <div style="font-size:1.4rem;font-weight:700;color:#2f855a" id="statTxSavings">—</div>
                             <div style="font-size:0.75rem;color:var(--color-gray-500);margin-top:0.2rem">From Savings</div>
                         </div>
                     </div>
                     <div style="background:var(--color-gray-50);border-radius:10px;padding:0.75rem;border:1px solid var(--color-border);display:flex;align-items:center;gap:0.75rem">
-                        <div style="width:36px;height:36px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.85rem;font-weight:700;flex-shrink:0" id="statLastAvatar">?</div>
+                        <div style="width:36px;height:36px;background:var(--color-primary-600);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.85rem;font-weight:700;flex-shrink:0" id="statLastAvatar">?</div>
                         <div style="flex:1;min-width:0">
                             <div style="font-size:0.8rem;font-weight:600;color:var(--color-gray-800)" id="statLastRecipient">No transfers yet</div>
                             <div style="font-size:0.72rem;color:var(--color-gray-400)" id="statLastDate"></div>
                         </div>
                         <div style="text-align:right;flex-shrink:0">
-                            <div style="font-size:0.85rem;font-weight:700;color:#6366f1" id="statLastAmount"></div>
+                            <div style="font-size:0.85rem;font-weight:700;color:var(--color-primary-600)" id="statLastAmount"></div>
                             <div style="font-size:0.7rem;color:var(--color-success)" id="statLastXp"></div>
                         </div>
                     </div>
                     <!-- 7-day transfer mini-chart -->
                     <div class="tx-chart-wrap" id="sevenDayChartWrap" style="display:none">
-                        <div class="tx-chart-title">📈 Last 7 Days — Transfer Volume</div>
+                        <div class="tx-chart-title">Last 7 Days — Transfer Volume</div>
                         <div class="tx-chart-bars"  id="sevenDayBars"></div>
                         <div class="tx-chart-labels" id="sevenDayLabels"></div>
                     </div>
@@ -401,7 +401,7 @@
             ═══════════════════════════════════════════════════════ -->
             <div class="page-tab-panel" id="panel-scheduled">
                 <div class="banking-section full-width">
-                    <h2>🔁 Schedule a Transfer</h2>
+                    <h2>Schedule a Transfer</h2>
                     <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1rem">Set up a one-time future transfer, or a recurring one that repeats automatically.</p>
                     <form id="schedCreateForm">
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
@@ -441,7 +441,7 @@
             <div class="page-tab-panel" id="panel-creditcard">
                 <div id="ccNoCardSection">
                     <div class="banking-section full-width">
-                        <h2>💳 Open a Credit Card</h2>
+                        <h2>Open a Credit Card</h2>
                         <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1rem">Build credit history by choosing a card tier below. Higher tiers unlock a larger limit and a lower APR.</p>
                         <div class="cc-tier-grid" id="ccTierGrid"></div>
                     </div>
@@ -451,7 +451,7 @@
                         <div id="ccVisual"></div>
                         <div class="cc-forms-grid" style="margin-top:1.5rem;display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
                             <div>
-                                <h3 style="font-size:0.95rem;margin-bottom:0.6rem">🛍️ Make a Purchase</h3>
+                                <h3 style="font-size:0.95rem;margin-bottom:0.6rem">Make a Purchase</h3>
                                 <form id="ccPurchaseForm">
                                     <div class="form-group"><label>Amount (ƒ)</label><input type="number" class="form-input" id="ccPurchaseAmount" min="0.01" step="0.01" required></div>
                                     <div class="form-group"><label>Description <span style="color:var(--color-gray-400);font-weight:400">(Optional)</span></label><input type="text" class="form-input" id="ccPurchaseDesc" placeholder="What did you buy?"></div>
@@ -459,7 +459,7 @@
                                 </form>
                             </div>
                             <div>
-                                <h3 style="font-size:0.95rem;margin-bottom:0.6rem">💵 Pay Your Card</h3>
+                                <h3 style="font-size:0.95rem;margin-bottom:0.6rem">Pay Your Card</h3>
                                 <form id="ccPaymentForm">
                                     <div class="form-group"><label>Amount (ƒ)</label><input type="number" class="form-input" id="ccPaymentAmount" min="0.01" step="0.01" required></div>
                                     <div id="ccPaymentHint" style="font-size:0.78rem;color:var(--color-gray-500);margin:-0.4rem 0 0.75rem"></div>
@@ -481,7 +481,7 @@
             <div class="page-tab-panel" id="panel-loans">
                 <div id="loanApplySection">
                     <div class="banking-section full-width">
-                        <h2>🏠 Apply for a Loan</h2>
+                        <h2>Apply for a Loan</h2>
                         <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1rem">Borrow between ƒ500 and ƒ20,000. Shorter terms cost less in total interest.</p>
                         <form id="loanApplyForm">
                             <div class="form-group"><label>Loan Amount (ƒ)</label><input type="number" class="form-input" id="loanAmount" min="500" max="20000" step="0.01" value="1000" required></div>
@@ -524,7 +524,7 @@
             ═══════════════════════════════════════════════════════ -->
             <div class="page-tab-panel" id="panel-goals">
                 <div class="banking-section full-width">
-                    <h2>🎯 Create a New Goal</h2>
+                    <h2>Create a New Goal</h2>
                     <form id="goalCreateForm" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:flex-end">
                         <div class="form-group" style="flex:2;min-width:180px;margin-bottom:0"><label>Goal Name</label><input type="text" class="form-input" id="goalName" placeholder="e.g. New Laptop" maxlength="60" required></div>
                         <div class="form-group" style="flex:1;min-width:120px;margin-bottom:0"><label>Target (ƒ)</label><input type="number" class="form-input" id="goalTarget" min="10" max="1000000" step="0.01" required></div>
@@ -542,7 +542,7 @@
             ═══════════════════════════════════════════════════════ -->
             <div class="page-tab-panel" id="panel-statements">
                 <div class="banking-section full-width no-print">
-                    <h2>📄 Account Statement</h2>
+                    <h2>Account Statement</h2>
                     <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:0.5rem">
                         <div class="form-group" style="margin-bottom:0">
                             <label>Account</label>
@@ -565,7 +565,7 @@
             ═══════════════════════════════════════════════════════ -->
             <div class="page-tab-panel" id="panel-alerts">
                 <div class="banking-section full-width">
-                    <h2>🔔 Alert Preferences</h2>
+                    <h2>Alert Preferences</h2>
                     <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1.25rem">Alerts are delivered to your Messages inbox.</p>
                     <form id="alertPrefsForm">
                         <div class="alert-pref-row">
