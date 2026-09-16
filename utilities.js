@@ -22,7 +22,7 @@ function showPaymentConfirmModal(details) {
                 '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem"><span style="color:#64748b">Bill Type</span><strong>' + escHtml(details.billType) + '</strong></div>' +
                 '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem"><span style="color:#64748b">Account No.</span><span style="font-family:monospace">' + escHtml(details.accountNumber) + '</span></div>' +
                 '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem"><span style="color:#64748b">Pay From</span><span>' + escHtml(details.fromLabel) + '</span></div>' +
-                '<div style="display:flex;justify-content:space-between;border-top:1px solid #e2e8f0;padding-top:0.5rem;margin-top:0.5rem"><span style="color:#64748b">Amount</span><strong style="color:#6366f1;font-size:1.1rem">ƒ' + Number(details.amount).toFixed(2) + '</strong></div>' +
+                '<div style="display:flex;justify-content:space-between;border-top:1px solid #e2e8f0;padding-top:0.5rem;margin-top:0.5rem"><span style="color:#64748b">Amount</span><strong style="color:var(--color-primary-600);font-size:1.1rem">ƒ' + Number(details.amount).toFixed(2) + '</strong></div>' +
                 '<div style="display:flex;justify-content:space-between;margin-top:0.25rem"><span style="color:#64748b">New balance</span><span style="color:' + (details.newBalance<0?'#ef4444':'#10b981') + '">ƒ' + Number(details.newBalance).toFixed(2) + '</span></div>' +
             '</div>' +
             '<div style="display:flex;gap:0.75rem">' +

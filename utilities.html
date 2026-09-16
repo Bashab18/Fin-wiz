@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="shopping-styles.css">
 </head>
-<body>
+<body class="digipay-theme">
     <!-- DigiPay Header — logo, tabs, game progress, account icons, and logout
          are all one unified bar instead of three stacked strips. -->
     <header class="shop-header">
@@ -59,49 +59,51 @@
                         <h1>Utilities &amp; Bill Payment</h1>
                         <p>Pay your bills on time, build good financial habits, and earn XP</p>
                     </div>
-                    <div style="background:linear-gradient(135deg,#6366f1,#4f46e5);border-radius:var(--radius-xl);padding:0.75rem 1.25rem;color:white;text-align:right">
-                        <div style="font-size:0.75rem;opacity:0.85">Total Balance</div>
+                    <div style="background:var(--color-primary-700);border-radius:var(--radius-lg);padding:0.75rem 1.25rem;color:white;text-align:right">
+                        <div style="font-size:0.72rem;opacity:0.8;text-transform:uppercase;letter-spacing:0.05em">Total Balance</div>
                         <div style="font-size:1.4rem;font-weight:700" id="utilHeaderBalance">ƒ0.00</div>
                     </div>
                 </div>
             </div>
 
-            <!-- ── Stats Row (always visible) ───────────────────────── -->
+            <!-- ── Stats Row (always visible) — plain statement-style tiles
+                 with a colored accent bar instead of full-color gradient
+                 fills, matching how a real bill-pay portal reads. ────── -->
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0.75rem;margin-bottom:1rem">
-                <div style="background:linear-gradient(135deg,#667eea,#764ba2);border-radius:var(--radius-xl);padding:1rem;color:white;text-align:center">
-                    <div style="font-size:1.4rem;font-weight:700" id="utilBillsPaid">—</div>
-                    <div style="font-size:0.72rem;opacity:0.85">Bills Paid</div>
+                <div style="background:var(--color-surface);border:1px solid var(--color-border);border-left:4px solid var(--color-primary-600);border-radius:var(--radius-lg);padding:1rem;text-align:center">
+                    <div style="font-size:1.4rem;font-weight:700;color:var(--color-gray-800)" id="utilBillsPaid">—</div>
+                    <div style="font-size:0.72rem;color:var(--color-gray-500)">Bills Paid</div>
                 </div>
-                <div style="background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:var(--radius-xl);padding:1rem;color:white;text-align:center">
-                    <div style="font-size:1.4rem;font-weight:700" id="utilTotalPaid">—</div>
-                    <div style="font-size:0.72rem;opacity:0.85">Total Paid</div>
+                <div style="background:var(--color-surface);border:1px solid var(--color-border);border-left:4px solid #b7862c;border-radius:var(--radius-lg);padding:1rem;text-align:center">
+                    <div style="font-size:1.4rem;font-weight:700;color:var(--color-gray-800)" id="utilTotalPaid">—</div>
+                    <div style="font-size:0.72rem;color:var(--color-gray-500)">Total Paid</div>
                 </div>
-                <div style="background:linear-gradient(135deg,#10b981,#059669);border-radius:var(--radius-xl);padding:1rem;color:white;text-align:center">
-                    <div style="font-size:1.4rem;font-weight:700" id="utilXpEarned">—</div>
-                    <div style="font-size:0.72rem;opacity:0.85">XP Earned</div>
+                <div style="background:var(--color-surface);border:1px solid var(--color-border);border-left:4px solid #2f855a;border-radius:var(--radius-lg);padding:1rem;text-align:center">
+                    <div style="font-size:1.4rem;font-weight:700;color:var(--color-gray-800)" id="utilXpEarned">—</div>
+                    <div style="font-size:0.72rem;color:var(--color-gray-500)">XP Earned</div>
                 </div>
-                <div style="background:linear-gradient(135deg,#3b82f6,#2563eb);border-radius:var(--radius-xl);padding:1rem;color:white;text-align:center">
-                    <div style="font-size:1.4rem;font-weight:700" id="utilNextMilestone">—</div>
-                    <div style="font-size:0.72rem;opacity:0.85">Next Milestone</div>
+                <div style="background:var(--color-surface);border:1px solid var(--color-border);border-left:4px solid var(--color-gray-400);border-radius:var(--radius-lg);padding:1rem;text-align:center">
+                    <div style="font-size:1.4rem;font-weight:700;color:var(--color-gray-800)" id="utilNextMilestone">—</div>
+                    <div style="font-size:0.72rem;color:var(--color-gray-500)">Next Milestone</div>
                 </div>
             </div>
 
             <!-- Extended stats -->
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0.75rem;margin-bottom:1rem">
                 <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:0.875rem;text-align:center">
-                    <div style="font-size:1.2rem;font-weight:700;color:#8b5cf6" id="utilLargestPay">—</div>
+                    <div style="font-size:1.2rem;font-weight:700;color:var(--color-gray-800)" id="utilLargestPay">—</div>
                     <div style="font-size:0.72rem;color:var(--color-gray-500)">Largest Payment</div>
                 </div>
                 <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:0.875rem;text-align:center">
-                    <div style="font-size:1.2rem;font-weight:700;color:#ec4899" id="utilAvgPay">—</div>
+                    <div style="font-size:1.2rem;font-weight:700;color:var(--color-gray-800)" id="utilAvgPay">—</div>
                     <div style="font-size:0.72rem;color:var(--color-gray-500)">Avg Payment</div>
                 </div>
                 <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:0.875rem;text-align:center">
-                    <div style="font-size:1.2rem;font-weight:700;color:#f97316" id="utilMostPaidType">—</div>
+                    <div style="font-size:1.2rem;font-weight:700;color:var(--color-primary-600)" id="utilMostPaidType">—</div>
                     <div style="font-size:0.72rem;color:var(--color-gray-500)">Most Paid Bill</div>
                 </div>
                 <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:0.875rem;text-align:center">
-                    <div style="font-size:1.2rem;font-weight:700;color:#0ea5e9" id="utilBillTypes">—</div>
+                    <div style="font-size:1.2rem;font-weight:700;color:var(--color-primary-600)" id="utilBillTypes">—</div>
                     <div style="font-size:0.72rem;color:var(--color-gray-500)">Bill Types Paid</div>
                 </div>
             </div>
@@ -126,7 +128,7 @@
             <!-- Monthly budget bar -->
             <div id="utilBudgetRow" style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:1rem;margin-bottom:1.25rem">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
-                    <div style="font-size:0.8rem;font-weight:700;color:var(--color-gray-700)">📅 Monthly Bill Budget</div>
+                    <div style="font-size:0.8rem;font-weight:700;color:var(--color-gray-700)">Monthly Bill Budget</div>
                     <div style="font-size:0.75rem;color:var(--color-gray-500)">Paid <strong id="utilBudgetPaid">ƒ0</strong> of est. <strong id="utilBudgetTotal">ƒ585.24</strong></div>
                 </div>
                 <div class="budget-bar-wrap">
@@ -140,8 +142,8 @@
 
             <!-- ── Page Tab Navigation ─────────────────────────────── -->
             <div class="page-tabs">
-                <button class="page-tab-btn active" id="tab-btn-bills"   onclick="switchUtilPageTab('bills')">⚡ Bills</button>
-                <button class="page-tab-btn"         id="tab-btn-history" onclick="switchUtilPageTab('history')">🧾 History</button>
+                <button class="page-tab-btn active" id="tab-btn-bills"   onclick="switchUtilPageTab('bills')">Bills</button>
+                <button class="page-tab-btn"         id="tab-btn-history" onclick="switchUtilPageTab('history')">History</button>
             </div>
 
             <!-- ═══════════════════════════════════════════════════════
@@ -152,7 +154,7 @@
                 <!-- Challenge Tracker -->
                 <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:1.25rem;margin-bottom:1.5rem">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
-                        <h2 style="font-size:1rem;font-weight:700;margin:0">⚡ Utility Challenges</h2>
+                        <h2 style="font-size:1rem;font-weight:700;margin:0">Utility Challenges</h2>
                     </div>
                     <div class="challenge-summary-grid">
                         <div class="csg-item"><div class="csg-val" style="color:#10b981" id="utilChalDoneCount">—</div><div class="csg-lbl">Completed</div></div>
@@ -168,8 +170,8 @@
                 <!-- Pay All + Add Custom Bill buttons -->
                 <div style="display:flex;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap">
                     <div id="payAllWrap" style="display:none;flex:1;min-width:220px">
-                        <button class="btn btn-primary btn-block" id="payAllBtn" onclick="payAllBills()" style="background:linear-gradient(135deg,#6366f1,#4f46e5);font-size:0.9rem;padding:0.75rem">
-                            ⚡ Pay All Unpaid Bills <span id="payAllCount" style="background:rgba(255,255,255,0.25);border-radius:99px;padding:0.1rem 0.6rem;font-size:0.8rem;margin-left:0.4rem"></span>
+                        <button class="btn btn-primary btn-block" id="payAllBtn" onclick="payAllBills()" style="font-size:0.9rem;padding:0.75rem">
+                            Pay All Unpaid Bills <span id="payAllCount" style="background:rgba(255,255,255,0.25);border-radius:99px;padding:0.1rem 0.6rem;font-size:0.8rem;margin-left:0.4rem"></span>
                         </button>
                     </div>
                     <button class="btn" id="addCustomBillBtn" onclick="showCustomBillForm()" style="font-size:0.9rem;padding:0.75rem 1.25rem">+ Add Your Own Bill</button>
@@ -192,13 +194,13 @@
 
                 <!-- Spending breakdown by bill type -->
                 <div class="bill-breakdown-section" id="billBreakdownSection" style="display:none">
-                    <div style="font-size:0.9rem;font-weight:700;color:var(--color-gray-800);margin-bottom:0.75rem">📊 Spending by Bill Type</div>
+                    <div style="font-size:0.9rem;font-weight:700;color:var(--color-gray-800);margin-bottom:0.75rem">Spending by Bill Type</div>
                     <div id="billBreakdownChart"></div>
                 </div>
 
                 <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:1.25rem">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
-                        <h2 style="font-size:1rem;font-weight:700;margin:0">🧾 Payment History</h2>
+                        <h2 style="font-size:1rem;font-weight:700;margin:0">Payment History</h2>
                         <span id="payHistoryCount" style="font-size:0.8rem;color:var(--color-gray-500)"></span>
                     </div>
                     <!-- Payment history search -->
@@ -304,7 +306,13 @@
     // a shared flat template plus a client-side "does any payment of this
     // type exist" guess at whether it's "paid."
     function loadBills() {
-        DigifinwizDB.getMyBills().then(function(bills) {
+        Promise.all([
+            DigifinwizDB.getMyBills(),
+            DigifinwizDB.getAutopayPrefs()
+        ]).then(function(results) {
+            var bills = results[0];
+            var autopayPrefs = {};
+            results[1].forEach(function(p) { autopayPrefs[p.billDefKey] = p.enabled; });
             LOADED_BILLS      = bills;
             ESTIMATED_MONTHLY = bills.reduce(function(s,b){ return s + (b.amount||0); }, 0);
             var totalEl = document.getElementById('utilBudgetTotal');
@@ -322,14 +330,14 @@
                 var isPaid       = b.status === 'paid';
                 var urgencyBadge = getDueBadge(b);
                 var tip          = BILL_TIPS[b.name] ? '<div class="bill-tip">' + BILL_TIPS[b.name] + '</div>' : '';
-                var isAutopay    = !!autopayState[b.name];
+                var isAutopay    = !!autopayPrefs[b.billDefKey];
                 var isCustom     = (b.billDefKey || '').indexOf('custom:') === 0;
                 var autopayRow   =
                     '<div class="autopay-row">' +
-                        '<span class="autopay-label">🔄 Auto-pay</span>' +
+                        '<span class="autopay-label">Auto-pay</span>' +
                         '<label class="autopay-switch">' +
                             '<input type="checkbox" id="autopay-' + b.id + '" ' + (isAutopay ? 'checked' : '') +
-                                " onchange='toggleAutopay(" + b.id + ',' + jsAttr(b.name) + ")'>" +
+                                " onchange='toggleAutopay(" + b.id + ',' + jsAttr(b.billDefKey) + ',' + jsAttr(b.name) + ")'>" +
                             '<span class="autopay-slider"></span>' +
                         '</label>' +
                     '</div>';
@@ -343,11 +351,9 @@
                             "onblur='saveBillNote(" + b.id + ',' + jsAttr(b.name) + ")'>" + '</textarea>' +
                         '<div id="billNote-disp-' + b.id + '" class="bill-note-display" style="' + (savedNote ? '' : 'display:none') + '">' + escHU(savedNote) + '</div>' +
                     '</div>';
-                // Savings estimator (auto-pay saves ~4%)
-                var annualSave  = (Number(b.amount) * 12 * 0.04).toFixed(2);
                 var savingsChip = !isAutopay
-                    ? '<div class="bill-savings-chip">💰 Enable auto-pay · save ≈ ƒ' + annualSave + '/yr</div>'
-                    : '<div class="bill-savings-chip" style="background:#ede9fe;color:#6d28d9;border-color:#c4b5fd">✅ Auto-pay on · saving ≈ ƒ' + annualSave + '/yr</div>';
+                    ? '<div class="bill-savings-chip">Enable auto-pay · avoid late fees automatically</div>'
+                    : '<div class="bill-savings-chip" style="background:#dcfce7;color:#166534;border-color:#bbf7d0">Auto-pay on · this bill will be paid for you when due</div>';
                 // Usage breakdown for usage-based bills — shows the reading
                 // that actually drove this month's charge.
                 var usageLine = (b.billingType === 'usage' && b.usage != null)
@@ -443,7 +449,7 @@
                 '<option value="flat">Flat rate (same amount every month)</option>' +
                 '<option value="usage">Usage-based (bills by meter reading, like electric/water/gas)</option>' +
             '</select></div>' +
-            '<div id="cb_flatFields"><div class="form-group"><label>Amount (ƒ)</label><input type="number" class="form-input" id="cb_amount" min="0.01" step="0.01" placeholder="e.g. 75.00"></div></div>' +
+            '<div id="cb_flatFields"><div class="form-group"><label>Amount (ƒ)</label><input type="number" class="form-input" id="cb_amount" min="5" step="0.01" placeholder="e.g. 75.00"></div></div>' +
             '<div id="cb_usageFields" style="display:none">' +
                 '<div class="form-row">' +
                     '<div class="form-group"><label>Unit</label><input type="text" class="form-input" id="cb_unit" placeholder="e.g. kWh, gallons, GB"></div>' +
@@ -463,7 +469,7 @@
             '<div class="form-group"><label>Due Day of Month</label><input type="number" class="form-input" id="cb_dueDateDay" min="1" max="28" value="25" style="max-width:120px"></div>' +
             '<div class="form-actions">' +
                 '<button type="button" class="btn btn-secondary" onclick="cancelCustomBillForm()">Cancel</button>' +
-                '<button type="button" class="btn btn-primary" onclick="saveCustomBillForm()">Save Bill</button>' +
+                '<button type="button" class="btn btn-primary" id="cb_saveBtn" onclick="saveCustomBillForm()">Save Bill</button>' +
             '</div></div>';
         fc.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
@@ -481,7 +487,14 @@
         if (fc) fc.innerHTML = '';
     }
 
+    // Guards against a second submit firing while the first is still in
+    // flight (double-click on Save Bill) — without it, two requests can
+    // both read the store before either writes, and the second write
+    // silently clobbers the first (or leaves two records sharing an id).
+    var customBillSaveInFlight = false;
+
     function saveCustomBillForm() {
+        if (customBillSaveInFlight) return;
         var name        = (document.getElementById('cb_name') || {}).value || '';
         var category    = (document.getElementById('cb_category') || {}).value || 'other';
         var accountNum  = (document.getElementById('cb_account') || {}).value || '';
@@ -500,17 +513,24 @@
             if (!payload.unit.trim()) { showNotification('Enter a usage unit (e.g. kWh).', 'error'); return; }
             if (!payload.ratePerUnit || payload.ratePerUnit <= 0) { showNotification('Enter a valid rate per unit.', 'error'); return; }
             if (!payload.usageMin || !payload.usageMax || payload.usageMax <= payload.usageMin) { showNotification('Enter a valid usage range (max must exceed min).', 'error'); return; }
+            if (payload.baseFee + payload.usageMin * payload.ratePerUnit < 5) { showNotification('Even at minimum usage this bill must total at least ƒ5.00.', 'error'); return; }
         } else {
             payload.amount = parseFloat((document.getElementById('cb_amount') || {}).value);
-            if (!payload.amount || payload.amount <= 0) { showNotification('Enter a valid amount.', 'error'); return; }
+            if (!payload.amount || payload.amount < 5) { showNotification('Amount must be at least ƒ5.00.', 'error'); return; }
         }
 
+        customBillSaveInFlight = true;
+        var saveBtn = document.getElementById('cb_saveBtn');
+        if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
         DigifinwizDB.createCustomBill(payload).then(function() {
             cancelCustomBillForm();
             showNotification('Bill added!', 'success');
             loadBills();
         }).catch(function(err) {
             showNotification(err && err.message ? err.message : 'Could not add bill.', 'error');
+        }).then(function() {
+            customBillSaveInFlight = false;
+            if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Bill'; }
         });
     }
 
@@ -525,17 +545,24 @@
     }
 
     /* ── Auto-pay toggle ───────────────────────────────────────────────── */
-    function toggleAutopay(id, billName) {
-        var autopay = JSON.parse(localStorage.getItem('digifinwiz_autopay') || '{}');
-        autopay[billName] = !autopay[billName];
-        localStorage.setItem('digifinwiz_autopay', JSON.stringify(autopay));
+    // Persists to the server (checked on every /api/me/bills fetch, which
+    // auto-charges any due bill with this enabled) rather than localStorage,
+    // which never actually paid anything — the toggle used to claim a
+    // savings benefit it didn't deliver.
+    function toggleAutopay(id, billDefKey, billName) {
         var toggle = document.getElementById('autopay-' + id);
-        if (toggle) toggle.checked = !!autopay[billName];
-        if (autopay[billName]) {
-            showNotification('🔄 Auto-pay enabled for ' + billName, 'success');
-        } else {
-            showNotification('Auto-pay disabled for ' + billName, 'info');
-        }
+        var enabled = toggle ? toggle.checked : false;
+        DigifinwizDB.setAutopayPref(billDefKey, enabled).then(function() {
+            if (enabled) {
+                showNotification('Auto-pay enabled for ' + billName, 'success');
+            } else {
+                showNotification('Auto-pay disabled for ' + billName, 'info');
+            }
+            loadBills();
+        }).catch(function(err) {
+            if (toggle) toggle.checked = !enabled;
+            showNotification(err && err.message ? err.message : 'Could not update auto-pay.', 'error');
+        });
     }
 
     /* ── Bill type breakdown chart ─────────────────────────────────────── */
