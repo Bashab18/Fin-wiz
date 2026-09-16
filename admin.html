@@ -747,13 +747,14 @@
                         <table class="admin-table">
                             <thead>
                                 <tr>
+                                    <th>Participant</th>
                                     <th>Recipient</th>
                                     <th>Amount</th>
                                     <th>Date</th>
                                 </tr>
                             </thead>
                             <tbody id="dash-tx-table">
-                                <tr class="empty-row"><td colspan="3">Loading…</td></tr>
+                                <tr class="empty-row"><td colspan="4">Loading…</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -887,7 +888,7 @@
                     <span class="pill pill-blue" id="tx-count-badge">0</span>
                 </div>
                 <div class="admin-panel-body" style="padding-bottom:0">
-                    <input id="tx-search" type="search" placeholder="Search recipient, account, description…"
+                    <input id="tx-search" type="search" placeholder="Search recipient, account, description, participant…"
                         style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:var(--text-sm);margin-bottom:var(--space-3)">
                 </div>
                 <div class="admin-table-wrap">
@@ -895,6 +896,7 @@
                         <thead>
                             <tr>
                                 <th>#</th>
+                                <th data-sort="fullName">Participant<span class="sort-arrow"> ↕</span></th>
                                 <th data-sort="type">Type<span class="sort-arrow"> ↕</span></th>
                                 <th data-sort="recipient">Recipient<span class="sort-arrow"> ↕</span></th>
                                 <th>Account</th>
@@ -905,7 +907,7 @@
                             </tr>
                         </thead>
                         <tbody id="tx-table-body">
-                            <tr class="empty-row"><td colspan="8">Loading…</td></tr>
+                            <tr class="empty-row"><td colspan="9">Loading…</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -929,7 +931,7 @@
                     <span class="pill pill-amber" id="pay-count-badge">0</span>
                 </div>
                 <div class="admin-panel-body" style="padding-bottom:0">
-                    <input id="pay-search" type="search" placeholder="Search bill type, account…"
+                    <input id="pay-search" type="search" placeholder="Search bill type, account, participant…"
                         style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:var(--text-sm);margin-bottom:var(--space-3)">
                 </div>
                 <div class="admin-table-wrap">
@@ -937,6 +939,7 @@
                         <thead>
                             <tr>
                                 <th>#</th>
+                                <th data-sort="fullName">Participant<span class="sort-arrow"> ↕</span></th>
                                 <th data-sort="type">Bill Type<span class="sort-arrow"> ↕</span></th>
                                 <th>Account No.</th>
                                 <th data-sort="amount">Amount<span class="sort-arrow"> ↕</span></th>
@@ -945,7 +948,7 @@
                             </tr>
                         </thead>
                         <tbody id="pay-table-body">
-                            <tr class="empty-row"><td colspan="6">Loading…</td></tr>
+                            <tr class="empty-row"><td colspan="7">Loading…</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -969,7 +972,7 @@
                     <span class="pill pill-green" id="purch-count-badge">0</span>
                 </div>
                 <div class="admin-panel-body" style="padding-bottom:0">
-                    <input id="purch-search" type="search" placeholder="Search by date…"
+                    <input id="purch-search" type="search" placeholder="Search by date, participant…"
                         style="width:100%;padding:8px 12px;border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:var(--text-sm);margin-bottom:var(--space-3)">
                 </div>
                 <div class="admin-table-wrap">
@@ -977,6 +980,7 @@
                         <thead>
                             <tr>
                                 <th>#</th>
+                                <th data-sort="fullName">Participant<span class="sort-arrow"> ↕</span></th>
                                 <th data-sort="date">Date<span class="sort-arrow"> ↕</span></th>
                                 <th>Items</th>
                                 <th data-sort="total">Total<span class="sort-arrow"> ↕</span></th>
@@ -984,7 +988,7 @@
                             </tr>
                         </thead>
                         <tbody id="purch-table-body">
-                            <tr class="empty-row"><td colspan="5">Loading…</td></tr>
+                            <tr class="empty-row"><td colspan="6">Loading…</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1090,7 +1094,7 @@
                                     </div>
                                 </div>
                                 <div class="admin-form-group">
-                                    <label>Florin Cost (ƒ)</label>
+                                    <label>Florin Reward (ƒ)</label>
                                     <input type="number" id="chal-florins" min="0" step="0.01" placeholder="0">
                                 </div>
                             </div>
@@ -1229,7 +1233,7 @@
                                     <th data-sort="title">Title<span class="sort-arrow"> ↕</span></th>
                                     <th data-sort="category">Category<span class="sort-arrow"> ↕</span></th>
                                     <th data-sort="points">Points<span class="sort-arrow"> ↕</span></th>
-                                    <th>Cost (ƒ)</th>
+                                    <th>Reward (ƒ)</th>
                                     <th>Condition</th>
                                     <th data-sort="completed">Progress<span class="sort-arrow"> ↕</span></th>
                                     <th>Actions</th>
@@ -1377,24 +1381,16 @@
                 <div class="admin-panel-header"><h2>Database Info</h2></div>
                 <div class="admin-panel-body">
                     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:var(--space-4)">
-                        <div class="admin-stat-card accent-purple" style="margin:0"><div class="stat-icon">🗄️</div><div class="stat-value" style="font-size:var(--text-lg)">DigifinwizDB</div><div class="stat-label">Database Name</div></div>
-                        <div class="admin-stat-card accent-teal" style="margin:0"><div class="stat-icon">📦</div><div class="stat-value" style="font-size:var(--text-lg)">v4</div><div class="stat-label">DB Version</div></div>
-                        <div class="admin-stat-card accent-green" style="margin:0"><div class="stat-icon">🏪</div><div class="stat-value" style="font-size:var(--text-lg)">9</div><div class="stat-label">Object Stores</div></div>
+                        <div class="admin-stat-card accent-purple" style="margin:0"><div class="stat-icon">🗄️</div><div class="stat-value" style="font-size:var(--text-lg)" id="settings-backend">—</div><div class="stat-label">Storage Backend</div></div>
+                        <div class="admin-stat-card accent-teal" style="margin:0"><div class="stat-icon">🏪</div><div class="stat-value" style="font-size:var(--text-lg)" id="settings-store-count">—</div><div class="stat-label">Data Stores</div></div>
                         <div class="admin-stat-card accent-amber" style="margin:0"><div class="stat-icon">💾</div><div class="stat-value" style="font-size:var(--text-lg)" id="settings-record-count">—</div><div class="stat-label">Total Records</div></div>
                     </div>
                     <div style="margin-top:var(--space-5)">
-                        <div style="font-size:var(--text-sm);font-weight:600;color:var(--color-text);margin-bottom:var(--space-3)">Object Stores</div>
+                        <div style="font-size:var(--text-sm);font-weight:600;color:var(--color-text);margin-bottom:var(--space-3)">Data Stores</div>
                         <table class="admin-table" style="border:1px solid var(--color-border);border-radius:var(--radius-md);overflow:hidden">
-                            <thead><tr><th>Store</th><th>Key</th><th>Indexes</th><th>Records</th></tr></thead>
-                            <tbody>
-                                <tr><td><span class="pill pill-purple">userData</span></td><td>id (keyPath)</td><td>—</td><td id="store-count-userData">—</td></tr>
-                                <tr><td><span class="pill pill-blue">transactions</span></td><td>id (autoIncrement)</td><td>date, timestamp</td><td id="store-count-transactions">—</td></tr>
-                                <tr><td><span class="pill pill-amber">payments</span></td><td>id (autoIncrement)</td><td>date, timestamp</td><td id="store-count-payments">—</td></tr>
-                                <tr><td><span class="pill pill-green">purchaseHistory</span></td><td>id (autoIncrement)</td><td>date, timestamp</td><td id="store-count-purchaseHistory">—</td></tr>
-                                <tr><td><span class="pill pill-blue">balances</span></td><td>account (keyPath)</td><td>—</td><td>2</td></tr>
-                                <tr><td><span class="pill pill-purple">profile</span></td><td>id (keyPath)</td><td>—</td><td>—</td></tr>
-                                <tr><td><span class="pill pill-green">cart</span></td><td>id (autoIncrement)</td><td>—</td><td>—</td></tr>
-                                <tr><td><span class="pill pill-purple">challenges</span></td><td>id (autoIncrement)</td><td>category, active</td><td id="store-count-challenges">—</td></tr>
+                            <thead><tr><th>Store</th><th>Records</th></tr></thead>
+                            <tbody id="settings-store-table-body">
+                                <tr class="empty-row"><td colspan="2">Loading…</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1434,7 +1430,7 @@
 
             <div class="danger-zone">
                 <h3>⚠ Danger Zone</h3>
-                <p>These actions are irreversible. All data will be permanently deleted from IndexedDB.</p>
+                <p>These actions are irreversible. All data will be permanently deleted.</p>
                 <div class="danger-actions">
                     <button class="btn btn-danger" id="clearTransactionsBtn">Clear Transactions</button>
                     <button class="btn btn-danger" id="clearPaymentsBtn">Clear Payments</button>

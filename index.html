@@ -125,6 +125,12 @@
                         </div>
                         <p id="progressSubtext" style="font-size:0.8rem;color:#64748b;margin-top:4px"></p>
                     </div>
+
+                    <!-- Recent Activity -->
+                    <div id="recentActivitySection" style="margin-top:1.75rem">
+                        <h3 style="font-size:1rem;font-weight:700;margin-bottom:0.75rem;color:#1e293b">Recent Activity</h3>
+                        <div id="recentActivityList"></div>
+                    </div>
                 </div>
             </div>
 
@@ -146,11 +152,52 @@
     <script src="script.js"></script>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
+        function escH(s) {
+            return s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
+
+        // Which standalone module each activity-feed event type belongs to —
+        // these are plain links to the module's home page (not a deep link to
+        // a specific record: none of the three module pages parse a
+        // record-id query parameter).
+        var ACTIVITY_MODULE_LINK = {
+            purchase:    'ecommerce.html',
+            transfer:    'banking.html',
+            loan:        'banking.html',
+            creditcard:  'banking.html',
+            savingsgoal: 'banking.html',
+            payment:     'utilities.html'
+        };
+
         DigifinwizDB.init().then(function() {
-            return Promise.all([DigifinwizDB.getUserData(), DigifinwizDB.getChallenges()]);
+            return Promise.all([DigifinwizDB.getUserData(), DigifinwizDB.getChallenges(), DigifinwizDB.getRecentActivity(6)]);
         }).then(function(results) {
             var userData   = results[0];
             var challenges = results[1] || [];
+            var activity   = results[2] || [];
+
+            // Recent Activity list — same field names/formatting profile.html's
+            // timeline already relies on for this endpoint (icon/label/detail/
+            // date/pointsEarned), rendered here as a compact linked list.
+            var listEl = document.getElementById('recentActivityList');
+            if (listEl) {
+                if (activity.length === 0) {
+                    listEl.innerHTML = '<p style="color:#64748b;font-size:0.875rem">No activity yet. Visit Banking, Ecommerce or Utilities to get started!</p>';
+                } else {
+                    listEl.innerHTML = '<div style="display:flex;flex-direction:column;gap:0.5rem">' + activity.map(function(e) {
+                        var href = ACTIVITY_MODULE_LINK[e.type] || 'profile.html';
+                        var pts  = e.pointsEarned ? '<span style="color:#10b981;font-weight:600;font-size:0.8rem;margin-left:0.5rem">+' + e.pointsEarned + ' pts</span>' : '';
+                        return '<a href="' + href + '" style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.75rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;text-decoration:none;color:inherit">' +
+                            '<span style="font-size:1.1rem">' + (e.icon || '⭐') + '</span>' +
+                            '<span style="flex:1;min-width:0">' +
+                                '<strong style="display:block;font-size:0.875rem;color:#1e293b">' + escH(e.label) + '</strong>' +
+                                '<span style="font-size:0.8rem;color:#64748b">' + escH(e.detail) + '</span>' + pts +
+                            '</span>' +
+                            '<span style="font-size:0.75rem;color:#94a3b8;white-space:nowrap">' + escH(e.date || '') + '</span>' +
+                        '</a>';
+                    }).join('') + '</div>';
+                }
+            }
 
             if (!userData) return;
 

@@ -57,19 +57,19 @@
 
         <main class="main-content">
             <div class="breadcrumb">
-                <a href="tutorials.html">Tutorials</a> / <span>Logging in and Password Management</span>
+                <a href="tutorials.html">Tutorials</a> / <span id="tutBreadcrumbTitle">Loading...</span>
             </div>
 
             <div class="tutorial-header">
-                <h1>Tutorial: Logging in and Password Management</h1>
+                <h1 id="tutTitle">Tutorial: Loading...</h1>
                 <div class="tutorial-meta">
-                    <span class="tutorial-duration">⏱️ 3 min 45 sec</span>
-                    <span class="tutorial-difficulty">Beginner</span>
+                    <span class="tutorial-duration" id="tutDuration">⏱️ ...</span>
+                    <span class="tutorial-difficulty" id="tutDifficulty">Beginner</span>
                 </div>
             </div>
 
             <div class="video-player">
-                <div class="video-placeholder" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <div class="video-placeholder" id="tutVideoPlaceholder" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
                     <div class="play-button">▶️</div>
                     <p>Video Player</p>
                     <small>This is a prototype - video would play here</small>
@@ -77,98 +77,31 @@
             </div>
 
             <div class="tutorial-controls">
-                <button class="btn btn-navy">← Previous Lesson</button>
-                <button class="btn btn-primary">Mark as Complete</button>
-                <button class="btn btn-navy">Next Lesson →</button>
+                <button class="btn btn-navy" id="tutPrevBtn" onclick="goToTutorial(currentTutIdx - 1)">← Previous Lesson</button>
+                <button class="btn btn-primary" id="tutMarkCompleteBtn" onclick="markCurrentTutorialComplete()">Mark as Complete</button>
+                <button class="btn btn-navy" id="tutNextBtn" onclick="goToTutorial(currentTutIdx + 1)">Next Lesson →</button>
             </div>
 
             <div class="tutorial-content">
                 <h2>What You'll Learn</h2>
-                <ul class="tutorial-list">
-                    <li>How to create a secure password</li>
-                    <li>Best practices for password management</li>
-                    <li>How to use two-factor authentication</li>
-                    <li>What to do if you forget your password</li>
-                    <li>Common security mistakes to avoid</li>
-                </ul>
+                <ul class="tutorial-list" id="tutLearnList"></ul>
 
                 <h2>Lesson Overview</h2>
-                <p>In this tutorial, we'll cover the fundamentals of logging in securely and managing your passwords effectively. You'll learn how to create strong passwords, use password managers, and protect your accounts from unauthorized access.</p>
+                <p id="tutOverview"></p>
 
                 <h2>Key Points</h2>
-                <div class="key-points">
-                    <div class="key-point-card">
-                        <h4>🔒 Strong Passwords</h4>
-                        <p>Use at least 12 characters with a mix of uppercase, lowercase, numbers, and symbols</p>
-                    </div>
-
-                    <div class="key-point-card">
-                        <h4>🔑 Unique Passwords</h4>
-                        <p>Never reuse passwords across different accounts</p>
-                    </div>
-
-                    <div class="key-point-card">
-                        <h4>🛡️ Two-Factor Authentication</h4>
-                        <p>Enable 2FA whenever possible for extra security</p>
-                    </div>
-
-                    <div class="key-point-card">
-                        <h4>🗄️ Password Managers</h4>
-                        <p>Use a password manager to store and generate secure passwords</p>
-                    </div>
-                </div>
+                <div class="key-points" id="tutKeyPoints"></div>
 
                 <h2>Practice Exercise</h2>
                 <div class="exercise-box">
-                    <p><strong>Try it yourself:</strong> Go to the profile settings page and update your password using the guidelines you learned in this tutorial.</p>
-                    <a href="profile.html" class="btn btn-primary">Go to Profile Settings</a>
-                </div>
-
-                <h2>Quiz</h2>
-                <div class="quiz-section">
-                    <div class="quiz-question">
-                        <p><strong>Question 1:</strong> What is the minimum recommended password length?</p>
-                        <div class="quiz-options">
-                            <label><input type="radio" name="q1"> 6 characters</label>
-                            <label><input type="radio" name="q1"> 8 characters</label>
-                            <label><input type="radio" name="q1" checked> 12 characters</label>
-                            <label><input type="radio" name="q1"> 16 characters</label>
-                        </div>
-                    </div>
-
-                    <div class="quiz-question">
-                        <p><strong>Question 2:</strong> Should you use the same password for multiple accounts?</p>
-                        <div class="quiz-options">
-                            <label><input type="radio" name="q2"> Yes, it's easier to remember</label>
-                            <label><input type="radio" name="q2" checked> No, always use unique passwords</label>
-                        </div>
-                    </div>
-
-                    <button class="btn btn-primary" onclick="showNotification('Great job! You scored 100%', 'success')">Submit Quiz</button>
+                    <p><strong>Try it yourself:</strong> <span id="tutPracticeText"></span></p>
+                    <a href="index.html" id="tutPracticeLink" class="btn btn-primary">Go</a>
                 </div>
             </div>
 
             <div class="related-tutorials">
                 <h2>Related Tutorials</h2>
-                <div class="related-grid">
-                    <div class="related-card">
-                        <h4>Account Security Basics</h4>
-                        <p>Learn the fundamentals of keeping your account secure</p>
-                        <span class="duration">5 min</span>
-                    </div>
-
-                    <div class="related-card">
-                        <h4>Two-Factor Authentication</h4>
-                        <p>How to set up and use 2FA effectively</p>
-                        <span class="duration">4 min</span>
-                    </div>
-
-                    <div class="related-card">
-                        <h4>Recognizing Phishing</h4>
-                        <p>Identify and avoid phishing attempts</p>
-                        <span class="duration">6 min</span>
-                    </div>
-                </div>
+                <div class="related-grid" id="tutRelatedGrid"></div>
             </div>
         </main>
     </div>
@@ -177,5 +110,275 @@
     <script src="auth.js"></script>
     <script src="db.js"></script>
     <script src="script.js"></script>
+    <script>
+    // ── Tutorial content (real title/description/duration copied from tutorials.html) ──
+    var TUTORIALS = [
+        {
+            title: 'Getting started with Digifinwiz',
+            description: 'Learn how to navigate the Digifinwiz platform and get started with your first challenge.',
+            duration: '3 min 45 sec',
+            gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            overview: "In this tutorial, we'll cover the fundamentals of getting started on Digifinwiz — finding your way around the dashboard, understanding your sidebar navigation, and tackling your very first challenge.",
+            learn: [
+                'How to navigate the Digifinwiz dashboard',
+                'Where to find your challenges, points and florins',
+                'How the Banking, Ecommerce and Utilities modules fit together',
+                'How to complete your first challenge'
+            ],
+            keyPoints: [
+                { icon: '🧭', title: 'Dashboard Basics', text: 'Your sidebar links out to Banking, Ecommerce and Utilities — the three places you complete challenges.' },
+                { icon: '🎯', title: 'Challenges', text: 'Completing challenges earns you XP (points) and sometimes florins, the in-app currency.' },
+                { icon: '📈', title: 'Levelling Up', text: 'Earning enough points advances you to the next level and unlocks new content.' },
+                { icon: '👤', title: 'Your Profile', text: 'Check your profile page any time to see your balances and overall progress.' }
+            ],
+            practiceText: 'Head to the Challenges page and start your first challenge.',
+            practiceHref: 'challenges.html',
+            practiceLabel: 'Go to Challenges'
+        },
+        {
+            title: 'Making your first bank transfer',
+            description: "Step-by-step guide to transferring money using the Banking page and completing banking challenges.",
+            duration: '4 min 20 sec',
+            gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+            overview: "In this tutorial, we'll cover how to move money between accounts using the Banking (DigiBank) page, and how those transfers count toward your banking challenges.",
+            learn: [
+                'How to open the Banking page and view your accounts',
+                'How to fill out and submit a bank transfer',
+                'How transfers are verified and recorded',
+                'How transfers help you complete banking challenges'
+            ],
+            keyPoints: [
+                { icon: '🏦', title: 'Choose an Account', text: 'Select the account you want to send money from before entering transfer details.' },
+                { icon: '💸', title: 'Enter the Details', text: 'Provide the recipient and amount, then double-check them before submitting.' },
+                { icon: '✅', title: 'Confirm & Verify', text: 'Your bank verifies you have sufficient funds before the transfer completes.' },
+                { icon: '🧾', title: 'Track It', text: 'Every transfer appears in your transaction history for your records.' }
+            ],
+            practiceText: 'Go to the Banking page and make a transfer.',
+            practiceHref: 'banking.html',
+            practiceLabel: 'Go to Banking'
+        },
+        {
+            title: 'Shopping in the ecommerce store',
+            description: 'Browse products, add items to your cart, and complete purchases to earn ecommerce challenge rewards.',
+            duration: '3 min 10 sec',
+            gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+            overview: "In this tutorial, we'll cover how to shop in the InStyl ecommerce store — browsing products, managing your cart, and checking out to earn ecommerce challenge rewards.",
+            learn: [
+                'How to browse and search for products',
+                'How to add and remove items from your cart',
+                'How to complete checkout securely',
+                'How purchases count toward ecommerce challenges'
+            ],
+            keyPoints: [
+                { icon: '🛒', title: 'Browse Products', text: 'Explore the store catalogue and add anything you like to your cart.' },
+                { icon: '🧺', title: 'Review Your Cart', text: 'Check quantities and totals before proceeding to checkout.' },
+                { icon: '💳', title: 'Checkout', text: 'Enter payment details to complete your purchase securely.' },
+                { icon: '🏅', title: 'Earn Rewards', text: 'Completed purchases can unlock ecommerce-related challenges and XP.' }
+            ],
+            practiceText: 'Go to the Ecommerce store and make a purchase.',
+            practiceHref: 'ecommerce.html',
+            practiceLabel: 'Go to Ecommerce'
+        },
+        {
+            title: 'Paying utility bills',
+            description: 'Learn how to navigate the utilities page, pay bills, and unlock utility-based challenges.',
+            duration: '2 min 55 sec',
+            gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+            overview: "In this tutorial, we'll cover how to use the Utilities (DigiPay) page to pay bills on time, and how paying bills unlocks utility-based challenges.",
+            learn: [
+                'How to navigate the Utilities page',
+                'How to view and select a bill to pay',
+                'How to submit a bill payment',
+                'How paying bills unlocks utility challenges'
+            ],
+            keyPoints: [
+                { icon: '⚡', title: 'View Your Bills', text: 'The Utilities page lists your outstanding electricity, water, gas and other bills.' },
+                { icon: '📄', title: 'Check the Details', text: 'Review the amount due and due date before paying.' },
+                { icon: '✅', title: 'Pay On Time', text: 'Submitting payment before the due date avoids late fees.' },
+                { icon: '🏅', title: 'Unlock Challenges', text: 'Paying bills counts toward your utility-based challenges.' }
+            ],
+            practiceText: 'Go to the Utilities page and pay a bill.',
+            practiceHref: 'utilities.html',
+            practiceLabel: 'Go to Utilities'
+        }
+    ];
+
+    // ── Tutorial watched state (shared with tutorials.html) ────────────────
+    // Same base key + per-user namespacing as tutorials.html, so watched
+    // state stays consistent (and scoped to the logged-in user) across both
+    // pages instead of using a second, separate tracking mechanism.
+    var TUTS_WATCHED_BASE_KEY = 'digifinwiz_tutorials_watched';
+    var TUTORIAL_COUNT        = TUTORIALS.length;
+
+    function getTutsWatchedKey() {
+        var s = (typeof DigifinwizAuth !== 'undefined' && DigifinwizAuth.getSession) ? DigifinwizAuth.getSession() : null;
+        var uid = (s && s.userId != null) ? s.userId : 'anon';
+        return TUTS_WATCHED_BASE_KEY + '_' + uid;
+    }
+
+    function getTutorialsWatched() {
+        try { return JSON.parse(localStorage.getItem(getTutsWatchedKey()) || '{}'); } catch(e) { return {}; }
+    }
+
+    function markTutorialWatched(idx) {
+        var w = getTutorialsWatched();
+        w[String(idx)] = true;
+        localStorage.setItem(getTutsWatchedKey(), JSON.stringify(w));
+        maybeCompleteVideoLearnerChallenge();
+    }
+
+    // Once every tutorial has been watched, award the server-side
+    // "Video Learner" manual challenge (if present and not already
+    // completed) — mirrors challenges.html's own markChallengeComplete().
+    function maybeCompleteVideoLearnerChallenge() {
+        var w = getTutorialsWatched();
+        var count = 0;
+        for (var i = 0; i < TUTORIAL_COUNT; i++) { if (w[String(i)]) count++; }
+        if (count < TUTORIAL_COUNT) return;
+        if (typeof DigifinwizDB === 'undefined') return;
+        DigifinwizDB.getChallenges().then(function(challenges) {
+            var chal = (challenges || []).filter(function(c) { return c.title === 'Video Learner'; })[0];
+            if (!chal || chal.completed) return;
+            var points  = chal.points  || 0;
+            var florins = chal.florins || 0;
+            var now = Date.now();
+            return DigifinwizDB.updateChallenge(chal.id, { completed: true, completedAt: now }).then(function() {
+                return DigifinwizDB.getUserData();
+            }).then(function(userData) {
+                if (userData) {
+                    userData.points            = (userData.points || 0) + points;
+                    userData.coins             = (userData.coins || 0) + florins;
+                    userData.pointsToNextLevel = (userData.pointsToNextLevel != null ? userData.pointsToNextLevel : 1000) - points;
+                    userData.challenges        = (userData.challenges || 0) + 1;
+                    if (userData.pointsToNextLevel <= 0) {
+                        if (userData.level === 1) {
+                            return DigifinwizDB.getLevel1Requirements().then(function(req) {
+                                if (req.allMet) {
+                                    userData.level++;
+                                    userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
+                                    if (typeof showNotification === 'function') showNotification('&#127881; Level Up! You are now level ' + userData.level + '!', 'success');
+                                } else {
+                                    userData.pointsToNextLevel = 0;
+                                }
+                                return DigifinwizDB.setUserData(userData);
+                            });
+                        }
+                        userData.level++;
+                        userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
+                        if (typeof showNotification === 'function') showNotification('&#127881; Level Up! You are now level ' + userData.level + '!', 'success');
+                    }
+                    return DigifinwizDB.setUserData(userData);
+                }
+            }).then(function() {
+                var msg = '&#9989; Video Learner challenge complete! +' + points + ' XP earned' + (florins > 0 ? ' and +' + florins + ' florins' : '') + '!';
+                if (typeof showNotification === 'function') showNotification(msg, 'success');
+            });
+        }).catch(function(err) {
+            console.error('Video Learner challenge completion error:', err);
+        });
+    }
+
+    // ── Render + navigation ─────────────────────────────────────────────────
+    var currentTutIdx = 0;
+
+    function getTutIndexFromQuery() {
+        var params = new URLSearchParams(location.search);
+        var idx = parseInt(params.get('tut'), 10);
+        if (isNaN(idx) || idx < 0 || idx >= TUTORIALS.length) idx = 0;
+        return idx;
+    }
+
+    function goToTutorial(idx) {
+        if (idx < 0 || idx >= TUTORIALS.length) return;
+        window.location.href = 'tutorial-detail.html?tut=' + idx;
+    }
+
+    function markCurrentTutorialComplete() {
+        markTutorialWatched(currentTutIdx);
+        updateMarkCompleteButton();
+        if (typeof showNotification === 'function') {
+            showNotification('&#10003; Marked "' + TUTORIALS[currentTutIdx].title + '" as watched!', 'success');
+        }
+    }
+
+    function updateMarkCompleteButton() {
+        var btn = document.getElementById('tutMarkCompleteBtn');
+        if (!btn) return;
+        var watched = !!getTutorialsWatched()[String(currentTutIdx)];
+        btn.textContent = watched ? '✓ Completed' : 'Mark as Complete';
+    }
+
+    function renderTutorial(idx) {
+        currentTutIdx = idx;
+        var t = TUTORIALS[idx];
+
+        var breadcrumbEl = document.getElementById('tutBreadcrumbTitle');
+        if (breadcrumbEl) breadcrumbEl.textContent = t.title;
+
+        var titleEl = document.getElementById('tutTitle');
+        if (titleEl) titleEl.textContent = 'Tutorial: ' + t.title;
+
+        var durationEl = document.getElementById('tutDuration');
+        if (durationEl) durationEl.textContent = '⏱️ ' + t.duration;
+
+        var placeholderEl = document.getElementById('tutVideoPlaceholder');
+        if (placeholderEl) placeholderEl.style.background = t.gradient;
+
+        var learnListEl = document.getElementById('tutLearnList');
+        if (learnListEl) learnListEl.innerHTML = t.learn.map(function(item) { return '<li>' + item + '</li>'; }).join('');
+
+        var overviewEl = document.getElementById('tutOverview');
+        if (overviewEl) overviewEl.textContent = t.overview;
+
+        var keyPointsEl = document.getElementById('tutKeyPoints');
+        if (keyPointsEl) {
+            keyPointsEl.innerHTML = t.keyPoints.map(function(kp) {
+                return '<div class="key-point-card"><h4>' + kp.icon + ' ' + kp.title + '</h4><p>' + kp.text + '</p></div>';
+            }).join('');
+        }
+
+        var practiceTextEl = document.getElementById('tutPracticeText');
+        if (practiceTextEl) practiceTextEl.textContent = t.practiceText;
+        var practiceLinkEl = document.getElementById('tutPracticeLink');
+        if (practiceLinkEl) {
+            practiceLinkEl.href = t.practiceHref;
+            practiceLinkEl.textContent = t.practiceLabel;
+        }
+
+        var relatedGridEl = document.getElementById('tutRelatedGrid');
+        if (relatedGridEl) {
+            var relatedHtml = '';
+            for (var i = 0; i < TUTORIALS.length; i++) {
+                if (i === idx) continue;
+                relatedHtml += '<a href="tutorial-detail.html?tut=' + i + '" class="related-card" style="text-decoration:none;color:inherit;display:block">' +
+                    '<h4>' + TUTORIALS[i].title + '</h4>' +
+                    '<p>' + TUTORIALS[i].description + '</p>' +
+                    '<span class="duration">' + TUTORIALS[i].duration + '</span>' +
+                    '</a>';
+            }
+            relatedGridEl.innerHTML = relatedHtml;
+        }
+
+        // Previous/Next lesson buttons — disable at the first/last tutorial.
+        var prevBtn = document.getElementById('tutPrevBtn');
+        var nextBtn = document.getElementById('tutNextBtn');
+        if (prevBtn) {
+            prevBtn.disabled = (idx <= 0);
+            prevBtn.style.opacity = prevBtn.disabled ? '0.5' : '';
+            prevBtn.style.cursor = prevBtn.disabled ? 'not-allowed' : '';
+        }
+        if (nextBtn) {
+            nextBtn.disabled = (idx >= TUTORIALS.length - 1);
+            nextBtn.style.opacity = nextBtn.disabled ? '0.5' : '';
+            nextBtn.style.cursor = nextBtn.disabled ? 'not-allowed' : '';
+        }
+
+        updateMarkCompleteButton();
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        renderTutorial(getTutIndexFromQuery());
+    });
+    </script>
 </body>
 </html>

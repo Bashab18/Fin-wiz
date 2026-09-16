@@ -151,6 +151,23 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
+        .email-item-category {
+            font-size: 0.85rem;
+            flex-shrink: 0;
+            line-height: 1;
+        }
+        .email-category-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 2px 10px;
+            border-radius: var(--radius-full, 9999px);
+            font-size: 0.7rem;
+            font-weight: 600;
+            background: #f1f5f9;
+            color: #475569;
+            border: 1px solid #e2e8f0;
+        }
 
         /* ── Reading pane ── */
         .email-reading-pane {
@@ -295,6 +312,18 @@
         var TYPE_LABEL = { announcement: '📣 Announcement', warning: '⚠️ Warning', info: 'ℹ️ Info', email: '✉️ Email' };
         var TYPE_CLASS = { announcement: 'msg-type-announcement', warning: 'msg-type-warning', info: 'msg-type-info', email: 'msg-type-email' };
 
+        // Module the message relates to (matches the icon conventions used across
+        // banking.js / ecommerce.js / utilities.js / admin.js for these categories).
+        var CATEGORY_ICON = { banking: '🏦', ecommerce: '🛒', utilities: '⚡', system: '⚙️', general: '⚙️' };
+        var CATEGORY_LABEL = { banking: 'Banking', ecommerce: 'Ecommerce', utilities: 'Utilities', system: 'System', general: 'General' };
+
+        function categoryIcon(cat) {
+            return CATEGORY_ICON[cat] || '⚙️';
+        }
+        function categoryLabel(cat) {
+            return CATEGORY_LABEL[cat] || (cat ? (cat[0].toUpperCase() + cat.slice(1)) : 'System');
+        }
+
         DigifinwizDB.init().then(function() {
             var session = typeof DigifinwizAuth !== 'undefined' ? DigifinwizAuth.getSession() : null;
             if (!session || !session.loggedIn) {
@@ -314,6 +343,10 @@
 
             return DigifinwizDB.getMessagesForUser(session.userId).then(function(messages) {
                 messages = messages || [];
+                // Newest first, regardless of the storage/insertion order the API returns.
+                messages.sort(function(a, b) {
+                    return new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime();
+                });
                 buildUI(messages, session);
             });
         }).catch(function(err) {
@@ -376,6 +409,7 @@
                     item.innerHTML =
                         '<div class="email-item-top">' +
                             (!isRead ? '<div class="email-unread-dot"></div>' : '<div style="width:8px;flex-shrink:0"></div>') +
+                            '<span class="email-item-category" title="' + esc(categoryLabel(m.category)) + '">' + categoryIcon(m.category) + '</span>' +
                             '<div class="email-item-sender">' + esc(m.senderName || 'Admin') + '</div>' +
                             '<div class="email-item-date">' + esc(formatDate(m.sentAt)) + '</div>' +
                         '</div>' +
@@ -414,6 +448,7 @@
                                 '<div class="email-reading-from-date">' + new Date(m.sentAt).toLocaleString() + '</div>' +
                             '</div>' +
                             '<div class="email-reading-actions">' +
+                                '<span class="email-category-badge" title="' + esc(categoryLabel(m.category)) + '">' + categoryIcon(m.category) + ' ' + esc(categoryLabel(m.category)) + '</span>' +
                                 '<span class="msg-type-badge ' + typeClass + '">' + typeLabel + '</span>' +
                                 (!isRead
                                     ? '<button class="btn btn-primary btn-sm" id="markReadBtn">Mark as Read</button>'

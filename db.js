@@ -441,6 +441,24 @@ const DigifinwizDB = (() => {
         return _api('DELETE', '/api/admin/messages/' + id);
     }
 
+    // Admin-only cross-module global activity views (real participant activity
+    // across all three standalone modules, not just the caller's own account)
+    function getAdminTransactions() {
+        return _api('GET', '/api/admin/transactions');
+    }
+
+    function getAdminPayments() {
+        return _api('GET', '/api/admin/payments');
+    }
+
+    function getAdminPurchases() {
+        return _api('GET', '/api/admin/purchases');
+    }
+
+    function getAdminDataOverview() {
+        return _api('GET', '/api/admin/data-overview');
+    }
+
     // ── Stats & activity ──────────────────────────────────────────────────────
     function getStats() {
         return _api('GET', '/api/me/stats');
@@ -690,6 +708,10 @@ const DigifinwizDB = (() => {
         sendSystemMessage,
         getAllSentMessages,
         deleteAdminMessage,
+        getAdminTransactions,
+        getAdminPayments,
+        getAdminPurchases,
+        getAdminDataOverview,
 
         // Stats & activity
         getStats,

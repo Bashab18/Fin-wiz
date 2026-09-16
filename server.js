@@ -425,7 +425,8 @@ const ALL_DEFAULT_CHALLENGES = [
     { title: 'Level Up!',           description: 'Reach level 2 by earning points through activities.',               category: 'general',   points: 40,  florins: 0,    condition: 'reach_level',       conditionValue: 2,     active: true },
     { title: 'Rising Star',         description: 'Reach level 5.',                                                    category: 'general',   points: 75,  florins: 0,    condition: 'reach_level',       conditionValue: 5,     active: true },
     { title: 'Financial Explorer',  description: 'Read the Information tab on your Profile page to learn about financial concepts.', category: 'general',   points: 30,  florins: 0,    condition: 'manual',            conditionValue: 0,     active: true },
-    { title: 'Profile Complete',    description: 'Fill in your profile name and username in the Profile page.',       category: 'general',   points: 25,  florins: 0,    condition: 'manual',            conditionValue: 0,     active: true }
+    { title: 'Profile Complete',    description: 'Fill in your profile name and username in the Profile page.',       category: 'general',   points: 25,  florins: 0,    condition: 'manual',            conditionValue: 0,     active: true },
+    { title: 'Video Learner',       description: 'Watch all 4 tutorial videos.',                                      category: 'general',   points: 30,  florins: 0,    condition: 'manual',            conditionValue: 0,     active: true }
 ];
 const LEVEL_1_REQUIRED_CONDITIONS = ['first_transfer', 'first_purchase', 'first_payment'];
 
@@ -972,6 +973,7 @@ app.post('/api/utilities/auth/login', async (req, res) => {
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 app.get('/api/users', async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const users = await readJSON(req.userStore);
     res.json(users.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
 });
@@ -991,7 +993,7 @@ app.get('/api/users/:id', async (req, res) => {
 // profile-level fields listed here — never role, status, balances, or
 // passwordHash. Admins may patch any field on any user (this is how the
 // admin panel edits userData/balances).
-const SELF_EDITABLE_USER_FIELDS = ['fullName', 'email', 'username', 'prefs', 'avatarDataUri'];
+const SELF_EDITABLE_USER_FIELDS = ['fullName', 'email', 'username', 'prefs', 'avatarDataUri', 'phone', 'address'];
 app.put('/api/users/:id', async (req, res) => {
     const id      = Number(req.params.id);
     const isAdmin = req.userRole === 'admin';
@@ -2518,7 +2520,14 @@ app.patch('/api/admin/challenges/:id', async (req, res) => {
     const target = all.find(c => c.id === id);
     if (!target) return res.status(404).json({ error: 'Challenge not found' });
     const { completed, completedAt, id: _ignoredId, userId: _ignoredUserId, ...templatePatch } = req.body || {};
-    const updated = all.map(c => c.title === target.title ? Object.assign({}, c, templatePatch) : c);
+    const perUserPatch = {};
+    if (completed !== undefined) perUserPatch.completed = completed;
+    if (completedAt !== undefined) perUserPatch.completedAt = completedAt;
+    const updated = all.map(c => {
+        if (c.id === id) return Object.assign({}, c, templatePatch, perUserPatch);
+        if (c.title === target.title) return Object.assign({}, c, templatePatch);
+        return c;
+    });
     await writeJSON(req.challengeStore, updated);
     res.json(updated.find(c => c.id === id));
 });
@@ -2616,6 +2625,64 @@ app.post('/api/admin/challenges/reseed', async (req, res) => {
 
     await writeJSON(req.challengeStore, challenges);
     res.json(added);
+});
+
+// ── Admin: cross-module global activity views ─────────────────────────────────
+// GET /api/me/transactions|payments|purchases resolve to whichever store the
+// CALLER's own account owns (via req.<x>Store, keyed off X-App) — since the
+// admin panel never sends X-App and the admin account itself rarely
+// transacts, those routes are useless for a global view. These routes read
+// each module's per-module store directly by its literal name instead, so
+// the admin panel can see real participant activity across all modules.
+function buildUserLookup(users) {
+    const lookup = {};
+    users.forEach(u => { lookup[u.id] = { username: u.username, fullName: u.fullName }; });
+    return lookup;
+}
+
+app.get('/api/admin/transactions', async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const [transactions, users] = await Promise.all([readJSON('bankingTransactions'), readJSON('bankingUsers')]);
+    const lookup = buildUserLookup(users);
+    const merged = transactions.map(t => Object.assign({}, t, lookup[t.userId] || {}));
+    merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    res.json(merged);
+});
+
+app.get('/api/admin/payments', async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const [payments, users] = await Promise.all([readJSON('utilitiesPayments'), readJSON('utilitiesUsers')]);
+    const lookup = buildUserLookup(users);
+    const merged = payments.map(p => Object.assign({}, p, lookup[p.userId] || {}));
+    merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    res.json(merged);
+});
+
+app.get('/api/admin/purchases', async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const [purchases, users] = await Promise.all([readJSON('ecommercePurchases'), readJSON('ecommerceUsers')]);
+    const lookup = buildUserLookup(users);
+    const merged = purchases.map(p => Object.assign({}, p, lookup[p.userId] || {}));
+    merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    res.json(merged);
+});
+
+// GET /api/admin/data-overview — real store names/counts for the admin
+// panel's "Database Info" section (previously hardcoded fake IndexedDB-era
+// metadata). Store-name list is built from MODULE_STORES/PER_USER_STORE_PROPS
+// programmatically so it can never drift out of sync with them.
+app.get('/api/admin/data-overview', async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const storeNames = new Set(Object.keys(PER_USER_STORE_PROPS));
+    Object.values(MODULE_STORES).forEach(mod => {
+        Object.values(mod).forEach(name => storeNames.add(name));
+    });
+    const counts = {};
+    for (const name of storeNames) {
+        const result = await readJSON(name);
+        counts[name] = Array.isArray(result) ? result.length : 0;
+    }
+    res.json({ backend: dbUsable ? 'postgres' : 'json-files', counts });
 });
 
 // ── Bills API ─────────────────────────────────────────────────────────────────

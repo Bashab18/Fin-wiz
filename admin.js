@@ -66,11 +66,12 @@ document.addEventListener('DOMContentLoaded', function () {
     function loadDashboard() {
         Promise.all([
             DigifinwizDB.getStats(),
-            DigifinwizDB.getTransactions(5),
+            DigifinwizDB.getAdminTransactions(),
             DigifinwizDB.getAllBalances(),
             DigifinwizDB.getRecentActivity(8),
             DigifinwizDB.getChallenges()
-        ]).then(([stats, recentTx, balances, activity, challenges]) => {
+        ]).then(([stats, allTx, balances, activity, challenges]) => {
+            const recentTx = allTx.slice(0, 5);
             const user = stats.user;
             setText('dash-level',          user ? user.level : 0);
             setText('dash-points',         user ? user.points.toLocaleString() : 0);
@@ -95,15 +96,16 @@ document.addEventListener('DOMContentLoaded', function () {
             setText('dash-challenges', activeChallenges);
             setText('dash-bills', stats.payCount);
 
-            // Recent tx table
+            // Recent tx table (cross-participant — see getAdminTransactions() above)
             const txBadge = document.getElementById('dash-tx-badge');
-            if (txBadge) txBadge.textContent = stats.txCount;
+            if (txBadge) txBadge.textContent = allTx.length;
             const txTable = document.getElementById('dash-tx-table');
             if (recentTx.length === 0) {
-                txTable.innerHTML = '<tr class="empty-row"><td colspan="3">No transactions yet</td></tr>';
+                txTable.innerHTML = '<tr class="empty-row"><td colspan="4">No transactions yet</td></tr>';
             } else {
                 txTable.innerHTML = recentTx.map(t =>
-                    '<tr><td>' + escHtml(t.recipient || '—') + '</td>' +
+                    '<tr><td>' + escHtml(t.fullName || t.username || '—') + '</td>' +
+                    '<td>' + escHtml(t.recipient || '—') + '</td>' +
                     '<td>ƒ' + Number(t.amount).toFixed(2) + '</td>' +
                     '<td>' + escHtml(t.date || '—') + '</td></tr>'
                 ).join('');
@@ -317,6 +319,10 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // ── TRANSACTIONS PAGE ────────────────────────────────────────────────────
+    // Cross-participant view: getAdminTransactions() merges every approved
+    // participant's real bank transfers (not just the logged-in admin's own,
+    // near-empty history), so each row also carries username/fullName —
+    // rendered here as a Participant column.
     let txTable;
     function loadTransactionsPage() {
         if (!txTable) {
@@ -324,11 +330,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 tableId: 'txMainTable', tbodyId: 'tx-table-body',
                 searchId: 'tx-search', infoId: 'tx-page-info',
                 prevId: 'tx-prev', nextId: 'tx-next',
-                searchFields: ['recipient', 'account', 'description', 'date'],
-                cols: 8,
+                searchFields: ['recipient', 'account', 'description', 'date', 'fullName', 'username'],
+                cols: 9,
                 rowFn: (t, i) =>
                     '<tr>' +
                     '<td style="color:var(--color-text-muted)">' + (i + 1) + '</td>' +
+                    '<td>' + escHtml(t.fullName || t.username || '—') + (t.username ? '<div style="font-size:var(--text-xs);color:var(--color-text-muted)">@' + escHtml(t.username) + '</div>' : '') + '</td>' +
                     '<td><span class="pill pill-blue">' + escHtml(t.type || 'transfer') + '</span></td>' +
                     '<td>' + escHtml(t.recipient || '—') + '</td>' +
                     '<td style="font-family:monospace;font-size:var(--text-xs)">' + escHtml(t.account || '—') + '</td>' +
@@ -339,7 +346,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     '</tr>'
             });
         }
-        DigifinwizDB.getTransactions(1000).then(list => {
+        DigifinwizDB.getAdminTransactions().then(list => {
             const badge = document.getElementById('tx-count-badge');
             if (badge) badge.textContent = list.length;
             txTable.load(list);
@@ -347,6 +354,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // ── PAYMENTS PAGE ────────────────────────────────────────────────────────
+    // Cross-participant view: getAdminPayments() merges every approved
+    // participant's real bill payments, each carrying username/fullName —
+    // rendered here as a Participant column.
     let payTable;
     function loadPaymentsPage() {
         if (!payTable) {
@@ -354,11 +364,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 tableId: 'payMainTable', tbodyId: 'pay-table-body',
                 searchId: 'pay-search', infoId: 'pay-page-info',
                 prevId: 'pay-prev', nextId: 'pay-next',
-                searchFields: ['type', 'accountNumber', 'date'],
-                cols: 6,
+                searchFields: ['type', 'accountNumber', 'date', 'fullName', 'username'],
+                cols: 7,
                 rowFn: (p, i) =>
                     '<tr>' +
                     '<td style="color:var(--color-text-muted)">' + (i + 1) + '</td>' +
+                    '<td>' + escHtml(p.fullName || p.username || '—') + (p.username ? '<div style="font-size:var(--text-xs);color:var(--color-text-muted)">@' + escHtml(p.username) + '</div>' : '') + '</td>' +
                     '<td><span class="pill pill-amber">' + escHtml(p.type || '—') + '</span></td>' +
                     '<td style="font-family:monospace;font-size:var(--text-xs)">' + escHtml(p.accountNumber || '—') + '</td>' +
                     '<td><strong>ƒ' + Number(p.amount || 0).toFixed(2) + '</strong></td>' +
@@ -367,7 +378,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     '</tr>'
             });
         }
-        DigifinwizDB.getPayments(1000).then(list => {
+        DigifinwizDB.getAdminPayments().then(list => {
             const badge = document.getElementById('pay-count-badge');
             if (badge) badge.textContent = list.length;
             payTable.load(list);
@@ -375,6 +386,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // ── PURCHASES PAGE ────────────────────────────────────────────────────────
+    // Cross-participant view: getAdminPurchases() merges every approved
+    // participant's real ecommerce orders, each carrying username/fullName —
+    // rendered here as a Participant column.
     let purchTable;
     function loadPurchasesPage() {
         if (!purchTable) {
@@ -382,12 +396,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 tableId: 'purchMainTable', tbodyId: 'purch-table-body',
                 searchId: 'purch-search', infoId: 'purch-page-info',
                 prevId: 'purch-prev', nextId: 'purch-next',
-                searchFields: ['date'],
-                cols: 5,
+                searchFields: ['date', 'fullName', 'username'],
+                cols: 6,
                 rowFn: (p, i) => {
                     const itemNames = p.items ? p.items.map(it => escHtml(it.name)).join(', ') : '—';
                     return '<tr>' +
                         '<td style="color:var(--color-text-muted)">' + (i + 1) + '</td>' +
+                        '<td>' + escHtml(p.fullName || p.username || '—') + (p.username ? '<div style="font-size:var(--text-xs);color:var(--color-text-muted)">@' + escHtml(p.username) + '</div>' : '') + '</td>' +
                         '<td>' + escHtml(p.date || '—') + '</td>' +
                         '<td style="font-size:var(--text-xs);color:var(--color-text-muted)">' + itemNames + '</td>' +
                         '<td><strong>ƒ' + Number(p.total || 0).toFixed(2) + '</strong></td>' +
@@ -396,7 +411,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             });
         }
-        DigifinwizDB.getPurchases(1000).then(list => {
+        DigifinwizDB.getAdminPurchases().then(list => {
             const badge = document.getElementById('purch-count-badge');
             if (badge) badge.textContent = list.length;
             purchTable.load(list);
@@ -1188,7 +1203,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const florEl = document.getElementById('chal-preview-florins');
         florEl.style.display = florins > 0 ? '' : 'none';
-        if (florins > 0) florEl.textContent = '-ƒ' + florins.toFixed(2);
+        if (florins > 0) florEl.textContent = '+ƒ' + florins.toFixed(2);
 
         const chalForSummary = {
             condition:       cond,
@@ -1660,22 +1675,34 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // ── SETTINGS PAGE ────────────────────────────────────────────────────────
+    // Database Info renders the app's real backend (JSON files or Postgres,
+    // via readJSON/writeJSON on the server) and its actual per-store record
+    // counts from getAdminDataOverview() — this used to hardcode fake
+    // IndexedDB-era metadata (DB name/version, object-store count, and
+    // keyPath/autoIncrement/index columns) that has no bearing on how this
+    // app actually stores data.
     function loadSettingsPage() {
         Promise.all([
-            DigifinwizDB.getUserData(),
-            DigifinwizDB.getTransactions(1000),
-            DigifinwizDB.getPayments(1000),
-            DigifinwizDB.getPurchases(1000),
             DigifinwizDB.getAllBalances(),
-            DigifinwizDB.getChallenges()
-        ]).then(([user, txs, pays, purchs, bals, challenges]) => {
-            const total = (user ? 1 : 0) + txs.length + pays.length + purchs.length + challenges.length;
-            setText('settings-record-count',         total);
-            setText('store-count-userData',          user ? 1 : 0);
-            setText('store-count-transactions',      txs.length);
-            setText('store-count-payments',          pays.length);
-            setText('store-count-purchaseHistory',   purchs.length);
-            setText('store-count-challenges',        challenges.length);
+            DigifinwizDB.getAdminDataOverview()
+        ]).then(([bals, overview]) => {
+            const counts     = (overview && overview.counts) || {};
+            const storeNames = Object.keys(counts).sort();
+            const total      = storeNames.reduce((sum, name) => sum + (counts[name] || 0), 0);
+
+            setText('settings-backend',     overview && overview.backend === 'postgres' ? 'PostgreSQL' : 'JSON Files');
+            setText('settings-store-count', storeNames.length);
+            setText('settings-record-count', total);
+
+            const tbody = document.getElementById('settings-store-table-body');
+            if (tbody) {
+                tbody.innerHTML = storeNames.length === 0
+                    ? '<tr class="empty-row"><td colspan="2">No stores found.</td></tr>'
+                    : storeNames.map(name =>
+                        '<tr><td><span class="pill pill-purple">' + escHtml(name) + '</span></td><td>' + (counts[name] || 0) + '</td></tr>'
+                    ).join('');
+            }
+
             const checking = bals.find(b => b.account === 'checking');
             const savings  = bals.find(b => b.account === 'savings');
             setText('settings-checking', checking ? 'ƒ' + checking.amount.toLocaleString('en-US', {minimumFractionDigits:2}) : '—');
