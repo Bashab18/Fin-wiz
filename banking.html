@@ -113,6 +113,7 @@
             <aside class="sidebar module-sidebar">
                 <nav class="sidebar-nav">
                     <a href="#" class="nav-item active" id="tab-btn-dashboard" onclick="switchPageTab('dashboard');return false;">Dashboard</a>
+                    <a href="#" class="nav-item" id="tab-btn-profile" onclick="switchPageTab('profile');return false;">Profile</a>
                     <a href="#" class="nav-item" id="tab-btn-banking" onclick="switchPageTab('banking');return false;">Transfer Money</a>
                     <a href="#" class="nav-item" id="tab-btn-scheduled" onclick="switchPageTab('scheduled');return false;">Scheduled Transfers</a>
                     <a href="#" class="nav-item" id="tab-btn-creditcard" onclick="switchPageTab('creditcard');return false;">Credit Card</a>
@@ -182,6 +183,52 @@
                     </div>
                 </div>
             </div><!-- /panel-dashboard -->
+
+            <!-- ═══════════════════════════════════════════════════════
+                 PROFILE TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel" id="panel-profile">
+                <div class="banking-section full-width">
+                    <h2>Profile Information</h2>
+                    <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1.25rem">Update your name, username, and email address.</p>
+                    <form id="profileForm">
+                        <div class="form-group">
+                            <label>Full Name</label>
+                            <input type="text" class="form-input" id="profileFullName" placeholder="Your full name" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Username</label>
+                            <input type="text" class="form-input" id="profileUsername" placeholder="Username" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" class="form-input" id="profileEmail" placeholder="you@example.com" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </form>
+                </div>
+
+                <div class="banking-section full-width" style="margin-top:1.5rem">
+                    <h2>Change Password</h2>
+                    <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1.25rem">Choose a strong password you don't use anywhere else.</p>
+                    <form id="profilePasswordForm">
+                        <div class="form-group">
+                            <label>Current Password</label>
+                            <input type="password" class="form-input" id="profileCurrentPassword" required>
+                        </div>
+                        <div class="form-group">
+                            <label>New Password</label>
+                            <input type="password" class="form-input" id="profileNewPassword" required>
+                            <div style="font-size:0.78rem;color:var(--color-gray-500);margin-top:0.3rem">At least 8 characters, with an uppercase letter, a lowercase letter, and a number.</div>
+                        </div>
+                        <div class="form-group">
+                            <label>Confirm New Password</label>
+                            <input type="password" class="form-input" id="profileConfirmPassword" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Update Password</button>
+                    </form>
+                </div>
+            </div><!-- /panel-profile -->
 
             <!-- ═══════════════════════════════════════════════════════
                  BANKING TAB
@@ -602,6 +649,7 @@
     // script focused on the original Banking tab.
     var PAGE_TAB_LOADERS = {
         dashboard:  'loadDashboardTab',
+        profile:    'loadProfileTab',
         scheduled:  'loadScheduledTab',
         creditcard: 'loadCreditCardTab',
         loans:      'loadLoansTab',
@@ -611,7 +659,7 @@
     };
 
     function switchPageTab(name) {
-        ['dashboard', 'banking', 'scheduled', 'creditcard', 'loans', 'goals', 'statements', 'alerts'].forEach(function(t) {
+        ['dashboard', 'profile', 'banking', 'scheduled', 'creditcard', 'loans', 'goals', 'statements', 'alerts'].forEach(function(t) {
             var panel = document.getElementById('panel-' + t);
             var btn   = document.getElementById('tab-btn-' + t);
             if (!panel || !btn) return;

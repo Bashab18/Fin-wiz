@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>InStyl - Profile</title>
+    <title>InStyl - Alerts</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="shopping-styles.css">
     <script src="config.js"></script>
@@ -52,7 +52,7 @@
             <aside class="shop-sidebar">
                 <nav class="shop-sidebar-nav">
                     <a href="shop-account.html" class="shop-nav-item">Account Summary</a>
-                    <a href="shop-profile.html" class="shop-nav-item active">Profile</a>
+                    <a href="shop-profile.html" class="shop-nav-item">Profile</a>
                     <a href="shop-change-password.html" class="shop-nav-item">Change Password</a>
                     <a href="shop-address-book.html" class="shop-nav-item">Address Book</a>
                     <a href="shop-order-history.html" class="shop-nav-item">Order History</a>
@@ -60,55 +60,34 @@
                     <a href="shop-wallet.html" class="shop-nav-item">Wallet</a>
                     <a href="shop-saved-items.html" class="shop-nav-item">Saved Items</a>
                     <a href="shop-cart.html" class="shop-nav-item">Cart</a>
-                    <a href="shop-alerts.html" class="shop-nav-item">Alerts</a>
+                    <a href="shop-alerts.html" class="shop-nav-item active">Alerts</a>
                     <a href="ecommerce.html" class="shop-nav-item back-link">&#8592; Back to Store</a>
                 </nav>
             </aside>
 
             <main class="shop-content-area">
-                <div class="shop-page-header"><h1>Profile</h1></div>
+                <div class="shop-page-header"><h1>Alerts</h1></div>
 
-                <form class="form-container" data-custom-submit>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="firstName">First Name</label>
-                            <input type="text" id="firstName" name="firstName" value="Andrew">
+                <div class="info-section">
+                    <p style="color:#64748b;font-size:0.875rem;margin:0 0 20px">Choose when InStyl should notify you. Alerts are delivered to your Messages inbox.</p>
+
+                    <form id="alertPrefsForm" style="max-width:600px;">
+                        <div class="alert-pref-row">
+                            <label class="autopay-switch"><input type="checkbox" id="alertLowBalEnabled"><span class="autopay-slider"></span></label>
+                            <div style="flex:1"><strong>Low Balance Alert</strong><div style="font-size:0.8rem;color:#64748b">Notify me when checking or savings drops to or below:</div></div>
+                            <div class="form-group" style="margin-bottom:0;width:140px"><input type="number" id="alertLowBalThreshold" min="0" step="0.01"></div>
                         </div>
-                        <div class="form-group">
-                            <label for="lastName">Last Name</label>
-                            <input type="text" id="lastName" name="lastName" value="Kroger">
+                        <div class="alert-pref-row">
+                            <label class="autopay-switch"><input type="checkbox" id="alertLargeTxEnabled"><span class="autopay-slider"></span></label>
+                            <div style="flex:1"><strong>Large Purchase Alert</strong><div style="font-size:0.8rem;color:#64748b">Notify me when any single order is at or above:</div></div>
+                            <div class="form-group" style="margin-bottom:0;width:140px"><input type="number" id="alertLargeTxThreshold" min="0" step="0.01"></div>
                         </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="email">Email</label>
-                            <input type="email" id="email" name="email" value="Andrewkroger@gmail.com">
+
+                        <div class="form-actions" style="margin-top:20px;">
+                            <button type="submit" class="btn btn-primary">Save Preferences</button>
                         </div>
-                        <div class="form-group">
-                            <label for="phone">Phone Number</label>
-                            <input type="tel" id="phone" name="phone" value="(123)-382-3393">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="birthdate">Date of Birth</label>
-                            <input type="date" id="birthdate" name="birthdate" value="1990-05-15">
-                        </div>
-                        <div class="form-group">
-                            <label for="gender">Gender</label>
-                            <select id="gender" name="gender">
-                                <option value="male">Male</option>
-                                <option value="female">Female</option>
-                                <option value="other">Other</option>
-                                <option value="prefer-not">Prefer not to say</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-actions">
-                        <button type="button" class="btn btn-secondary" onclick="window.history.back()">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Save Changes</button>
-                    </div>
-                </form>
+                    </form>
+                </div>
             </main>
         </div>
     </div>
@@ -118,47 +97,45 @@
     <script src="shopping-script.js"></script>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
-        if (typeof ShopBridge === 'undefined') return;
+        if (typeof DigifinwizDB === 'undefined') return;
 
-        // Load profile data into form fields
-        ShopBridge.getFullProfile().then(function(profile) {
-            var fullName = (profile.fullName || '').trim();
-            var parts = fullName ? fullName.split(' ') : [];
-            var fn = document.getElementById('firstName');
-            var ln = document.getElementById('lastName');
-            var em = document.getElementById('email');
-            var ph = document.getElementById('phone');
-            var bd = document.getElementById('birthdate');
-            var gd = document.getElementById('gender');
-            if (fn) fn.value = parts[0] || profile.username || '';
-            if (ln) ln.value = parts.slice(1).join(' ') || '';
-            if (em) em.value = profile.email || '';
-            if (ph) ph.value = profile.phone || '';
-            if (bd) bd.value = profile.birthdate || '';
-            if (gd && profile.gender) gd.value = profile.gender;
-        }).catch(function(){});
+        DigifinwizDB.getAlertPrefs().then(function(prefs) {
+            var lowEnabled   = document.getElementById('alertLowBalEnabled');
+            var lowThresh    = document.getElementById('alertLowBalThreshold');
+            var largeEnabled = document.getElementById('alertLargeTxEnabled');
+            var largeThresh  = document.getElementById('alertLargeTxThreshold');
+            if (lowEnabled)   lowEnabled.checked   = !!prefs.lowBalanceEnabled;
+            if (lowThresh)    lowThresh.value      = prefs.lowBalanceThreshold || '';
+            if (largeEnabled) largeEnabled.checked = !!prefs.largeTxEnabled;
+            if (largeThresh)  largeThresh.value    = prefs.largeTxThreshold || '';
+        }).catch(function(err) { console.error('loadAlertPrefs:', err); });
 
-        // Handle form submit — save to DB
-        var form = document.querySelector('form[data-custom-submit]');
-        if (form) form.addEventListener('submit', function(e) {
+        var alertForm = document.getElementById('alertPrefsForm');
+        if (!alertForm) return;
+        alertForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            var fn  = (document.getElementById('firstName').value || '').trim();
-            var ln  = (document.getElementById('lastName').value  || '').trim();
-            var em  = (document.getElementById('email').value     || '').trim();
-            var ph  = (document.getElementById('phone').value     || '').trim();
-            var bd  = document.getElementById('birthdate').value  || '';
-            var gd  = document.getElementById('gender').value     || '';
-            ShopBridge.saveProfile({
-                fullName: (fn + ' ' + ln).trim(),
-                email: em, phone: ph, birthdate: bd, gender: gd
-            }).then(function() {
-                var gp = window.gameProgress;
-                var p  = gp ? gp.addXP(25).then(function(){ return gp.addCoins(10); }) : Promise.resolve();
-                return p;
-            }).then(function() {
-                showShopToast('Profile saved! +25 XP, +10 Coins');
-            }).catch(function() {
-                showShopToast('Error saving profile.', true);
+            var lowBalanceEnabled   = document.getElementById('alertLowBalEnabled').checked;
+            var lowBalanceThreshold = parseFloat(document.getElementById('alertLowBalThreshold').value);
+            var largeTxEnabled      = document.getElementById('alertLargeTxEnabled').checked;
+            var largeTxThreshold    = parseFloat(document.getElementById('alertLargeTxThreshold').value);
+
+            if (lowBalanceEnabled && !(lowBalanceThreshold > 0)) {
+                return showShopToast('Enter a low-balance threshold above ƒ0, or turn the alert off.', true);
+            }
+            if (largeTxEnabled && !(largeTxThreshold > 0)) {
+                return showShopToast('Enter a large-purchase threshold above ƒ0, or turn the alert off.', true);
+            }
+
+            var prefs = {
+                lowBalanceEnabled:   lowBalanceEnabled,
+                lowBalanceThreshold: lowBalanceEnabled ? lowBalanceThreshold : 0,
+                largeTxEnabled:      largeTxEnabled,
+                largeTxThreshold:    largeTxEnabled ? largeTxThreshold : 0
+            };
+            DigifinwizDB.setAlertPrefs(prefs).then(function() {
+                showShopToast('Alert preferences saved!');
+            }).catch(function(err) {
+                showShopToast(err && err.message ? err.message : 'Could not save preferences.', true);
             });
         });
     });

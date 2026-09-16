@@ -548,7 +548,7 @@ function generateStatement() {
 function renderStatement(stmt) {
     var out = document.getElementById('stmtOutput');
     if (!out) return;
-    var session    = (typeof DigifinwizAuth !== 'undefined' && DigifinwizAuth.getSession) ? DigifinwizAuth.getSession() : null;
+    var session    = (typeof DigifinwizModuleAuth !== 'undefined' && DigifinwizModuleAuth.getSession) ? DigifinwizModuleAuth.getSession() : null;
     var monthLabel = new Date(stmt.month + '-01T00:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     var rows = stmt.events.map(function(e) {
         return '<tr>' +
@@ -625,6 +625,68 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
+   PROFILE
+   ══════════════════════════════════════════════════════════════════════════ */
+function loadProfileTab() {
+    if (typeof DigifinwizDB === 'undefined') return;
+    DigifinwizDB.getProfileData().then(function(profile) {
+        var fullNameEl = document.getElementById('profileFullName');
+        var usernameEl = document.getElementById('profileUsername');
+        var emailEl    = document.getElementById('profileEmail');
+        if (fullNameEl) fullNameEl.value = profile.fullName || '';
+        if (usernameEl) usernameEl.value = profile.username || '';
+        if (emailEl)    emailEl.value    = profile.email    || '';
+    }).catch(function(err) { console.error('loadProfileTab:', err); });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    var profileForm = document.getElementById('profileForm');
+    if (profileForm) profileForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var fullName = document.getElementById('profileFullName').value.trim();
+        var username = document.getElementById('profileUsername').value.trim();
+        var email    = document.getElementById('profileEmail').value.trim();
+        if (!fullName) { showNotification('Enter your full name.', 'error'); return; }
+        if (!username) { showNotification('Enter a username.', 'error'); return; }
+        if (!email)    { showNotification('Enter an email address.', 'error'); return; }
+        withBankingActionLock(function() {
+            return DigifinwizDB.setProfileData({ fullName: fullName, username: username, email: email }).then(function() {
+                // Keep the module session (used for the dashboard greeting and
+                // statement account-holder line) in sync with the saved name.
+                if (typeof DigifinwizModuleAuth !== 'undefined' && DigifinwizModuleAuth.updateSession) {
+                    DigifinwizModuleAuth.updateSession({ fullName: fullName, username: username });
+                }
+                showNotification('Profile updated!', 'success');
+                if (typeof loadDashboardTab === 'function') loadDashboardTab();
+            }).catch(function(err) {
+                showNotification(err && err.message ? err.message : 'Could not save profile.', 'error');
+            });
+        });
+    });
+
+    var passwordForm = document.getElementById('profilePasswordForm');
+    if (passwordForm) passwordForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var current = document.getElementById('profileCurrentPassword').value;
+        var newPwd  = document.getElementById('profileNewPassword').value;
+        var confirm = document.getElementById('profileConfirmPassword').value;
+        if (newPwd.length < 8)     { showNotification('Password must be at least 8 characters.', 'error'); return; }
+        if (!/[A-Z]/.test(newPwd)) { showNotification('Must contain an uppercase letter.', 'error'); return; }
+        if (!/[a-z]/.test(newPwd)) { showNotification('Must contain a lowercase letter.', 'error'); return; }
+        if (!/[0-9]/.test(newPwd)) { showNotification('Must contain a number.', 'error'); return; }
+        if (newPwd !== confirm)    { showNotification('New passwords do not match.', 'error'); return; }
+        withBankingActionLock(function() {
+            return DigifinwizDB.changePassword(current, newPwd).then(function() {
+                passwordForm.reset();
+                showNotification('Password updated successfully!', 'success');
+            }).catch(function(err) {
+                showNotification(err && err.message === 'Current password is incorrect' ? 'Current password is incorrect.' : (err && err.message ? err.message : 'Could not update password.'), 'error');
+            });
+        });
+    });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
    ACCOUNT / ROUTING NUMBERS (cosmetic realism — deterministic per user, not
    stored server-side; DigiFinWiz is a simulation, there is no real bank)
    ══════════════════════════════════════════════════════════════════════════ */
@@ -649,7 +711,7 @@ var BANK_BRANCHES = [
    ══════════════════════════════════════════════════════════════════════════ */
 function loadDashboardTab() {
     if (typeof DigifinwizDB === 'undefined') return;
-    var session = (typeof DigifinwizAuth !== 'undefined' && DigifinwizAuth.getSession) ? DigifinwizAuth.getSession() : null;
+    var session = (typeof DigifinwizModuleAuth !== 'undefined' && DigifinwizModuleAuth.getSession) ? DigifinwizModuleAuth.getSession() : null;
 
     Promise.all([
         DigifinwizDB.getAllBalances(),

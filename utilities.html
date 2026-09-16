@@ -35,7 +35,7 @@
 
             <div class="shop-header-right">
                 <div class="shop-icons">
-                    <button class="shop-icon-btn home" onclick="switchUtilPageTab('bills');return false;" title="My Progress">
+                    <button class="shop-icon-btn home" onclick="switchUtilPageTab('dashboard');return false;" title="My Progress">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
                     </button>
                     <button class="shop-icon-btn bookmark" onclick="switchUtilPageTab('history')" title="Payment History">
@@ -140,16 +140,72 @@
                 </div>
             </div>
 
-            <!-- ── Page Tab Navigation ─────────────────────────────── -->
-            <div class="page-tabs">
-                <button class="page-tab-btn active" id="tab-btn-bills"   onclick="switchUtilPageTab('bills')">Bills</button>
-                <button class="page-tab-btn"         id="tab-btn-history" onclick="switchUtilPageTab('history')">History</button>
-            </div>
+            <!-- ── Account navigation + content, like a real bill-pay
+                 portal's left section rail instead of an app-style pill
+                 tab bar ──────────────────────────────────────────────── -->
+            <div class="module-layout">
+            <aside class="sidebar module-sidebar">
+                <nav class="sidebar-nav">
+                    <a href="#" class="nav-item active" id="tab-btn-dashboard" onclick="switchUtilPageTab('dashboard');return false;">Dashboard</a>
+                    <a href="#" class="nav-item" id="tab-btn-bills" onclick="switchUtilPageTab('bills');return false;">Bills</a>
+                    <a href="#" class="nav-item" id="tab-btn-autopay" onclick="switchUtilPageTab('autopay');return false;">Auto-Pay</a>
+                    <a href="#" class="nav-item" id="tab-btn-history" onclick="switchUtilPageTab('history');return false;">History</a>
+                    <a href="#" class="nav-item" id="tab-btn-profile" onclick="switchUtilPageTab('profile');return false;">Profile</a>
+                    <a href="#" class="nav-item" id="tab-btn-alerts" onclick="switchUtilPageTab('alerts');return false;">Alerts</a>
+                </nav>
+            </aside>
+
+            <div class="module-content">
+            <!-- ═══════════════════════════════════════════════════════
+                 DASHBOARD TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel active" id="panel-dashboard">
+                <div class="banking-section full-width" id="utilDashGreeting"></div>
+
+                <div class="dash-grid" style="display:grid;grid-template-columns:2fr 1fr;gap:1.5rem;margin-top:1.5rem">
+                    <div>
+                        <div class="banking-section full-width">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+                                <h2 style="margin:0">Upcoming &amp; Overdue Bills</h2>
+                                <a href="#" onclick="switchUtilPageTab('bills');return false;" style="font-size:0.8rem;color:var(--color-primary-500);text-decoration:none;font-weight:600">View all bills →</a>
+                            </div>
+                            <div id="dashUpcomingBills"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">Loading…</p></div>
+                        </div>
+
+                        <div class="banking-section full-width" style="margin-top:1.5rem">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+                                <h2 style="margin:0">Recent Payments</h2>
+                                <a href="#" onclick="switchUtilPageTab('history');return false;" style="font-size:0.8rem;color:var(--color-primary-500);text-decoration:none;font-weight:600">View history →</a>
+                            </div>
+                            <div id="dashRecentPayments" class="transactions-list"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">Loading…</p></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="banking-section full-width">
+                            <h2 style="margin:0 0 0.75rem">Quick Actions</h2>
+                            <div style="display:flex;flex-direction:column;gap:0.5rem">
+                                <a href="#" onclick="switchUtilPageTab('bills');return false;" class="btn btn-block" style="text-align:left">Pay a Bill</a>
+                                <a href="#" onclick="switchUtilPageTab('autopay');return false;" class="btn btn-block" style="text-align:left">Manage Auto-Pay</a>
+                                <a href="#" onclick="switchUtilPageTab('history');return false;" class="btn btn-block" style="text-align:left">View Payment History</a>
+                            </div>
+                        </div>
+
+                        <div class="banking-section full-width" style="margin-top:1.5rem">
+                            <h2 style="margin:0 0 0.75rem">Support</h2>
+                            <div style="font-size:0.85rem;color:var(--color-gray-600);line-height:1.6">
+                                <p style="margin:0 0 0.5rem">Need help with a bill or payment?</p>
+                                <p style="margin:0">1-800-555-0173 &nbsp;•&nbsp; support@digipay.bill<br>Mon–Fri, 8am–8pm</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div><!-- /panel-dashboard -->
 
             <!-- ═══════════════════════════════════════════════════════
                  BILLS TAB
             ═══════════════════════════════════════════════════════ -->
-            <div class="page-tab-panel active" id="panel-bills">
+            <div class="page-tab-panel" id="panel-bills">
 
                 <!-- Challenge Tracker -->
                 <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:1.25rem;margin-bottom:1.5rem">
@@ -188,6 +244,17 @@
             </div><!-- /panel-bills -->
 
             <!-- ═══════════════════════════════════════════════════════
+                 AUTO-PAY TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel" id="panel-autopay">
+                <div class="banking-section full-width">
+                    <h2>Auto-Pay</h2>
+                    <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1.25rem">Turn on auto-pay for a bill and DigiPay will pay it automatically as soon as it's due, using your checking or savings balance — so it's never late and you never owe a late fee. This is the same setting as the auto-pay toggle on each bill's card in the Bills tab; switching it here or there keeps both in sync.</p>
+                    <div id="autopayList" class="transactions-list"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">Loading…</p></div>
+                </div>
+            </div><!-- /panel-autopay -->
+
+            <!-- ═══════════════════════════════════════════════════════
                  HISTORY TAB
             ═══════════════════════════════════════════════════════ -->
             <div class="page-tab-panel" id="panel-history">
@@ -217,6 +284,77 @@
                 </div>
             </div><!-- /panel-history -->
 
+            <!-- ═══════════════════════════════════════════════════════
+                 PROFILE TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel" id="panel-profile">
+                <div class="banking-section full-width">
+                    <h2>Profile Information</h2>
+                    <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1.25rem">Update your name, username, and email address.</p>
+                    <form id="profileForm">
+                        <div class="form-group">
+                            <label>Full Name</label>
+                            <input type="text" class="form-input" id="profileFullName" placeholder="Your full name" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Username</label>
+                            <input type="text" class="form-input" id="profileUsername" placeholder="Username" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" class="form-input" id="profileEmail" placeholder="you@example.com" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </form>
+                </div>
+
+                <div class="banking-section full-width" style="margin-top:1.5rem">
+                    <h2>Change Password</h2>
+                    <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1.25rem">Choose a strong password you don't use anywhere else.</p>
+                    <form id="profilePasswordForm">
+                        <div class="form-group">
+                            <label>Current Password</label>
+                            <input type="password" class="form-input" id="profileCurrentPassword" required>
+                        </div>
+                        <div class="form-group">
+                            <label>New Password</label>
+                            <input type="password" class="form-input" id="profileNewPassword" required>
+                            <div style="font-size:0.78rem;color:var(--color-gray-500);margin-top:0.3rem">At least 8 characters, with an uppercase letter, a lowercase letter, and a number.</div>
+                        </div>
+                        <div class="form-group">
+                            <label>Confirm New Password</label>
+                            <input type="password" class="form-input" id="profileConfirmPassword" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Update Password</button>
+                    </form>
+                </div>
+            </div><!-- /panel-profile -->
+
+            <!-- ═══════════════════════════════════════════════════════
+                 ALERTS TAB
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel" id="panel-alerts">
+                <div class="banking-section full-width">
+                    <h2>Alert Preferences</h2>
+                    <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1.25rem">Alerts are delivered to your Messages inbox.</p>
+                    <form id="alertPrefsForm">
+                        <div class="alert-pref-row">
+                            <label class="autopay-switch"><input type="checkbox" id="alertLowBalEnabled"><span class="autopay-slider"></span></label>
+                            <div style="flex:1"><strong>Low Balance Alert</strong><div style="font-size:0.8rem;color:var(--color-gray-500)">Notify me when checking or savings drops to or below:</div></div>
+                            <div class="form-group" style="margin-bottom:0;width:140px"><input type="number" class="form-input" id="alertLowBalThreshold" min="0" step="0.01"></div>
+                        </div>
+                        <div class="alert-pref-row">
+                            <label class="autopay-switch"><input type="checkbox" id="alertLargeTxEnabled"><span class="autopay-slider"></span></label>
+                            <div style="flex:1"><strong>Large Bill Payment Alert</strong><div style="font-size:0.8rem;color:var(--color-gray-500)">Notify me when any single bill payment is at or above:</div></div>
+                            <div class="form-group" style="margin-bottom:0;width:140px"><input type="number" class="form-input" id="alertLargeTxThreshold" min="0" step="0.01"></div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="margin-top:1rem">Save Preferences</button>
+                    </form>
+                </div>
+            </div><!-- /panel-alerts -->
+            </div><!-- /module-content -->
+            </div><!-- /module-layout -->
+
         </main>
     </div>
 
@@ -228,8 +366,21 @@
     <script src="utilities.js"></script>
     <script>
     /* ── Tab switching ──────────────────────────────────────────────── */
+    // Each new tab lazy-loads (and refreshes on every visit) via a loader
+    // function named below — keeps Bills/History's own logic (already
+    // wired to run on DOMContentLoaded) untouched while the new tabs
+    // (Dashboard/Auto-Pay/Profile/Alerts) always show fresh data.
+    var UTIL_PAGE_TAB_LOADERS = {
+        dashboard: 'loadDashboardTab',
+        bills:     'loadBills',
+        autopay:   'loadAutopayTab',
+        history:   'updatePaymentHistory',
+        profile:   'loadProfileTab',
+        alerts:    'loadAlertsTab'
+    };
+
     function switchUtilPageTab(name) {
-        ['bills','history'].forEach(function(t) {
+        ['dashboard','bills','autopay','history','profile','alerts'].forEach(function(t) {
             var panel = document.getElementById('panel-' + t);
             var btn   = document.getElementById('tab-btn-' + t);
             if (!panel || !btn) return;
@@ -238,6 +389,8 @@
             btn.classList.toggle('active', active);
         });
         sessionStorage.setItem('util_page_tab', name);
+        var loaderName = UTIL_PAGE_TAB_LOADERS[name];
+        if (loaderName && typeof window[loaderName] === 'function') window[loaderName]();
     }
 
     // Legacy alias used by older inline onclick on history tab button (no-op, kept for safety)
@@ -549,20 +702,75 @@
     // auto-charges any due bill with this enabled) rather than localStorage,
     // which never actually paid anything — the toggle used to claim a
     // savings benefit it didn't deliver.
-    function toggleAutopay(id, billDefKey, billName) {
-        var toggle = document.getElementById('autopay-' + id);
-        var enabled = toggle ? toggle.checked : false;
-        DigifinwizDB.setAutopayPref(billDefKey, enabled).then(function() {
+    // The same preference is exposed from two places — the per-card switch
+    // on the Bills tab, and the consolidated list on the Auto-Pay tab — so
+    // both toggle functions below funnel through this one save+refresh
+    // routine to keep them in sync no matter which one was flipped.
+    function setAutopayAndSync(enabled, billDefKey, billName, revertFn) {
+        return DigifinwizDB.setAutopayPref(billDefKey, enabled).then(function() {
             if (enabled) {
                 showNotification('Auto-pay enabled for ' + billName, 'success');
             } else {
                 showNotification('Auto-pay disabled for ' + billName, 'info');
             }
             loadBills();
+            if (typeof loadAutopayTab === 'function') loadAutopayTab();
         }).catch(function(err) {
-            if (toggle) toggle.checked = !enabled;
+            if (revertFn) revertFn();
             showNotification(err && err.message ? err.message : 'Could not update auto-pay.', 'error');
         });
+    }
+
+    function toggleAutopay(id, billDefKey, billName) {
+        var toggle = document.getElementById('autopay-' + id);
+        var enabled = toggle ? toggle.checked : false;
+        setAutopayAndSync(enabled, billDefKey, billName, function() { if (toggle) toggle.checked = !enabled; });
+    }
+
+    // Same preference, toggled from the consolidated Auto-Pay tab's list
+    // instead of a bill's own card — see setAutopayAndSync above.
+    function toggleAutopayPanel(id, billDefKey, billName) {
+        var toggle = document.getElementById('autopay-panel-' + id);
+        var enabled = toggle ? toggle.checked : false;
+        setAutopayAndSync(enabled, billDefKey, billName, function() { if (toggle) toggle.checked = !enabled; });
+    }
+
+    /* ── Auto-Pay tab: consolidated list of every bill's auto-pay switch ── */
+    function renderAutopayList(bills, autopayPrefs) {
+        var el = document.getElementById('autopayList');
+        if (!el) return;
+        if (!bills || bills.length === 0) {
+            el.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem;text-align:center">No bills yet — add one from the Bills tab!</p>';
+            return;
+        }
+        el.innerHTML = bills.map(function(b) {
+            var isOn = !!autopayPrefs[b.billDefKey];
+            return '<div class="transaction-item">' +
+                '<div style="width:40px;height:40px;border-radius:50%;background:var(--color-gray-100);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">' + escHU(b.icon || '🧾') + '</div>' +
+                '<div class="transaction-details" style="flex:1;min-width:0">' +
+                    '<div style="font-weight:600;font-size:0.875rem">' + escHU(b.name) + '</div>' +
+                    '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">' + (isOn ? 'Auto-pay is on' : 'Auto-pay is off') + '</div>' +
+                '</div>' +
+                '<label class="autopay-switch">' +
+                    '<input type="checkbox" id="autopay-panel-' + b.id + '" ' + (isOn ? 'checked' : '') +
+                        " onchange='toggleAutopayPanel(" + b.id + ',' + jsAttr(b.billDefKey) + ',' + jsAttr(b.name) + ")'>" +
+                    '<span class="autopay-slider"></span>' +
+                '</label>' +
+                '</div>';
+        }).join('');
+    }
+
+    function loadAutopayTab() {
+        if (typeof DigifinwizDB === 'undefined') return;
+        Promise.all([
+            DigifinwizDB.getMyBills(),
+            DigifinwizDB.getAutopayPrefs()
+        ]).then(function(results) {
+            var bills = results[0];
+            var prefs = {};
+            results[1].forEach(function(p) { prefs[p.billDefKey] = p.enabled; });
+            renderAutopayList(bills, prefs);
+        }).catch(function(err) { console.error('loadAutopayTab:', err); });
     }
 
     /* ── Bill type breakdown chart ─────────────────────────────────────── */
@@ -771,17 +979,214 @@
         }).catch(function(){});
     }
 
+    /* ══════════════════════════════════════════════════════════════════
+       DASHBOARD
+       ══════════════════════════════════════════════════════════════════ */
+    function renderDashGreeting() {
+        var el = document.getElementById('utilDashGreeting');
+        if (!el) return;
+        var session = (typeof DigifinwizModuleAuth !== 'undefined' && DigifinwizModuleAuth.getSession) ? DigifinwizModuleAuth.getSession() : null;
+        var greeting = session ? ('Welcome back, ' + escHU(session.fullName || session.username) + '.') : 'Welcome back.';
+        el.innerHTML =
+            '<h2 style="margin:0 0 0.25rem">' + greeting + '</h2>' +
+            '<p style="color:var(--color-gray-500);font-size:0.85rem;margin:0">Here\'s your bill-pay overview.</p>';
+    }
+
+    function renderDashUpcomingBills(bills) {
+        var el = document.getElementById('dashUpcomingBills');
+        if (!el) return;
+        var unpaid = (bills || []).filter(function(b) { return b.status !== 'paid'; })
+            .sort(function(a, b) { return (a.dueDate || 0) - (b.dueDate || 0); })
+            .slice(0, 5);
+        if (unpaid.length === 0) {
+            el.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem;text-align:center">No upcoming bills — you\'re all caught up!</p>';
+            return;
+        }
+        el.innerHTML = unpaid.map(function(b) {
+            var due = new Date(b.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            var badge = b.overdue
+                ? '<span style="color:#dc2626;font-weight:600">⚠ Overdue ' + b.daysOverdue + 'd</span>'
+                : (b.daysUntilDue <= 3 ? '<span style="color:#d97706;font-weight:600">Due in ' + b.daysUntilDue + 'd</span>' : '<span style="color:var(--color-gray-400)">Due ' + due + '</span>');
+            return '<div class="transaction-item">' +
+                '<div style="width:40px;height:40px;border-radius:50%;background:var(--color-gray-100);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">' + escHU(b.icon || '🧾') + '</div>' +
+                '<div class="transaction-details" style="flex:1;min-width:0">' +
+                    '<div style="font-weight:600;font-size:0.875rem">' + escHU(b.name) + '</div>' +
+                    '<div style="font-size:0.72rem;margin-top:0.1rem">' + badge + '</div>' +
+                '</div>' +
+                '<div class="transaction-amount">ƒ' + Number(b.totalDue != null ? b.totalDue : b.amount).toFixed(2) + '</div>' +
+                '</div>';
+        }).join('');
+    }
+
+    function renderDashRecentPayments(payments) {
+        var el = document.getElementById('dashRecentPayments');
+        if (!el) return;
+        if (!payments || payments.length === 0) {
+            el.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem;text-align:center">No payments yet — pay a bill to get started!</p>';
+            return;
+        }
+        el.innerHTML = payments.map(function(p) {
+            var icon = BILL_ICONS_PAGE[p.type] || '🧾';
+            return '<div class="transaction-item">' +
+                '<div style="width:40px;height:40px;border-radius:50%;background:var(--color-gray-100);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">' + icon + '</div>' +
+                '<div class="transaction-details" style="flex:1;min-width:0">' +
+                    '<div style="font-weight:600;font-size:0.875rem">' + escHU(p.type) + ' Bill Paid</div>' +
+                    '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">' + escHU(p.date || '') + '</div>' +
+                '</div>' +
+                '<div class="transaction-amount">ƒ' + Number(p.amount || 0).toFixed(2) + '</div>' +
+                '</div>';
+        }).join('');
+    }
+
+    function loadDashboardTab() {
+        if (typeof DigifinwizDB === 'undefined') return;
+        renderDashGreeting();
+        Promise.all([
+            DigifinwizDB.getMyBills(),
+            DigifinwizDB.getPayments(5)
+        ]).then(function(results) {
+            renderDashUpcomingBills(results[0]);
+            renderDashRecentPayments(results[1]);
+        }).catch(function(err) { console.error('loadDashboardTab:', err); });
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       PROFILE
+       ══════════════════════════════════════════════════════════════════ */
+    function loadProfileTab() {
+        if (typeof DigifinwizDB === 'undefined') return;
+        DigifinwizDB.getProfileData().then(function(profile) {
+            var fullNameEl = document.getElementById('profileFullName');
+            var usernameEl = document.getElementById('profileUsername');
+            var emailEl    = document.getElementById('profileEmail');
+            if (fullNameEl) fullNameEl.value = profile.fullName || '';
+            if (usernameEl) usernameEl.value = profile.username || '';
+            if (emailEl)    emailEl.value    = profile.email    || '';
+        }).catch(function(err) { console.error('loadProfileTab:', err); });
+    }
+
+    // Guards the Profile forms against a double-click/fast-resubmit while
+    // the previous request is still in flight, same purpose as
+    // customBillSaveInFlight above.
+    var profileActionInFlight = false;
+    function withProfileActionLock(fn) {
+        if (profileActionInFlight) {
+            showNotification('Please wait for the previous action to finish.', 'error');
+            return;
+        }
+        profileActionInFlight = true;
+        var result = fn();
+        Promise.resolve(result).then(function() { profileActionInFlight = false; }, function() { profileActionInFlight = false; });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var profileForm = document.getElementById('profileForm');
+        if (profileForm) profileForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var fullName = document.getElementById('profileFullName').value.trim();
+            var username = document.getElementById('profileUsername').value.trim();
+            var email    = document.getElementById('profileEmail').value.trim();
+            if (!fullName) { showNotification('Enter your full name.', 'error'); return; }
+            if (!username) { showNotification('Enter a username.', 'error'); return; }
+            if (!email)    { showNotification('Enter an email address.', 'error'); return; }
+            withProfileActionLock(function() {
+                return DigifinwizDB.setProfileData({ fullName: fullName, username: username, email: email }).then(function() {
+                    // Keep the module session (used for the dashboard greeting)
+                    // in sync with the saved name.
+                    if (typeof DigifinwizModuleAuth !== 'undefined' && DigifinwizModuleAuth.updateSession) {
+                        DigifinwizModuleAuth.updateSession({ fullName: fullName, username: username });
+                    }
+                    showNotification('Profile updated!', 'success');
+                    if (typeof loadDashboardTab === 'function') loadDashboardTab();
+                }).catch(function(err) {
+                    showNotification(err && err.message ? err.message : 'Could not save profile.', 'error');
+                });
+            });
+        });
+
+        var passwordForm = document.getElementById('profilePasswordForm');
+        if (passwordForm) passwordForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var current = document.getElementById('profileCurrentPassword').value;
+            var newPwd  = document.getElementById('profileNewPassword').value;
+            var confirm = document.getElementById('profileConfirmPassword').value;
+            if (newPwd.length < 8)     { showNotification('Password must be at least 8 characters.', 'error'); return; }
+            if (!/[A-Z]/.test(newPwd)) { showNotification('Must contain an uppercase letter.', 'error'); return; }
+            if (!/[a-z]/.test(newPwd)) { showNotification('Must contain a lowercase letter.', 'error'); return; }
+            if (!/[0-9]/.test(newPwd)) { showNotification('Must contain a number.', 'error'); return; }
+            if (newPwd !== confirm)    { showNotification('New passwords do not match.', 'error'); return; }
+            withProfileActionLock(function() {
+                return DigifinwizDB.changePassword(current, newPwd).then(function() {
+                    passwordForm.reset();
+                    showNotification('Password updated successfully!', 'success');
+                }).catch(function(err) {
+                    showNotification(err && err.message === 'Current password is incorrect' ? 'Current password is incorrect.' : (err && err.message ? err.message : 'Could not update password.'), 'error');
+                });
+            });
+        });
+    });
+
+    /* ══════════════════════════════════════════════════════════════════
+       ALERT PREFERENCES
+       ══════════════════════════════════════════════════════════════════ */
+    function loadAlertsTab() {
+        if (typeof DigifinwizDB === 'undefined') return;
+        DigifinwizDB.getAlertPrefs().then(function(prefs) {
+            var lowEnabled   = document.getElementById('alertLowBalEnabled');
+            var lowThresh    = document.getElementById('alertLowBalThreshold');
+            var largeEnabled = document.getElementById('alertLargeTxEnabled');
+            var largeThresh  = document.getElementById('alertLargeTxThreshold');
+            if (lowEnabled)   lowEnabled.checked   = !!prefs.lowBalanceEnabled;
+            if (lowThresh)    lowThresh.value      = prefs.lowBalanceThreshold;
+            if (largeEnabled) largeEnabled.checked = !!prefs.largeTxEnabled;
+            if (largeThresh)  largeThresh.value    = prefs.largeTxThreshold;
+        }).catch(function(err) { console.error('loadAlertsTab:', err); });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var alertForm = document.getElementById('alertPrefsForm');
+        if (alertForm) alertForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var lowBalanceEnabled   = document.getElementById('alertLowBalEnabled').checked;
+            var lowBalanceThreshold = parseFloat(document.getElementById('alertLowBalThreshold').value);
+            var largeTxEnabled      = document.getElementById('alertLargeTxEnabled').checked;
+            var largeTxThreshold    = parseFloat(document.getElementById('alertLargeTxThreshold').value);
+            // A blank/zero threshold on an enabled alert isn't "no threshold" —
+            // for large-payment alerts it means every single payment
+            // qualifies (amount >= 0), spamming the inbox on every bill.
+            if (lowBalanceEnabled && !(lowBalanceThreshold > 0)) {
+                showNotification('Enter a low-balance threshold above ƒ0, or turn the alert off.', 'error'); return;
+            }
+            if (largeTxEnabled && !(largeTxThreshold > 0)) {
+                showNotification('Enter a large-bill-payment threshold above ƒ0, or turn the alert off.', 'error'); return;
+            }
+            var prefs = {
+                lowBalanceEnabled:   lowBalanceEnabled,
+                lowBalanceThreshold: lowBalanceEnabled ? lowBalanceThreshold : 0,
+                largeTxEnabled:      largeTxEnabled,
+                largeTxThreshold:    largeTxEnabled ? largeTxThreshold : 0
+            };
+            DigifinwizDB.setAlertPrefs(prefs).then(function() {
+                showNotification('Alert preferences saved!', 'success');
+            }).catch(function(err) {
+                showNotification(err && err.message ? err.message : 'Could not save preferences.', 'error');
+            });
+        });
+    });
+
     function refreshUtilPage() {
         loadUtilityChallenges();
         loadUtilStats();
+        if (typeof loadDashboardTab === 'function') loadDashboardTab();
+        if (typeof loadAutopayTab === 'function') loadAutopayTab();
     }
 
     document.addEventListener('DOMContentLoaded', function() {
         DigifinwizDB.init().then(function() {
             loadBills();
             refreshUtilPage();
-            // Restore last active tab (default: bills)
-            switchUtilPageTab(sessionStorage.getItem('util_page_tab') || 'bills');
+            // Restore last active tab (default: dashboard)
+            switchUtilPageTab(sessionStorage.getItem('util_page_tab') || 'dashboard');
         });
         // Populate DigiPay game progress bar
         DigifinwizDB.getUserData().then(function(userData) {
