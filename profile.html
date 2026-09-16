@@ -211,7 +211,7 @@
                     <p class="info-desc">Here is your address, you will use this address for any input field that requires you to type a residential address</p>
                     <div class="address-box">
                         <span class="location-icon">&#128205;</span>
-                        <strong>357 Peony Drive, Champaign IL, 23567, USA</strong>
+                        <strong id="infoAddressText">Loading your address...</strong>
                     </div>
                 </section>
 
@@ -253,20 +253,11 @@
                 </section>
 
                 <section class="info-section">
-                    <h2>Electricity bill</h2>
-                    <p class="info-desc">This is the information you need to pay your electricity bills</p>
+                    <h2>Your bills &#128179;</h2>
+                    <p class="info-desc">This is the information you need to pay your bills (in Utilities). This includes your default bills as well as any custom bills you have added.</p>
                     <table class="info-table">
-                        <thead><tr><th>Account Number</th><th>Account Name</th><th>Service/Address</th></tr></thead>
-                        <tbody><tr><td>1234560</td><td id="infoAccountName">&#8212;</td><td>357 Peony Drive, Champaign, IL</td></tr></tbody>
-                    </table>
-                </section>
-
-                <section class="info-section">
-                    <h2>Property tax</h2>
-                    <p class="info-desc">This is the information you need to pay your property taxes</p>
-                    <table class="info-table">
-                        <thead><tr><th>Account Number</th><th>Account Name</th><th>Service/Address</th></tr></thead>
-                        <tbody><tr><td>1234560</td><td id="infoAccountName2">&#8212;</td><td>357 Peony Drive, Champaign, IL</td></tr></tbody>
+                        <thead><tr><th>Account Number</th><th>Bill</th><th>Due Date</th></tr></thead>
+                        <tbody id="infoBillsBody"><tr><td colspan="3">Loading bills...</td></tr></tbody>
                     </table>
                 </section>
 
@@ -312,7 +303,7 @@
                         </div>
                         <div class="account-balance" id="balSavings">&#402;&#8212;</div>
                         <div class="account-info-row"><span>Account Number:</span><span>****4739</span></div>
-                        <div class="account-info-row"><span>Type:</span><span>Credit Card</span></div>
+                        <div class="account-info-row"><span>Type:</span><span>Savings Card</span></div>
                         <div class="account-info-row"><span>Status:</span><span class="status-active">Active</span></div>
                         <div class="account-chart"><canvas id="savingsChart"></canvas></div>
                     </div>
@@ -351,6 +342,14 @@
                                 <h4>Net Worth Growth</h4>
                                 <div class="summary-amount" id="balNetWorth">+&#402;&#8212;</div>
                                 <p class="summary-note">This month</p>
+                            </div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-icon" style="background:#ede9fe">&#127919;</div>
+                            <div class="summary-content">
+                                <h4>Savings Goals</h4>
+                                <div class="summary-amount" id="balGoalsProgress">&#8212;</div>
+                                <p class="summary-note" id="balGoalsNote">Loading...</p>
                             </div>
                         </div>
                     </div>
@@ -503,8 +502,14 @@
                     fv('prof-fullname', user.fullName);
                     fv('prof-username', user.username);
                     fv('prof-email',    user.email);
+                    fv('prof-phone',    user.phone);
+                    fv('prof-address',  user.address);
                     var unEl = document.getElementById('prof-username');
                     if (unEl) { unEl.readOnly=true; unEl.style.background='#f1f5f9'; unEl.title='Username cannot be changed'; }
+                    // Reflect the user's real saved address on the Information tab
+                    // (or clearly mark it as unset) instead of always showing fake data.
+                    var addrBoxEl = document.getElementById('infoAddressText');
+                    if (addrBoxEl) addrBoxEl.textContent = user.address ? user.address : 'No address on file yet — add one in the Settings tab above.';
                     var prefs = user.prefs || {};
                     ft('notif-email',      prefs.notifEmail     !==false);
                     ft('notif-challenge',  prefs.notifChallenge !==false);
@@ -520,6 +525,8 @@
                     function ft(id,v)  { var el=document.getElementById(id); if(el) el.checked=v; }
                     fv('prof-fullname',prof.fullName); fv('prof-username',prof.username);
                     fv('prof-email',prof.email); fv('prof-phone',prof.phone); fv('prof-address',prof.address);
+                    var addrBoxEl = document.getElementById('infoAddressText');
+                    if (addrBoxEl) addrBoxEl.textContent = prof.address ? prof.address : 'No address on file yet — add one in the Settings tab above.';
                     ft('notif-email',      prof.notifEmail     !==false);
                     ft('notif-challenge',  prof.notifChallenge !==false);
                     ft('notif-bills',      prof.notifBills     !==false);
@@ -537,13 +544,17 @@
             if (session && session.userId) {
                 var fullName = document.getElementById('prof-fullname').value.trim();
                 var email    = document.getElementById('prof-email').value.trim();
+                var phone    = document.getElementById('prof-phone') ? document.getElementById('prof-phone').value.trim() : '';
+                var address  = document.getElementById('prof-address') ? document.getElementById('prof-address').value.trim() : '';
                 if (!fullName) { showNotification('Full name is required.', 'error'); return; }
-                DigifinwizDB.updateUser(session.userId, { fullName: fullName, email: email }).then(function() {
+                DigifinwizDB.updateUser(session.userId, { fullName: fullName, email: email, phone: phone, address: address }).then(function() {
                     showNotification('Personal information saved!', 'success');
                     var ne = document.querySelector('.sidebar .user-profile h3');
                     if (ne) ne.textContent = fullName;
                     var nameEl = document.querySelector('.user-profile h3');
                     if (nameEl) nameEl.textContent = fullName;
+                    var addrBoxEl = document.getElementById('infoAddressText');
+                    if (addrBoxEl) addrBoxEl.textContent = address ? address : 'No address on file yet — add one in the Settings tab above.';
                     // Keep the cached session in sync — without this, every
                     // other page's first paint (auth.js's _injectSessionUI,
                     // which runs from the session snapshot before any fetch
@@ -563,8 +574,11 @@
                 };
                 DigifinwizDB.getProfileData().then(function(ex) {
                     return DigifinwizDB.setProfileData(Object.assign({}, ex||{}, data));
-                }).then(function() { showNotification('Personal information saved!', 'success'); })
-                  .catch(function() { showNotification('Save failed.', 'error'); });
+                }).then(function() {
+                    showNotification('Personal information saved!', 'success');
+                    var addrBoxEl = document.getElementById('infoAddressText');
+                    if (addrBoxEl) addrBoxEl.textContent = data.address ? data.address : 'No address on file yet — add one in the Settings tab above.';
+                }).catch(function() { showNotification('Save failed.', 'error'); });
             }
         });
 
@@ -660,12 +674,6 @@
         }
 
         // ── Information tab ───────────────────────────────────────────────
-        var displayName = session ? (session.fullName || session.username || 'Jane Doe') : 'Jane Doe';
-        var nameEl  = document.getElementById('infoAccountName');
-        var nameEl2 = document.getElementById('infoAccountName2');
-        if (nameEl)  nameEl.textContent  = displayName;
-        if (nameEl2) nameEl2.textContent = displayName;
-
         DigifinwizDB.init().then(function() {
             return Promise.all([
                 DigifinwizDB.getBalance('checking'),
@@ -673,11 +681,17 @@
                 DigifinwizDB.getPurchases(), // unlimited — expense/net-worth totals below need every purchase, not just the newest 8
                 DigifinwizDB.getRecentActivity ? DigifinwizDB.getRecentActivity(8) : Promise.resolve([]),
                 DigifinwizDB.getTransactions ? DigifinwizDB.getTransactions(100) : Promise.resolve([]),
-                DigifinwizDB.getPayments ? DigifinwizDB.getPayments(100) : Promise.resolve([])
+                DigifinwizDB.getPayments ? DigifinwizDB.getPayments(100) : Promise.resolve([]),
+                DigifinwizDB.getCreditCard ? DigifinwizDB.getCreditCard() : Promise.resolve({ active:false }),
+                DigifinwizDB.getLoan ? DigifinwizDB.getLoan() : Promise.resolve({ active:false, paidOff:false }),
+                DigifinwizDB.getSavingsGoals ? DigifinwizDB.getSavingsGoals() : Promise.resolve([]),
+                DigifinwizDB.getMyBills ? DigifinwizDB.getMyBills() : Promise.resolve([])
             ]);
         }).then(function(r) {
             var checking  = r[0], savings = r[1], purchases = r[2]||[], activity = r[3]||[];
             var txns = r[4]||[], payments = r[5]||[];
+            var creditCard = r[6] || { active:false }, loan = r[7] || { active:false, paidOff:false };
+            var savingsGoals = r[8]||[], bills = r[9]||[];
             var fmt = function(n){ return '\u0192' + Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
 
             // Information tab – cards
@@ -685,12 +699,22 @@
             if (ce) ce.textContent = fmt(checking);
             if (se) se.textContent = fmt(savings);
 
-            // Balances tab
-            var total = Number(checking||0) + Number(savings||0);
+            // Balances tab — assets (checking + savings) minus real liabilities
+            // (an active credit-card balance, an active unpaid loan balance).
+            var assets = Number(checking||0) + Number(savings||0);
+            var ccBalance = (creditCard && creditCard.active) ? Number(creditCard.balance||0) : 0;
+            var loanBalance = (loan && loan.active && !loan.paidOff) ? Number(loan.balance||0) : 0;
+            var liabilities = ccBalance + loanBalance;
+            var netTotal = assets - liabilities;
             var balTotal = document.getElementById('balTotalAmount');
-            if (balTotal) balTotal.textContent = '\u0192' + Math.round(total).toLocaleString();
+            if (balTotal) balTotal.textContent = (netTotal<0?'-':'') + '\u0192' + Math.round(Math.abs(netTotal)).toLocaleString();
             var balNote = document.getElementById('balTotalNote');
-            if (balNote) balNote.textContent = 'Across all accounts';
+            if (balNote) {
+                balNote.textContent = liabilities > 0
+                    ? 'Checking + savings, minus \u0192' + Math.round(liabilities).toLocaleString() + ' in card/loan debt'
+                    : 'Across all accounts';
+                balNote.style.color = netTotal < 0 ? '#dc2626' : '';
+            }
             var bc = document.getElementById('balChecking'), bs = document.getElementById('balSavings');
             if (bc) bc.textContent = fmt(checking);
             if (bs) bs.textContent = fmt(savings);
@@ -704,18 +728,52 @@
             var nwEl = document.getElementById('balNetWorth');
             if (nwEl) nwEl.textContent = '+\u0192' + Math.round(Math.max(0, 3500 - totalSpent)).toLocaleString();
 
+            // Savings goals progress tile
+            var goalsAmtEl = document.getElementById('balGoalsProgress');
+            var goalsNoteEl = document.getElementById('balGoalsNote');
+            if (goalsAmtEl) {
+                if (!savingsGoals.length) {
+                    goalsAmtEl.textContent = '\u2014';
+                    if (goalsNoteEl) goalsNoteEl.textContent = 'No goals yet';
+                } else {
+                    var goalCurrent = 0, goalTarget = 0;
+                    savingsGoals.forEach(function(g){ goalCurrent += Number(g.current||0); goalTarget += Number(g.target||0); });
+                    var goalPct = goalTarget > 0 ? Math.round((goalCurrent/goalTarget)*100) : 0;
+                    goalsAmtEl.textContent = goalPct + '%';
+                    if (goalsNoteEl) goalsNoteEl.textContent = fmt(goalCurrent) + ' of ' + fmt(goalTarget) + ' saved (' + savingsGoals.length + ' goal' + (savingsGoals.length!==1?'s':'') + ')';
+                }
+            }
+
+            // Bills — Information tab (default catalog bills + any custom bills added in Utilities)
+            var billsBody = document.getElementById('infoBillsBody');
+            if (billsBody) {
+                if (!bills.length) {
+                    billsBody.innerHTML = '<tr><td colspan="3">No bills yet. Visit <a href="utilities.html">Utilities</a> to see your bills.</td></tr>';
+                } else {
+                    billsBody.innerHTML = bills.map(function(b){
+                        var due = b.dueDate ? new Date(b.dueDate).toLocaleDateString() : '\u2014';
+                        return '<tr><td>'+escP(b.accountNumber||'\u2014')+'</td><td>'+escP(b.name||'Bill')+'</td><td>'+escP(due)+'</td></tr>';
+                    }).join('');
+                }
+            }
+
             // Past inventory
             var invContainer = document.getElementById('infoPastInventory');
             if (invContainer) {
                 var allItems = [];
-                purchases.forEach(function(p){ if(p.items&&Array.isArray(p.items)) p.items.forEach(function(it){ allItems.push(it); }); });
+                // Keep each item's parent purchase id so the tile can link to
+                // shop-order-detail.html?id=<purchase id>, the same pattern
+                // shop-order-history.html's "View Details" links already use.
+                purchases.forEach(function(p){ if(p.items&&Array.isArray(p.items)) p.items.forEach(function(it){ allItems.push({ it: it, purchaseId: p.id }); }); });
                 if (allItems.length === 0) {
                     invContainer.innerHTML = '<p style="color:#64748b;font-size:0.875rem">No purchases yet. Visit the <a href="ecommerce.html">Ecommerce store</a> to start shopping!</p>';
                 } else {
                     var ICONS=['\uD83D\uDC55','\uD83D\uDC54','\uD83C\uDF92','\uD83D\uDC5F','\uD83C\uDFA7','\uD83D\uDCF1','\uD83D\uDC56','\uD83D\uDC5C','\u231A','\uD83E\uDDE5','\uD83D\uDD76','\uD83C\uDFAE'];
                     var GRADS=['linear-gradient(135deg,#d4e4bc,#c8ddb0)','linear-gradient(135deg,#f4d4d4,#f0c8c8)','linear-gradient(135deg,#c4dcd4,#b8d4c8)','linear-gradient(135deg,#ffd4a3,#ffcb8e)','linear-gradient(135deg,#e0e7ff,#c7d2fe)','linear-gradient(135deg,#fce7f3,#fbcfe8)'];
-                    invContainer.innerHTML = '<div class="inventory-grid">' + allItems.slice(0,8).map(function(it,i){
-                        return '<div class="inventory-item"><div class="inventory-image" style="background:'+GRADS[i%GRADS.length]+'"><div class="placeholder-product" style="font-size:2rem">'+ICONS[i%ICONS.length]+'</div></div><h4>'+escP(it.name||it.title||'Item')+'</h4><p class="price">\u0192'+Number(it.price||0).toFixed(2)+'</p></div>';
+                    invContainer.innerHTML = '<div class="inventory-grid">' + allItems.slice(0,8).map(function(entry,i){
+                        var it = entry.it;
+                        var href = 'shop-order-detail.html?id=' + encodeURIComponent(entry.purchaseId);
+                        return '<a class="inventory-item" href="'+href+'" style="text-decoration:none;color:inherit;display:block"><div class="inventory-image" style="background:'+GRADS[i%GRADS.length]+'"><div class="placeholder-product" style="font-size:2rem">'+ICONS[i%ICONS.length]+'</div></div><h4>'+escP(it.name||it.title||'Item')+'</h4><p class="price">\u0192'+Number(it.price||0).toFixed(2)+'</p></a>';
                     }).join('') + '</div>';
                 }
             }
@@ -727,7 +785,7 @@
                 if (activityItems.length === 0 && purchases.length > 0) {
                     activityItems = purchases.slice(0,6).map(function(p){
                         var total=0; if(p.items) p.items.forEach(function(it){ total+=Number(it.price||0)*Number(it.quantity||1); });
-                        return { type:'purchase', description:'Purchased '+(p.items?p.items.length:0)+' item(s) from the ecommerce store', amount:total, xp:p.xp||0, date:p.date||(p.timestamp?new Date(p.timestamp).toLocaleDateString():'') };
+                        return { type:'purchase', description:'Purchased '+(p.items?p.items.length:0)+' item(s) from the ecommerce store', amount:total, xp:p.pointsEarned||0, date:p.date||(p.timestamp?new Date(p.timestamp).toLocaleDateString():'') };
                     });
                 }
                 if (activityItems.length === 0) {
@@ -735,8 +793,12 @@
                 } else {
                     achContainer.innerHTML = '<div class="achievement-list">' + activityItems.slice(0,6).map(function(a){
                         var icon = a.type==='purchase'?'\uD83D\uDED2':a.type==='payment'?'\u26A1':a.type==='transfer'?'\uD83C\uDFE6':'\u2B50';
-                        var xpB = a.xp?'<span class="badge badge-points">+'+a.xp+' XP</span>':'';
-                        var flB = a.amount?'<span class="badge badge-florins">\u0192'+Number(a.amount).toFixed(2)+'</span>':'';
+                        // Real getRecentActivity() events expose pointsEarned/detail (no xp/amount
+                        // keys); the local purchases-fallback objects above use xp/amount instead —
+                        // support both shapes so the badges don't always render blank.
+                        var pts = a.pointsEarned!=null ? a.pointsEarned : (a.xp||0);
+                        var xpB = pts?'<span class="badge badge-points">+'+pts+' XP</span>':'';
+                        var flB = a.amount!=null ? '<span class="badge badge-florins">\u0192'+Number(a.amount).toFixed(2)+'</span>' : (a.detail?'<span class="badge badge-florins">'+escP(a.detail)+'</span>':'');
                         var ds  = a.date||(a.timestamp?new Date(a.timestamp).toLocaleDateString():'');
                         return '<div class="achievement-card"><div class="achievement-content"><p class="achievement-text">'+icon+' '+escP(a.description||a.label||'Activity')+'</p><div class="achievement-badges">'+xpB+flB+'</div></div><div class="achievement-date">'+escP(ds)+'</div></div>';
                     }).join('') + '</div>';

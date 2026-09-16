@@ -288,19 +288,6 @@ document.addEventListener('DOMContentLoaded', function() {
     DigifinwizDB.init().then(() => {
         return DigifinwizDB.getUserData();
     }).then(data => {
-        if (!data) {
-            // Seed default user profile
-            const defaultUser = {
-                level: 13,
-                points: 1390,
-                pointsToNextLevel: 345,
-                challenges: 5,
-                completedTasks: 8
-            };
-            return DigifinwizDB.setUserData(defaultUser).then(() => defaultUser);
-        }
-        return data;
-    }).then(data => {
         updateUIWithData(data);
     }).catch(err => {
         console.error('DigifinwizDB init error:', err);

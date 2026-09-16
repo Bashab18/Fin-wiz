@@ -40,7 +40,7 @@
                     <label class="checkbox-label">
                         <input type="checkbox" id="rememberMe"> Remember me
                     </label>
-                    <a href="#" class="forgot-link">Forgot password?</a>
+                    <a href="#" class="forgot-link" id="forgotPasswordLink">Forgot password?</a>
                 </div>
 
                 <button type="submit" id="loginBtn" class="btn btn-primary btn-block">Login</button>
@@ -71,6 +71,17 @@
 
         function hideError() {
             loginError.style.display = 'none';
+        }
+
+        // No password-reset flow exists yet (no tokens, no email delivery) —
+        // reuse the page's existing inline message box so the link is honest
+        // about not doing anything instead of silently failing as a bare "#" link.
+        var forgotLink = document.getElementById('forgotPasswordLink');
+        if (forgotLink) {
+            forgotLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                showError("Password reset isn't available yet — please contact support.");
+            });
         }
 
         // Initialise DB on page load (ensures default admin is seeded)

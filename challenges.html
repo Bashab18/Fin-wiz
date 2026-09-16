@@ -158,7 +158,7 @@
                     <h2>Your current challenge &#11088;</h2>
                     <button class="btn btn-priority">First priority</button>
                 </div>
-                <p class="section-desc">Completing challenges allow you to earn points in the game which help you increase in levels. Some challenges will require you to use your florins.</p>
+                <p class="section-desc">Completing challenges allow you to earn points in the game which help you increase in levels. Some challenges also reward you with bonus florins.</p>
 
                 <div class="challenge-featured" id="featured-challenge">
                     <div class="challenge-illustration">
@@ -244,7 +244,7 @@
                 <div class="section-header">
                     <h2>Your other challenges &#11088;</h2>
                 </div>
-                <p class="section-desc">Completing challenges allow you to earn points in the game which help you increase in levels. Some challenges will require you to use your florins.</p>
+                <p class="section-desc">Completing challenges allow you to earn points in the game which help you increase in levels. Some challenges also reward you with bonus florins.</p>
 
                 <!-- Filter bar: search + category pills -->
                 <div class="chal-filter-bar">
@@ -386,6 +386,10 @@
     // Featured illustration icon per category
     var CAT_ICONS = { banking: '&#127970;', ecommerce: '&#128722;', utilities: '&#9889;', general: '&#127919;' };
 
+    // Category -> module page mapping, shared by the featured card and every
+    // card in the "Your other challenges" list.
+    var CAT_LINKS = { banking: 'banking.html', ecommerce: 'ecommerce.html', utilities: 'utilities.html' };
+
     function escHtml(s) {
         if (s == null) return '';
         return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -408,6 +412,34 @@
             case 'total_transferred': cur = stats.totalTransferred || 0; label = '&#402; transferred'; break;
             case 'total_spent_ecom':  cur = stats.totalSpentEcommerce || 0; label = '&#402; spent'; break;
             case 'reach_level':       cur = stats.user ? stats.user.level : 0; label = 'level'; break;
+            case 'purchase_count':    cur = stats.purchCount || 0; label = 'purchases'; break;
+            case 'purchase_items':    cur = stats.lastItemCount || 0; label = 'items in one order'; break;
+            case 'payment_amount':    cur = stats.lastPayAmount || 0; label = '&#402; in one payment'; break;
+            case 'total_paid_bills':  cur = stats.totalSpentBills || 0; label = '&#402; paid in bills'; break;
+            case 'total_xp_earned':   cur = stats.totalPts || 0; label = 'XP earned'; break;
+            case 'florin_balance':    cur = (stats.user && stats.user.coins) || 0; label = 'florins'; break;
+            case 'checking_balance':  cur = stats.checkingBalance || 0; label = '&#402; in checking'; break;
+            case 'savings_balance':   cur = stats.savingsBalance  || 0; label = '&#402; in savings';  break;
+            case 'unique_recipients': cur = stats.uniqueRecipients || 0; label = 'unique recipients'; break;
+            case 'first_savings_transfer': cur = Math.min(1, stats.savingsTransferCount || 0); val = 1; label = 'savings transfers'; break;
+            case 'savings_transfer_count': cur = stats.savingsTransferCount || 0; label = 'savings transfers'; break;
+            case 'transfer_to_beneficiary': {
+                var target = String(c.conditionValue || '').toLowerCase().trim();
+                var txList = stats._txs || [];
+                var matched = !!target && txList.some(function(t) {
+                    return String(t.recipient || '').toLowerCase().trim() === target ||
+                           String(t.account   || '').toLowerCase().trim() === target;
+                });
+                cur = matched ? 1 : 0; val = 1; label = 'sent to beneficiary';
+                break;
+            }
+            case 'custom':
+                // Admin-defined arbitrary field/operator comparison -- don't
+                // try to replicate that logic client-side, just show a
+                // neutral, indeterminate state instead of nothing.
+                return '<div style="margin-top:8px">' +
+                    '<div style="font-size:0.72em;color:#94a3b8;font-style:italic">Progress depends on an admin-defined rule &mdash; check back after your next activity.</div>' +
+                    '</div>';
             default: return '';
         }
         var pct  = val > 0 ? Math.min(100, Math.round((cur / val) * 100)) : 0;
@@ -423,7 +455,7 @@
         var svg       = CAT_SVG[c.category] || CAT_SVG.general;
         var isDone    = c.completed === true;
         var rewards   = '<span class="badge badge-points">+' + (c.points || 0) + ' XP</span>';
-        if (c.florins && c.florins > 0) rewards += ' <span class="badge badge-florins">-' + Number(c.florins).toFixed(0) + ' florins</span>';
+        if (c.florins && c.florins > 0) rewards += ' <span class="badge badge-florins">+' + Number(c.florins).toFixed(0) + ' florins</span>';
         var statusBadge = '';
         if (isDone) {
             var doneDate = c.completedAt ? ' on ' + new Date(c.completedAt).toLocaleDateString() : '';
@@ -434,10 +466,22 @@
         // Manual challenges get a user-visible "Mark Complete" button
         var manualBtn = '';
         if (!isDone && c.condition === 'manual') {
-            manualBtn = '<button onclick="markChallengeComplete(' + c.id + ',' + (c.points||0) + ')" ' +
+            manualBtn = '<button onclick="markChallengeComplete(' + c.id + ',' + (c.points||0) + ',' + (c.florins||0) + ')" ' +
                 'style="margin-top:8px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:0.8em;font-weight:600;cursor:pointer;transition:opacity 0.2s" ' +
                 'onmouseover="this.style.opacity=0.85" onmouseout="this.style.opacity=1">' +
                 '&#9989; Mark as Complete</button>';
+        }
+        // Non-manual, incomplete challenges get the same "Go to Banking/
+        // Ecommerce/Utilities" action link the featured challenge card shows,
+        // using the same category -> page mapping.
+        var catLinkHtml = '';
+        if (!isDone && c.condition !== 'manual') {
+            var catLinkHref = CAT_LINKS[c.category];
+            if (catLinkHref) {
+                var catIconTxt = CAT_ICONS[c.category] || '';
+                catLinkHtml = '<a href="' + catLinkHref + '" style="display:inline-block;margin-top:8px;background:#6366f1;color:#fff;padding:6px 14px;border-radius:8px;font-size:0.8em;font-weight:600;text-decoration:none">' +
+                    catIconTxt + ' Go to ' + escHtml(c.category.charAt(0).toUpperCase() + c.category.slice(1)) + '</a>';
+            }
         }
         return '<div class="challenge-card" style="' + (isDone ? 'opacity:0.75;' : '') + '">' +
             '<div class="challenge-illustration-small">' + svg + '</div>' +
@@ -450,16 +494,18 @@
             '<div class="challenge-rewards">' + rewards + '</div>' +
             '</div>' +
             manualBtn +
+            catLinkHtml +
             '</div></div>';
     }
 
-    function markChallengeComplete(id, points) {
+    function markChallengeComplete(id, points, florins) {
         var now = Date.now();
         DigifinwizDB.updateChallenge(id, { completed: true, completedAt: now }).then(function() {
             return DigifinwizDB.getUserData();
         }).then(function(userData) {
             if (userData) {
                 userData.points            = (userData.points || 0) + points;
+                userData.coins             = (userData.coins || 0) + (florins || 0);
                 userData.pointsToNextLevel = (userData.pointsToNextLevel != null ? userData.pointsToNextLevel : 1000) - points;
                 userData.challenges        = (userData.challenges || 0) + 1;
                 if (userData.pointsToNextLevel <= 0) {
@@ -483,7 +529,8 @@
                 return DigifinwizDB.setUserData(userData);
             }
         }).then(function() {
-            showNotification('&#9989; Challenge complete! +' + points + ' XP earned!', 'success');
+            var msg = '&#9989; Challenge complete! +' + points + ' XP earned' + (florins > 0 ? ' and +' + florins + ' florins' : '') + '!';
+            showNotification(msg, 'success');
             // Refresh the whole page section
             setTimeout(function() { location.reload(); }, 1200);
         }).catch(function(err) {
@@ -508,10 +555,16 @@
 
     // Extract data-loading into a named function so it can be called on load AND on tab return
     function loadChallengesPage() {
-        return Promise.all([DigifinwizDB.getStats(), DigifinwizDB.getChallenges(), DigifinwizDB.getTransactions(1000)]).then(function(results) {
+        return Promise.all([
+            DigifinwizDB.getStats(), DigifinwizDB.getChallenges(), DigifinwizDB.getTransactions(1000),
+            DigifinwizDB.getPayments(1000), DigifinwizDB.getPurchases(1000), DigifinwizDB.getAllBalances()
+        ]).then(function(results) {
             var stats      = results[0];
             var challenges = results[1];
             var txs        = results[2] || [];
+            var pays       = results[3] || [];
+            var purchs     = results[4] || [];
+            var balancesArr = results[5] || [];
             var user       = stats.user;
 
             // /api/me/stats has no "last transaction amount" field, so
@@ -519,6 +572,28 @@
             // Use the largest single transfer made so far instead, since that's
             // the meaningful "progress toward a single-transaction threshold".
             stats.lastTxAmount = txs.reduce(function(m, t){ return Math.max(m, Number(t.amount) || 0); }, 0);
+            // Same "largest single X so far" treatment for payment_amount and
+            // purchase_items conditions, which similarly have no "last value"
+            // field on /api/me/stats.
+            stats.lastPayAmount = pays.reduce(function(m, p){ return Math.max(m, Number(p.amount) || 0); }, 0);
+            stats.lastItemCount = purchs.reduce(function(m, p){ return Math.max(m, (p.items ? p.items.length : 0)); }, 0);
+            // Checking/savings balances, for the checking_balance / savings_balance conditions.
+            // getAllBalances() resolves GET /api/me/balances, which returns an array of
+            // {account, amount} objects, not a plain {checking, savings} object.
+            stats.checkingBalance = Number((balancesArr.find(function(b){ return b.account === 'checking'; }) || {}).amount) || 0;
+            stats.savingsBalance  = Number((balancesArr.find(function(b){ return b.account === 'savings';  }) || {}).amount) || 0;
+            // Savings-sourced transfers (transactions with fromAccount === 'savings'),
+            // for first_savings_transfer / savings_transfer_count.
+            stats.savingsTransferCount = txs.filter(function(t){ return t.fromAccount === 'savings'; }).length;
+            // Distinct recipients (by name or account number), for unique_recipients.
+            var seenRecipients = {};
+            txs.forEach(function(t) {
+                var key = String(t.recipient || t.account || '').toLowerCase().trim();
+                if (key) seenRecipients[key] = true;
+            });
+            stats.uniqueRecipients = Object.keys(seenRecipients).length;
+            // Raw transaction list, for transfer_to_beneficiary's admin-defined target match.
+            stats._txs = txs;
 
             // -- Progress header ------------------------------------------
             if (user) {
@@ -664,7 +739,7 @@
                     var rHTML = isDone
                         ? '<span style="background:#dcfce7;color:#16a34a;font-size:0.85em;padding:3px 12px;border-radius:99px;font-weight:600">+' + (featured.points || 0) + ' XP earned!</span>'
                         : '<span class="badge badge-points">+' + (featured.points || 0) + ' XP</span>';
-                    if (!isDone && featured.florins && featured.florins > 0) rHTML += ' <span class="badge badge-florins">-' + Number(featured.florins).toFixed(0) + ' florins</span>';
+                    if (!isDone && featured.florins && featured.florins > 0) rHTML += ' <span class="badge badge-florins">+' + Number(featured.florins).toFixed(0) + ' florins</span>';
                     featRewards.innerHTML = rHTML;
                 }
                 // Show progress bar in featured card
@@ -673,7 +748,7 @@
                 }
                 // Add category action link
                 if (featProg && !isDone) {
-                    var catLink = { banking: 'banking.html', ecommerce: 'ecommerce.html', utilities: 'utilities.html' }[featured.category];
+                    var catLink = CAT_LINKS[featured.category];
                     if (catLink) {
                         var catIconTxt = CAT_ICONS[featured.category] || '';
                         var linkEl = document.createElement('a');

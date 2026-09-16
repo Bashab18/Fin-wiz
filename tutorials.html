@@ -106,7 +106,7 @@
                 </div>
 
                 <div class="video-grid">
-                    <a href="tutorial-detail.html" class="video-card" data-tut="0" style="text-decoration:none;color:inherit;display:block" onclick="markTutorialWatched(0)">
+                    <a href="tutorial-detail.html?tut=0" class="video-card" data-tut="0" style="text-decoration:none;color:inherit;display:block" onclick="markTutorialWatched(0)">
                         <div class="video-thumbnail" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
                             <div class="watched-check-overlay">&#10003; Watched</div>
                             <div class="video-icon" id="tutIcon0">&#9654;&#65039;</div>
@@ -121,7 +121,7 @@
                         </div>
                     </a>
 
-                    <a href="tutorial-detail.html" class="video-card" data-tut="1" style="text-decoration:none;color:inherit;display:block" onclick="markTutorialWatched(1)">
+                    <a href="tutorial-detail.html?tut=1" class="video-card" data-tut="1" style="text-decoration:none;color:inherit;display:block" onclick="markTutorialWatched(1)">
                         <div class="video-thumbnail" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
                             <div class="watched-check-overlay">&#10003; Watched</div>
                             <div class="video-icon" id="tutIcon1">&#9654;&#65039;</div>
@@ -136,7 +136,7 @@
                         </div>
                     </a>
 
-                    <a href="tutorial-detail.html" class="video-card" data-tut="2" style="text-decoration:none;color:inherit;display:block" onclick="markTutorialWatched(2)">
+                    <a href="tutorial-detail.html?tut=2" class="video-card" data-tut="2" style="text-decoration:none;color:inherit;display:block" onclick="markTutorialWatched(2)">
                         <div class="video-thumbnail" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
                             <div class="watched-check-overlay">&#10003; Watched</div>
                             <div class="video-icon" id="tutIcon2">&#9654;&#65039;</div>
@@ -151,7 +151,7 @@
                         </div>
                     </a>
 
-                    <a href="tutorial-detail.html" class="video-card" data-tut="3" style="text-decoration:none;color:inherit;display:block" onclick="markTutorialWatched(3)">
+                    <a href="tutorial-detail.html?tut=3" class="video-card" data-tut="3" style="text-decoration:none;color:inherit;display:block" onclick="markTutorialWatched(3)">
                         <div class="video-thumbnail" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
                             <div class="watched-check-overlay">&#10003; Watched</div>
                             <div class="video-icon" id="tutIcon3">&#9654;&#65039;</div>
@@ -688,23 +688,84 @@
     <script src="script.js"></script>
     <script>
     // ── Tutorial watched state ─────────────────────────────────────────────
-    var TUTS_WATCHED_KEY = 'digifinwiz_tutorials_watched';
-    var TUTORIAL_COUNT   = 4;
+    // Namespaced per logged-in user (via DigifinwizAuth's session userId) so
+    // watched progress isn't shared across every account using this browser.
+    var TUTS_WATCHED_BASE_KEY = 'digifinwiz_tutorials_watched';
+    var TUTORIAL_COUNT        = 4;
+
+    function getTutsWatchedKey() {
+        var s = (typeof DigifinwizAuth !== 'undefined' && DigifinwizAuth.getSession) ? DigifinwizAuth.getSession() : null;
+        var uid = (s && s.userId != null) ? s.userId : 'anon';
+        return TUTS_WATCHED_BASE_KEY + '_' + uid;
+    }
 
     function getTutorialsWatched() {
-        try { return JSON.parse(localStorage.getItem(TUTS_WATCHED_KEY) || '{}'); } catch(e) { return {}; }
+        try { return JSON.parse(localStorage.getItem(getTutsWatchedKey()) || '{}'); } catch(e) { return {}; }
     }
 
     function markTutorialWatched(idx) {
         var w = getTutorialsWatched();
         w[String(idx)] = true;
-        localStorage.setItem(TUTS_WATCHED_KEY, JSON.stringify(w));
+        localStorage.setItem(getTutsWatchedKey(), JSON.stringify(w));
         applyWatchedUI();
+        maybeCompleteVideoLearnerChallenge();
     }
 
     function resetTutorialsWatched() {
-        localStorage.removeItem(TUTS_WATCHED_KEY);
+        localStorage.removeItem(getTutsWatchedKey());
         applyWatchedUI();
+    }
+
+    // Once every tutorial has been watched, award the server-side
+    // "Video Learner" manual challenge (if present and not already
+    // completed) using the same call-and-credit pattern as challenges.html's
+    // own markChallengeComplete().
+    function maybeCompleteVideoLearnerChallenge() {
+        var w = getTutorialsWatched();
+        var count = 0;
+        for (var i = 0; i < TUTORIAL_COUNT; i++) { if (w[String(i)]) count++; }
+        if (count < TUTORIAL_COUNT) return;
+        if (typeof DigifinwizDB === 'undefined') return;
+        DigifinwizDB.getChallenges().then(function(challenges) {
+            var chal = (challenges || []).filter(function(c) { return c.title === 'Video Learner'; })[0];
+            if (!chal || chal.completed) return;
+            var points  = chal.points  || 0;
+            var florins = chal.florins || 0;
+            var now = Date.now();
+            return DigifinwizDB.updateChallenge(chal.id, { completed: true, completedAt: now }).then(function() {
+                return DigifinwizDB.getUserData();
+            }).then(function(userData) {
+                if (userData) {
+                    userData.points            = (userData.points || 0) + points;
+                    userData.coins             = (userData.coins || 0) + florins;
+                    userData.pointsToNextLevel = (userData.pointsToNextLevel != null ? userData.pointsToNextLevel : 1000) - points;
+                    userData.challenges        = (userData.challenges || 0) + 1;
+                    if (userData.pointsToNextLevel <= 0) {
+                        if (userData.level === 1) {
+                            return DigifinwizDB.getLevel1Requirements().then(function(req) {
+                                if (req.allMet) {
+                                    userData.level++;
+                                    userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
+                                    if (typeof showNotification === 'function') showNotification('&#127881; Level Up! You are now level ' + userData.level + '!', 'success');
+                                } else {
+                                    userData.pointsToNextLevel = 0;
+                                }
+                                return DigifinwizDB.setUserData(userData);
+                            });
+                        }
+                        userData.level++;
+                        userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
+                        if (typeof showNotification === 'function') showNotification('&#127881; Level Up! You are now level ' + userData.level + '!', 'success');
+                    }
+                    return DigifinwizDB.setUserData(userData);
+                }
+            }).then(function() {
+                var msg = '&#9989; Video Learner challenge complete! +' + points + ' XP earned' + (florins > 0 ? ' and +' + florins + ' florins' : '') + '!';
+                if (typeof showNotification === 'function') showNotification(msg, 'success');
+            });
+        }).catch(function(err) {
+            console.error('Video Learner challenge completion error:', err);
+        });
     }
 
     function applyWatchedUI() {
