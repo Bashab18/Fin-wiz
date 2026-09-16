@@ -45,6 +45,51 @@ function escHtml(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+// ── Transaction detail modal ────────────────────────────────────────────────
+// Surfaces the full transaction record (already stored server-side, already
+// fetched for the lists that call this) behind a click on any transaction
+// row — same overlay/card visual pattern as showConfirmModal above.
+var TX_TYPE_ICONS = { transfer: '💸' };
+
+function showTransactionDetailModal(transaction) {
+    var existing = document.getElementById('txDetailModal');
+    if (existing) existing.remove();
+
+    var t = transaction || {};
+    var icon      = TX_TYPE_ICONS[t.type] || '💸';
+    var typeLabel = t.type ? (t.type.charAt(0).toUpperCase() + t.type.slice(1)) : 'Transaction';
+    var fromLabel = t.fromAccount === 'savings' ? 'Savings Account' : 'Checking Account';
+    // t.date is just a pre-formatted display string with no time-of-day —
+    // t.timestamp is the real millisecond epoch, so format that instead to
+    // show an actual time here, which the one-line summary never does.
+    var fullDateTime = t.timestamp ? new Date(t.timestamp).toLocaleString() : (t.date || '');
+
+    var modal = document.createElement('div');
+    modal.id = 'txDetailModal';
+    modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;animation:fadeIn 0.2s';
+
+    modal.innerHTML =
+        '<div style="background:#fff;border-radius:16px;padding:2rem;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2)">' +
+        '<h2 style="font-size:1.25rem;font-weight:700;margin-bottom:1rem;color:#1e293b">' + icon + ' ' + escHtml(typeLabel) + ' Details</h2>' +
+        '<div style="background:#f1f5f9;border-radius:10px;padding:1rem;margin-bottom:1.25rem;font-size:0.9rem">' +
+            '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem"><span style="color:#64748b">To</span><strong>' + escHtml(t.recipient) + '</strong></div>' +
+            '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem"><span style="color:#64748b">Account</span><span style="font-family:monospace">' + escHtml(t.account) + '</span></div>' +
+            '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem"><span style="color:#64748b">From</span><span>' + escHtml(fromLabel) + '</span></div>' +
+            '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;border-top:1px solid #e2e8f0;padding-top:0.5rem;margin-top:0.5rem"><span style="color:#64748b">Amount</span><strong style="color:#6366f1;font-size:1.1rem">ƒ' + Number(t.amount || 0).toFixed(2) + '</strong></div>' +
+            '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem"><span style="color:#64748b">Date &amp; Time</span><span style="text-align:right">' + escHtml(fullDateTime) + '</span></div>' +
+            (t.description ? '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem"><span style="color:#64748b">Description</span><span style="text-align:right;max-width:230px;word-break:break-word">' + escHtml(t.description) + '</span></div>' : '') +
+            '<div style="display:flex;justify-content:space-between"><span style="color:#64748b">XP Earned</span><span style="color:#10b981;font-weight:600">+' + (t.pointsEarned || 0) + ' XP</span></div>' +
+        '</div>' +
+        '<div style="display:flex;gap:0.75rem">' +
+            '<button id="txDetailClose" class="btn btn-primary" style="flex:1">Close</button>' +
+        '</div></div>';
+
+    document.body.appendChild(modal);
+
+    document.getElementById('txDetailClose').addEventListener('click', function() { modal.remove(); });
+    modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+}
+
 // ── Balance display helpers ────────────────────────────────────────────────
 function updateBalanceDisplay() {
     DigifinwizDB.getAllBalances().then(function(bals) {
@@ -271,7 +316,12 @@ function updateTransactionsList(filter) {
                 acctChip = '<span style="display:inline-block;padding:1px 7px;border-radius:9px;font-size:0.62rem;font-weight:700;background:#f0fdf4;color:#059669;margin-left:0.3rem;vertical-align:middle">Savings</span>';
             }
 
-            return '<div class="transaction-item">' +
+            // Row is clickable to open the full transaction detail modal —
+            // jsAttrB (defined in banking.html) JSON-encodes the full record
+            // safely for splicing into a single-quoted onclick attribute.
+            var txAttr = (typeof jsAttrB === 'function') ? jsAttrB(t) : JSON.stringify(t).replace(/'/g, '&#39;');
+
+            return '<div class="transaction-item" style="cursor:pointer" onclick=\'showTransactionDetailModal(' + txAttr + ')\'>' +
                 '<div style="width:40px;height:40px;border-radius:50%;background:' + gradient + ';display:flex;align-items:center;justify-content:center;font-size:0.82rem;font-weight:700;color:white;flex-shrink:0;letter-spacing:0.02em">' + initials + '</div>' +
                 '<div class="transaction-details" style="flex:1;min-width:0">' +
                     '<div style="font-weight:600;font-size:0.875rem">Transfer to ' + escHtml(t.recipient) + acctChip + '</div>' +

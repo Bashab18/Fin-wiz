@@ -60,6 +60,7 @@
                     <a href="shop-wallet.html" class="shop-nav-item">Wallet</a>
                     <a href="shop-saved-items.html" class="shop-nav-item">Saved Items</a>
                     <a href="shop-cart.html" class="shop-nav-item">Cart</a>
+                    <a href="shop-alerts.html" class="shop-nav-item">Alerts</a>
                     <a href="ecommerce.html" class="shop-nav-item back-link">&#8592; Back to Store</a>
                 </nav>
             </aside>
@@ -140,6 +141,7 @@
                     '<div style="text-align:right;flex-shrink:0">' +
                         '<div style="font-weight:700;color:#1e293b">ƒ' + Number(p.total||0).toFixed(2) + '</div>' +
                         '<div style="font-size:0.72rem;color:#10b981;margin-top:0.1rem">+' + (p.pointsEarned||0) + ' XP</div>' +
+                        '<a href="shop-order-detail.html?id=' + encodeURIComponent(p.id) + '" class="add-link" style="font-size:0.75rem;display:inline-block;margin-top:0.3rem">View Details &rarr;</a>' +
                     '</div>' +
                     '</div>';
             }).join('');

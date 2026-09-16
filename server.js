@@ -713,7 +713,8 @@ const MODULE_STORES = {
     },
     utilities: {
         users: 'utilitiesUsers', challenges: 'utilitiesChallenges', messages: 'utilitiesMessages',
-        payments: 'utilitiesPayments', billCycles: 'utilitiesBillCycles', customBills: 'utilitiesCustomBills'
+        payments: 'utilitiesPayments', billCycles: 'utilitiesBillCycles', customBills: 'utilitiesCustomBills',
+        autopayPrefs: 'utilitiesAutopayPrefs'
     }
 };
 
@@ -725,7 +726,7 @@ const PER_USER_STORE_PROPS = {
     creditCards: 'creditCardStore', creditActivity: 'creditActivityStore', loans: 'loanStore',
     loanPayments: 'loanPaymentStore', savingsGoals: 'savingsGoalStore', savingsGoalActivity: 'savingsGoalActivityStore',
     scheduledTransfers: 'scheduledTransferStore', addresses: 'addressStore', paymentMethods: 'paymentMethodStore',
-    billCycles: 'billCycleStore', customBills: 'customBillStore'
+    billCycles: 'billCycleStore', customBills: 'customBillStore', autopayPrefs: 'autopayStore'
 };
 
 app.use((req, res, next) => {
@@ -1030,7 +1031,7 @@ app.delete('/api/users/:id', async (req, res) => {
         req.transactionStore, req.paymentStore, req.purchaseStore, req.challengeStore,
         req.creditCardStore, req.creditActivityStore, req.loanStore, req.loanPaymentStore,
         req.savingsGoalStore, req.savingsGoalActivityStore,
-        req.scheduledTransferStore, req.addressStore, req.paymentMethodStore, req.billCycleStore, req.customBillStore
+        req.scheduledTransferStore, req.addressStore, req.paymentMethodStore, req.billCycleStore, req.customBillStore, req.autopayStore
     ]) {
         const rows = await readJSON(store);
         await writeJSON(store, rows.filter(r => r.userId !== id));
@@ -1632,7 +1633,7 @@ app.post('/api/me/reset', async (req, res) => {
         req.transactionStore, req.paymentStore, req.purchaseStore, req.cartStore,
         req.creditCardStore, req.creditActivityStore, req.loanStore, req.loanPaymentStore,
         req.savingsGoalStore, req.savingsGoalActivityStore,
-        req.scheduledTransferStore, req.addressStore, req.paymentMethodStore, req.billCycleStore, req.customBillStore
+        req.scheduledTransferStore, req.addressStore, req.paymentMethodStore, req.billCycleStore, req.customBillStore, req.autopayStore
     ]) {
         const rows = await readJSON(store);
         await writeJSON(store, rows.filter(r => r.userId !== req.userId));
@@ -2789,8 +2790,141 @@ async function notifyOverdueBillsForUser(userId, cycles, messageStore = 'message
     return cycles.map(c => overdueNow.some(o => o.id === c.id) ? Object.assign({}, c, { overdueNotified: true }) : c);
 }
 
+// Core bill-payment logic shared by the manual "Pay Now" route and the
+// auto-pay sweep below. Locks internally (like executeOneScheduledTransfer)
+// rather than throwing, so callers that loop over several cycles — the
+// auto-pay sweep — call this directly per cycle instead of nesting it
+// inside their own withUserLock, which would deadlock against the single
+// global lock chain (see withUserLock's comment above).
+async function attemptPayBillCycle(userId, cycleId, req) {
+    return withUserLock(userId, async () => {
+        const cycles = await readJSON(req.billCycleStore);
+        const idx    = cycles.findIndex(c => c.id === cycleId && c.userId === userId);
+        if (idx === -1) return { ok: false, reason: 'not_found' };
+        const cycle = cycles[idx];
+        if (cycle.status === 'paid') return { ok: false, reason: 'already_paid' };
+
+        const statusInfo = computeBillCycleStatus(cycle);
+        const totalDue    = statusInfo.totalDue;
+
+        const users = await readJSON(req.userStore);
+        const uidx  = users.findIndex(u => u.id === userId);
+        if (uidx === -1) return { ok: false, reason: 'user_not_found' };
+        const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
+
+        let account = 'checking';
+        if (totalDue > balances[account]) {
+            if (totalDue <= balances.savings) account = 'savings';
+            else return { ok: false, reason: 'insufficient_funds', totalDue };
+        }
+        const current = balances[account];
+        const next    = parseFloat((current - totalDue).toFixed(2));
+        balances[account] = next;
+
+        const onTime       = !statusInfo.overdue;
+        const pointsEarned = 45 + (onTime ? 15 : 0);
+        const coinsEarned  = Math.floor(totalDue / 10);
+
+        const userData = Object.assign({}, DEFAULT_USER_DATA, users[uidx].userData || {});
+        userData.points            = (userData.points || 0) + pointsEarned;
+        userData.pointsToNextLevel = (userData.pointsToNextLevel != null ? userData.pointsToNextLevel : 1000) - pointsEarned;
+        userData.completedTasks    = (userData.completedTasks || 0) + 1;
+        userData.coins              = (userData.coins || 0) + coinsEarned;
+        let leveledUp = false, newLevel = 0;
+        if (userData.pointsToNextLevel <= 0) {
+            if (userData.level === 1) {
+                // Meaningless for a standalone single-module account (it has
+                // no way to ever do the other two) — bypass it there, same
+                // as checkAndCompleteChallengesForUser() and the
+                // /api/me/challenges/level1 route.
+                const challenges = req.appModule ? [] : await readJSON(req.challengeStore);
+                const reqMet = req.appModule || LEVEL_1_REQUIRED_CONDITIONS.every(cond =>
+                    challenges.some(c => c.userId === userId && c.condition === cond && c.completed)
+                );
+                if (reqMet) {
+                    userData.level++;
+                    userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
+                    leveledUp = true; newLevel = userData.level;
+                } else {
+                    userData.pointsToNextLevel = 0;
+                }
+            } else {
+                userData.level++;
+                userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
+                leveledUp = true; newLevel = userData.level;
+            }
+        }
+
+        const updatedUser = Object.assign({}, users[uidx], { balances, userData });
+        users[uidx] = updatedUser;
+        await writeJSON(req.userStore, users);
+        await maybeFireBalanceAlerts(updatedUser, account, current, next, -totalDue, 'utilities', req.messageStore);
+
+        cycles[idx] = Object.assign({}, cycle, { status: 'paid', paidAt: Date.now(), paidAmount: totalDue, lateFeePaid: statusInfo.lateFee });
+        await writeJSON(req.billCycleStore, cycles);
+
+        const payments = await readJSON(req.paymentStore);
+        const paymentRecord = {
+            id: nextId(payments), userId,
+            type: cycle.name, amount: totalDue, accountNumber: cycle.accountNumber,
+            fromAccount: account, date: new Date().toLocaleDateString(), timestamp: Date.now(),
+            pointsEarned, lateFee: statusInfo.lateFee, usage: cycle.usage, unit: cycle.unit, autoPaid: !!req.isAutopaySweep
+        };
+        payments.push(paymentRecord);
+        await writeJSON(req.paymentStore, payments);
+
+        return {
+            ok: true,
+            cycle: Object.assign({}, cycles[idx], computeBillCycleStatus(cycles[idx])),
+            payment: paymentRecord, leveledUp, newLevel, account, balance: next, onTimeBonus: onTime, pointsEarned
+        };
+    });
+}
+
+const AUTOPAY_ERROR_STATUS = {
+    not_found: [404, 'Bill not found'], already_paid: [409, 'Bill is already paid'],
+    user_not_found: [404, 'User not found']
+};
+
+// Auto-pay sweep: charges any due-or-overdue cycle whose bill has auto-pay
+// enabled, the same lazy-execution-on-read pattern used for scheduled
+// transfers. Each cycle gets its own attemptPayBillCycle call (its own lock
+// acquisition) rather than one call wrapping the whole loop, since nesting
+// a second withUserLock inside an already-held one would deadlock.
+async function runDueAutopays(userId, req) {
+    const prefs = (await readJSON(req.autopayStore)).filter(p => p.userId === userId && p.enabled);
+    if (prefs.length === 0) return;
+    const enabledKeys = new Set(prefs.map(p => p.billDefKey));
+    const cycles = await readJSON(req.billCycleStore);
+    const due = cycles.filter(c => c.userId === userId && c.status !== 'paid' &&
+        enabledKeys.has(c.billDefKey) && Date.now() >= c.dueDate);
+    for (const c of due) {
+        const result = await attemptPayBillCycle(userId, c.id, Object.assign({}, req, { isAutopaySweep: true }));
+        if (result.ok) {
+            await pushSystemMessage(userId, {
+                subject: 'Auto-pay: ' + c.name,
+                body: 'Auto-pay charged ƒ' + result.payment.amount.toFixed(2) + ' for your ' + c.name +
+                      ' bill from your ' + result.account + ' account.',
+                type: 'success', category: 'utilities'
+            }, req.messageStore);
+        } else if (result.reason === 'insufficient_funds') {
+            await pushSystemMessage(userId, {
+                subject: 'Auto-pay failed: ' + c.name,
+                body: 'Auto-pay could not charge your ' + c.name + ' bill of ƒ' + result.totalDue.toFixed(2) +
+                      ' — insufficient funds in checking and savings. Please pay it manually.',
+                type: 'warning', category: 'utilities'
+            }, req.messageStore);
+        }
+    }
+}
+
 app.get('/api/me/bills', async (req, res) => {
-    let cycles = await ensureCurrentBillCycles(req.userId, req.customBillStore, req.billCycleStore);
+    await ensureCurrentBillCycles(req.userId, req.customBillStore, req.billCycleStore);
+    await runDueAutopays(req.userId, req);
+    // Re-read fresh: both calls above may have changed cycles on disk
+    // (a new cycle created, or one just auto-paid), and the response must
+    // reflect that rather than a snapshot taken before either ran.
+    let cycles = (await readJSON(req.billCycleStore)).filter(c => c.userId === req.userId);
     // Locked so two concurrent GETs can't both observe the dedup flag as
     // unset and each push a duplicate overdue message.
     cycles = await withUserLock(req.userId, () => notifyOverdueBillsForUser(req.userId, cycles, req.messageStore, req.billCycleStore));
@@ -2799,94 +2933,42 @@ app.get('/api/me/bills', async (req, res) => {
     res.json(enriched);
 });
 
+app.get('/api/me/bills/autopay', async (req, res) => {
+    const prefs = await readJSON(req.autopayStore);
+    res.json(prefs.filter(p => p.userId === req.userId));
+});
+
+app.post('/api/me/bills/autopay', async (req, res) => {
+    const billDefKey = String((req.body && req.body.billDefKey) || '').trim();
+    const enabled    = !!(req.body && req.body.enabled);
+    if (!billDefKey) return res.status(400).json({ error: 'billDefKey required' });
+    const pref = await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.autopayStore);
+        const idx = all.findIndex(p => p.userId === req.userId && p.billDefKey === billDefKey);
+        if (idx === -1) {
+            const rec = { id: nextId(all), userId: req.userId, billDefKey, enabled, updatedAt: Date.now() };
+            all.push(rec);
+            await writeJSON(req.autopayStore, all);
+            return rec;
+        }
+        all[idx] = Object.assign({}, all[idx], { enabled, updatedAt: Date.now() });
+        await writeJSON(req.autopayStore, all);
+        return all[idx];
+    });
+    res.json(pref);
+});
+
 app.post('/api/me/bills/:cycleId/pay', async (req, res) => {
     const cycleId = Number(req.params.cycleId);
-    try {
-        const result = await withUserLock(req.userId, async () => {
-            const cycles = await readJSON(req.billCycleStore);
-            const idx    = cycles.findIndex(c => c.id === cycleId && c.userId === req.userId);
-            if (idx === -1) { const e = new Error('Bill not found'); e.status = 404; throw e; }
-            const cycle = cycles[idx];
-            if (cycle.status === 'paid') { const e = new Error('Bill is already paid'); e.status = 409; throw e; }
-
-            const statusInfo = computeBillCycleStatus(cycle);
-            const totalDue    = statusInfo.totalDue;
-
-            const users = await readJSON(req.userStore);
-            const uidx  = users.findIndex(u => u.id === req.userId);
-            if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
-            const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
-
-            let account = 'checking';
-            if (totalDue > balances[account]) {
-                if (totalDue <= balances.savings) account = 'savings';
-                else { const e = new Error('Insufficient funds in both accounts. Need ƒ' + totalDue.toFixed(2)); e.status = 409; throw e; }
-            }
-            const current = balances[account];
-            const next    = parseFloat((current - totalDue).toFixed(2));
-            balances[account] = next;
-
-            const onTime       = !statusInfo.overdue;
-            const pointsEarned = 45 + (onTime ? 15 : 0);
-            const coinsEarned  = Math.floor(totalDue / 10);
-
-            const userData = Object.assign({}, DEFAULT_USER_DATA, users[uidx].userData || {});
-            userData.points            = (userData.points || 0) + pointsEarned;
-            userData.pointsToNextLevel = (userData.pointsToNextLevel != null ? userData.pointsToNextLevel : 1000) - pointsEarned;
-            userData.completedTasks    = (userData.completedTasks || 0) + 1;
-            userData.coins              = (userData.coins || 0) + coinsEarned;
-            let leveledUp = false, newLevel = 0;
-            if (userData.pointsToNextLevel <= 0) {
-                if (userData.level === 1) {
-                    // Meaningless for a standalone single-module account (it has
-                    // no way to ever do the other two) — bypass it there, same
-                    // as checkAndCompleteChallengesForUser() and the
-                    // /api/me/challenges/level1 route.
-                    const challenges = req.appModule ? [] : await readJSON(req.challengeStore);
-                    const reqMet = req.appModule || LEVEL_1_REQUIRED_CONDITIONS.every(cond =>
-                        challenges.some(c => c.userId === req.userId && c.condition === cond && c.completed)
-                    );
-                    if (reqMet) {
-                        userData.level++;
-                        userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
-                        leveledUp = true; newLevel = userData.level;
-                    } else {
-                        userData.pointsToNextLevel = 0;
-                    }
-                } else {
-                    userData.level++;
-                    userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
-                    leveledUp = true; newLevel = userData.level;
-                }
-            }
-
-            const updatedUser = Object.assign({}, users[uidx], { balances, userData });
-            users[uidx] = updatedUser;
-            await writeJSON(req.userStore, users);
-            await maybeFireBalanceAlerts(updatedUser, account, current, next, -totalDue, 'utilities', req.messageStore);
-
-            cycles[idx] = Object.assign({}, cycle, { status: 'paid', paidAt: Date.now(), paidAmount: totalDue, lateFeePaid: statusInfo.lateFee });
-            await writeJSON(req.billCycleStore, cycles);
-
-            const payments = await readJSON(req.paymentStore);
-            const paymentRecord = {
-                id: nextId(payments), userId: req.userId,
-                type: cycle.name, amount: totalDue, accountNumber: cycle.accountNumber,
-                fromAccount: account, date: new Date().toLocaleDateString(), timestamp: Date.now(),
-                pointsEarned, lateFee: statusInfo.lateFee, usage: cycle.usage, unit: cycle.unit
-            };
-            payments.push(paymentRecord);
-            await writeJSON(req.paymentStore, payments);
-
-            return {
-                cycle: Object.assign({}, cycles[idx], computeBillCycleStatus(cycles[idx])),
-                payment: paymentRecord, leveledUp, newLevel, account, balance: next, onTimeBonus: onTime, pointsEarned
-            };
-        });
-        res.status(201).json(result);
-    } catch (err) {
-        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    const result = await attemptPayBillCycle(req.userId, cycleId, req);
+    if (!result.ok) {
+        if (result.reason === 'insufficient_funds') {
+            return res.status(409).json({ error: 'Insufficient funds in both accounts. Need ƒ' + result.totalDue.toFixed(2) });
+        }
+        const [status, message] = AUTOPAY_ERROR_STATUS[result.reason] || [500, 'Server error'];
+        return res.status(status).json({ error: message });
     }
+    res.status(201).json(result);
 });
 
 // ── Me: custom bills ─────────────────────────────────────────────────────────
@@ -2897,6 +2979,13 @@ app.get('/api/me/bills/custom', async (req, res) => {
     const all = await readJSON(req.customBillStore);
     res.json(all.filter(b => b.userId === req.userId));
 });
+
+// A custom bill's smallest possible charge must clear this floor — without
+// it, a flat bill of ƒ0.01 (or a usage bill whose min-usage*rate rounds to
+// pennies) still pays out the same flat +45/+60 XP and coins as any other
+// bill, and since deleting a custom bill is instant and free, that turns
+// bill creation into an unbounded, near-zero-cost XP farm.
+const MIN_CUSTOM_BILL_AMOUNT = 5;
 
 app.post('/api/me/bills/custom', async (req, res) => {
     const body = req.body || {};
@@ -2912,64 +3001,92 @@ app.post('/api/me/bills/custom', async (req, res) => {
         dueDateDay, lateFeeRate: 0.05, graceDays: 5, active: true, createdAt: Date.now()
     };
 
-    const all = await readJSON(req.customBillStore);
     let record;
     if (billingType === 'usage') {
         const unit        = String(body.unit || '').trim();
         const ratePerUnit = Number(body.ratePerUnit);
         const usageMin     = Number(body.usageMin);
         const usageMax     = Number(body.usageMax);
+        const baseFee      = Math.max(0, Number(body.baseFee) || 0);
         if (!unit) return res.status(400).json({ error: 'Usage unit required' });
         if (!ratePerUnit || ratePerUnit <= 0) return res.status(400).json({ error: 'Valid rate per unit required' });
         if (!usageMin || !usageMax || usageMax <= usageMin) return res.status(400).json({ error: 'Valid usage range required (max must exceed min)' });
-        record = Object.assign({}, base, {
-            unit, ratePerUnit, baseFee: Math.max(0, Number(body.baseFee) || 0), usageMin, usageMax, amount: null
-        });
+        if (baseFee + usageMin * ratePerUnit < MIN_CUSTOM_BILL_AMOUNT) {
+            return res.status(400).json({ error: 'Even at minimum usage this bill must total at least ƒ' + MIN_CUSTOM_BILL_AMOUNT.toFixed(2) });
+        }
+        record = Object.assign({}, base, { unit, ratePerUnit, baseFee, usageMin, usageMax, amount: null });
     } else {
         const amount = Number(body.amount);
-        if (!amount || amount <= 0) return res.status(400).json({ error: 'Valid amount required' });
+        if (!amount || amount < MIN_CUSTOM_BILL_AMOUNT) {
+            return res.status(400).json({ error: 'Amount must be at least ƒ' + MIN_CUSTOM_BILL_AMOUNT.toFixed(2) });
+        }
         record = Object.assign({}, base, {
             unit: null, ratePerUnit: null, baseFee: null, usageMin: null, usageMax: null, amount
         });
     }
-    record.id = nextId(all);
-    all.push(record);
-    await writeJSON(req.customBillStore, all);
+
+    record = await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.customBillStore);
+        record.id = nextId(all);
+        all.push(record);
+        await writeJSON(req.customBillStore, all);
+        return record;
+    });
     res.status(201).json(record);
 });
 
 app.put('/api/me/bills/custom/:id', async (req, res) => {
-    const id  = Number(req.params.id);
-    const all = await readJSON(req.customBillStore);
-    const idx = all.findIndex(b => b.id === id && b.userId === req.userId);
-    if (idx === -1) return res.status(404).json({ error: 'Custom bill not found' });
-    const body  = req.body || {};
-    const patch = {};
-    if (body.name !== undefined)          patch.name          = String(body.name).trim();
-    if (body.accountNumber !== undefined) patch.accountNumber = String(body.accountNumber).trim();
-    if (body.active !== undefined)        patch.active        = !!body.active;
-    if (all[idx].billingType === 'flat' && body.amount !== undefined) {
-        const amount = Number(body.amount);
-        if (!amount || amount <= 0) return res.status(400).json({ error: 'Valid amount required' });
-        patch.amount = amount;
+    const id = Number(req.params.id);
+    try {
+        const updated = await withUserLock(req.userId, async () => {
+            const all = await readJSON(req.customBillStore);
+            const idx = all.findIndex(b => b.id === id && b.userId === req.userId);
+            if (idx === -1) { const e = new Error('Custom bill not found'); e.status = 404; throw e; }
+            const body  = req.body || {};
+            const patch = {};
+            if (body.name !== undefined)          patch.name          = String(body.name).trim();
+            if (body.accountNumber !== undefined) patch.accountNumber = String(body.accountNumber).trim();
+            if (body.active !== undefined)        patch.active        = !!body.active;
+            if (all[idx].billingType === 'flat' && body.amount !== undefined) {
+                const amount = Number(body.amount);
+                if (!amount || amount < MIN_CUSTOM_BILL_AMOUNT) {
+                    const e = new Error('Amount must be at least ƒ' + MIN_CUSTOM_BILL_AMOUNT.toFixed(2)); e.status = 400; throw e;
+                }
+                patch.amount = amount;
+            }
+            if (all[idx].billingType === 'usage' && body.ratePerUnit !== undefined) {
+                const ratePerUnit = Number(body.ratePerUnit);
+                const usageMin    = all[idx].usageMin;
+                const baseFee     = all[idx].baseFee || 0;
+                if (!ratePerUnit || ratePerUnit <= 0) { const e = new Error('Valid rate per unit required'); e.status = 400; throw e; }
+                if (baseFee + usageMin * ratePerUnit < MIN_CUSTOM_BILL_AMOUNT) {
+                    const e = new Error('Even at minimum usage this bill must total at least ƒ' + MIN_CUSTOM_BILL_AMOUNT.toFixed(2)); e.status = 400; throw e;
+                }
+                patch.ratePerUnit = ratePerUnit;
+            }
+            all[idx] = Object.assign({}, all[idx], patch);
+            await writeJSON(req.customBillStore, all);
+            return all[idx];
+        });
+        res.json(updated);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
     }
-    if (all[idx].billingType === 'usage' && body.ratePerUnit !== undefined) {
-        const ratePerUnit = Number(body.ratePerUnit);
-        if (!ratePerUnit || ratePerUnit <= 0) return res.status(400).json({ error: 'Valid rate per unit required' });
-        patch.ratePerUnit = ratePerUnit;
-    }
-    all[idx] = Object.assign({}, all[idx], patch);
-    await writeJSON(req.customBillStore, all);
-    res.json(all[idx]);
 });
 
 app.delete('/api/me/bills/custom/:id', async (req, res) => {
-    const id  = Number(req.params.id);
-    const all = await readJSON(req.customBillStore);
-    await writeJSON(req.customBillStore, all.filter(b => !(b.id === id && b.userId === req.userId)));
-    // Drop any bill cycles this custom bill generated so it stops appearing.
-    const cycles = await readJSON(req.billCycleStore);
-    await writeJSON(req.billCycleStore, cycles.filter(c => !(c.userId === req.userId && c.billDefKey === 'custom:' + id)));
+    const id = Number(req.params.id);
+    await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.customBillStore);
+        await writeJSON(req.customBillStore, all.filter(b => !(b.id === id && b.userId === req.userId)));
+        // Drop any bill cycles this custom bill generated so it stops appearing.
+        const cycles = await readJSON(req.billCycleStore);
+        await writeJSON(req.billCycleStore, cycles.filter(c => !(c.userId === req.userId && c.billDefKey === 'custom:' + id)));
+        // Also drop any auto-pay preference for it, so recreating a bill with
+        // the same free id later doesn't inherit a stale "enabled" flag.
+        const prefs = await readJSON(req.autopayStore);
+        await writeJSON(req.autopayStore, prefs.filter(p => !(p.userId === req.userId && p.billDefKey === 'custom:' + id)));
+    });
     res.json({ ok: true });
 });
 

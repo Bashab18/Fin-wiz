@@ -432,6 +432,197 @@ body.digibank-theme .amz-progress-stat .coin-icon {
     justify-content: center;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   DigiPay brand identity — same technique as InStyl/DigiBank above: recolor
+   every shared component that keys off the app-wide primary token to a
+   warm utility-bill amber/orange (distinct from InStyl's teal-blue and
+   DigiBank's navy), then layer a dark slate header with amber accents onto
+   the shared chrome that has no design-system token. Scoped to
+   header/nav/progress only — utilities.html has no search box, product
+   grid, or filter rail, so none of InStyl's shop-specific rules below need
+   a utilities equivalent. ═══════════════════════════════════════════════ */
+body.digipay-theme {
+    --color-primary-50:  #fff7ed;
+    --color-primary-100: #ffedd5;
+    --color-primary-200: #fed7aa;
+    --color-primary-300: #fdba74;
+    --color-primary-400: #fb923c;
+    --color-primary-500: #ea580c;
+    --color-primary-600: #c2410c;
+    --color-primary-700: #9a3412;
+    --color-primary-800: #7c2d12;
+    --shadow-colored: 0 4px 14px rgba(234, 88, 12, 0.3);
+}
+
+body.digipay-theme .shop-logo {
+    font-style: normal;
+    letter-spacing: -0.01em;
+    color: #fff;
+}
+
+body.digipay-theme .shop-header {
+    background: #1e2530;
+    border-bottom: none;
+    padding: 10px 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+body.digipay-theme .amz-header-logout {
+    margin-left: 4px;
+    padding: 0.4rem 0.6rem;
+    color: #fca5a5;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    border-radius: 6px;
+}
+
+body.digipay-theme .amz-header-logout:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #f87171;
+}
+
+body.digipay-theme .shop-icon-btn {
+    position: relative;
+    color: #fff;
+}
+
+body.digipay-theme .shop-icon-btn:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+body.digipay-theme .shop-icon-btn.home svg,
+body.digipay-theme .shop-icon-btn.bookmark svg,
+body.digipay-theme .shop-icon-btn.cart svg {
+    fill: #fff;
+}
+
+body.digipay-theme .amz-icon-badge {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
+    border-radius: 999px;
+    background: #ea580c;
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+    pointer-events: none;
+}
+
+body.digipay-theme .amz-unified-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+body.digipay-theme .amz-unified-bar .shop-nav {
+    flex: 0 0 auto;
+    margin-left: 0;
+    gap: 6px;
+}
+
+body.digipay-theme .amz-unified-bar .shop-icon-btn {
+    padding: 6px;
+}
+
+body.digipay-theme .amz-unified-bar .shop-header-right {
+    gap: 10px;
+    margin-left: auto;
+}
+
+body.digipay-theme .amz-unified-bar .shop-nav a {
+    color: #fff;
+    font-size: 13px;
+    padding: 4px 2px;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+}
+
+body.digipay-theme .amz-unified-bar .shop-nav a:hover {
+    color: #fdba74;
+}
+
+body.digipay-theme .shop-nav a.active {
+    color: #fff;
+    border-bottom-color: #fb923c;
+}
+
+@media (max-width: 1180px) {
+    body.digipay-theme .amz-unified-bar {
+        flex-wrap: wrap;
+        row-gap: 10px;
+    }
+    body.digipay-theme .amz-unified-bar .shop-header-right {
+        margin-left: 0;
+        flex: 1 1 100%;
+        justify-content: flex-end;
+    }
+}
+
+body.digipay-theme .amz-progress-compact {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    color: #fff;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+body.digipay-theme .amz-progress-level strong {
+    color: #fdba74;
+}
+
+body.digipay-theme .amz-progress-mini {
+    width: 70px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+body.digipay-theme .amz-progress-mini-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #fdba74 0%, #ea580c 100%);
+    border-radius: 999px;
+}
+
+body.digipay-theme .amz-progress-pct {
+    opacity: 0.85;
+}
+
+body.digipay-theme .amz-progress-stat {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+body.digipay-theme .amz-progress-stat svg {
+    fill: #fff;
+}
+
+body.digipay-theme .amz-progress-stat .coin-icon {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #fdba74 0%, #ea580c 100%);
+    color: #333;
+    font-size: 10px;
+    font-weight: 700;
+    font-style: italic;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 /* ── Department / price / rating filter rail ──────────────────────────── */
 body.instyl-theme .amz-shop-layout {
     display: flex;

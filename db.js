@@ -285,6 +285,14 @@ const DigifinwizDB = (() => {
         return _api('DELETE', '/api/me/bills/custom/' + id);
     }
 
+    function getAutopayPrefs() {
+        return _api('GET', '/api/me/bills/autopay');
+    }
+
+    function setAutopayPref(billDefKey, enabled) {
+        return _api('POST', '/api/me/bills/autopay', { billDefKey, enabled });
+    }
+
     // ── Purchases ─────────────────────────────────────────────────────────────
     function addPurchase(p) {
         return _api('POST', '/api/me/purchases', p);
@@ -642,6 +650,8 @@ const DigifinwizDB = (() => {
         createCustomBill,
         updateCustomBill,
         deleteCustomBill,
+        getAutopayPrefs,
+        setAutopayPref,
 
         // Purchases
         addPurchase,
