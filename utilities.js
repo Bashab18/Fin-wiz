@@ -166,10 +166,19 @@ function payBill(cycleId) {
 
 var BILL_ICONS = { Electricity:'⚡', Water:'💧', Internet:'🌐', 'Property Tax':'🏠', Phone:'📱', Gas:'🔥' };
 
+// Full payment records, keyed by id, for the detail modal — the rendered
+// history rows only show a formatted summary string, so a click needs
+// somewhere to recover the underlying record (including usage/unit/lateFee)
+// rather than re-parsing it back out of the DOM.
+var UTIL_PAYMENT_BY_ID = {};
+
 function updatePaymentHistory() {
     DigifinwizDB.getPayments(200).then(function(payments) {
         var paymentHistory = document.getElementById('paymentHistory');
         if (!paymentHistory) return;
+
+        UTIL_PAYMENT_BY_ID = {};
+        payments.forEach(function(p) { UTIL_PAYMENT_BY_ID[p.id] = p; });
 
         if (payments.length === 0) {
             paymentHistory.innerHTML = '<p style="color:#64748b;padding:1rem;text-align:center;font-size:0.875rem">No payments yet. Pay your first bill to earn XP!</p>';
@@ -214,7 +223,7 @@ function updatePaymentHistory() {
                 if (p.usage != null && p.unit) detailBits.push(p.usage.toLocaleString() + ' ' + p.unit);
                 if (p.lateFee > 0) detailBits.push('incl. ƒ' + Number(p.lateFee).toFixed(2) + ' late fee');
                 var detailLine = detailBits.length ? (' · ' + escHtml(detailBits.join(' · '))) : '';
-                return '<div class="pay-hist-item" data-type="' + escHtml(p.type||'') + '" style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem 0;border-bottom:1px solid #f1f5f9">' +
+                return '<div class="pay-hist-item" data-type="' + escHtml(p.type||'') + '" onclick="showPaymentDetailModal(UTIL_PAYMENT_BY_ID[' + Number(p.id) + '])" style="cursor:pointer;display:flex;align-items:center;gap:0.75rem;padding:0.75rem 0;border-bottom:1px solid #f1f5f9">' +
                     '<div style="width:40px;height:40px;background:#f0fdf4;border:2px solid #bbf7d0;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0">' + icon + '</div>' +
                     '<div style="flex:1;min-width:0">' +
                         '<strong style="font-size:0.875rem">' + escHtml(p.type) + ' Bill Paid</strong>' +

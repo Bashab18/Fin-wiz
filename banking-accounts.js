@@ -717,10 +717,15 @@ function loadDashboardTab() {
         DigifinwizDB.getAllBalances(),
         DigifinwizDB.getRecentActivity(6),
         DigifinwizDB.getScheduledTransfers(),
-        DigifinwizDB.getSavingsGoals()
+        DigifinwizDB.getSavingsGoals(),
+        // getRecentActivity() returns a stripped-down, merged feed (icon/
+        // label/detail only) across several activity types — fetch the full
+        // transaction records too so transfer rows can open the detail modal
+        // with the real recipient/account/description/timestamp data.
+        DigifinwizDB.getTransactions(200)
     ]).then(function(results) {
         renderDashAccountsSummary(results[0], session);
-        renderDashActivity(results[1]);
+        renderDashActivity(results[1], results[4]);
         renderDashUpcomingSchedule(results[2]);
         renderDashGoalsSummary(results[3]);
         renderDashBranchLocator();
@@ -748,15 +753,26 @@ function renderDashAccountsSummary(balances, session) {
         '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem">' + cards + '</div>';
 }
 
-function renderDashActivity(events) {
+function renderDashActivity(events, transactions) {
     var list = document.getElementById('dashActivityList');
     if (!list) return;
     if (!events || events.length === 0) {
         list.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem;text-align:center">No activity yet — make a transfer to get started!</p>';
         return;
     }
+    // Match each "transfer" activity-feed entry back to its full transaction
+    // record (same underlying store, same timestamp) so the row can open the
+    // detail modal. Other activity types (bill payments, purchases, credit
+    // card, loans, goals) have no equivalent full record to show here.
+    var txByTimestamp = {};
+    (transactions || []).forEach(function(t) { txByTimestamp[t.timestamp] = t; });
+
     list.innerHTML = events.map(function(e) {
-        return '<div class="transaction-item">' +
+        var tx = (e.type === 'transfer') ? txByTimestamp[e.timestamp] : null;
+        var clickAttrs = tx
+            ? ' style="cursor:pointer" onclick=\'showTransactionDetailModal(' + jsAttrB(tx) + ')\''
+            : '';
+        return '<div class="transaction-item"' + clickAttrs + '>' +
             '<div style="width:40px;height:40px;border-radius:50%;background:var(--color-gray-100);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">' + e.icon + '</div>' +
             '<div class="transaction-details" style="flex:1;min-width:0">' +
                 '<div style="font-weight:600;font-size:0.875rem">' + escBA(e.label) + '</div>' +

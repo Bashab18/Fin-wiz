@@ -405,6 +405,64 @@
             .replace(/&/g, '\\u0026').replace(/</g, '\\u003C').replace(/>/g, '\\u003E').replace(/'/g, '\\u0027');
     }
 
+    /* ── Payment detail modal ──────────────────────────────────────────
+       Surfaces the full stored payment record (usage/unit/lateFee/full
+       timestamp/etc.) that the History list only ever shows a one-line
+       summary of. Same centered-overlay-card visual language as the
+       bill-payment confirm modal in utilities.js. */
+    function showPaymentDetailModal(payment) {
+        if (!payment) return;
+        var existing = document.getElementById('paymentDetailModal');
+        if (existing) existing.remove();
+
+        var icon = BILL_ICONS_PAGE[payment.type] || '🧾';
+        var d = payment.timestamp ? new Date(payment.timestamp) : (payment.date ? new Date(payment.date) : null);
+        var fullDateTime = (d && !isNaN(d.getTime()))
+            ? d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) +
+              ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+            : (payment.date || '—');
+        var fromLbl = payment.fromAccount
+            ? (payment.fromAccount.charAt(0).toUpperCase() + payment.fromAccount.slice(1)) + ' Account'
+            : '—';
+
+        var usageLine = (payment.usage != null && payment.unit)
+            ? '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem"><span style="color:#64748b">Usage</span><strong>' +
+              Number(payment.usage).toLocaleString() + ' ' + escHU(payment.unit) + '</strong></div>'
+            : '';
+        var lateFeeBanner = (payment.lateFee > 0)
+            ? '<div style="background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:8px;padding:0.55rem 0.75rem;font-size:0.8rem;margin-bottom:1rem;font-weight:600">⚠ Includes late fee of $' +
+              Number(payment.lateFee).toFixed(2) + '</div>'
+            : '';
+
+        var modal = document.createElement('div');
+        modal.id = 'paymentDetailModal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;animation:fadeIn 0.2s';
+
+        modal.innerHTML =
+            '<div style="background:#fff;border-radius:16px;padding:2rem;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2)">' +
+                '<div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.25rem">' +
+                    '<div style="width:48px;height:48px;background:#f0fdf4;border:2px solid #bbf7d0;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0">' + icon + '</div>' +
+                    '<div><h2 style="font-size:1.15rem;font-weight:700;margin:0;color:#1e293b">' + escHU(payment.type) + ' Bill</h2>' +
+                        '<div style="font-size:0.78rem;color:#64748b">Payment details</div></div>' +
+                '</div>' +
+                lateFeeBanner +
+                '<div style="background:#f1f5f9;border-radius:10px;padding:1rem;margin-bottom:1.25rem;font-size:0.875rem">' +
+                    '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem"><span style="color:#64748b">Amount Charged</span><strong style="color:var(--color-primary-600);font-size:1.1rem">ƒ' + Number(payment.amount || 0).toFixed(2) + '</strong></div>' +
+                    usageLine +
+                    '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem"><span style="color:#64748b">Account No.</span><span style="font-family:monospace">' + escHU(payment.accountNumber || '—') + '</span></div>' +
+                    '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem"><span style="color:#64748b">Paid From</span><span>' + escHU(fromLbl) + '</span></div>' +
+                    '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem"><span style="color:#64748b">Date &amp; Time</span><span>' + escHU(fullDateTime) + '</span></div>' +
+                    '<div style="display:flex;justify-content:space-between;border-top:1px solid #e2e8f0;padding-top:0.5rem;margin-top:0.5rem"><span style="color:#64748b">XP Earned</span><strong style="color:#10b981">+' + (payment.pointsEarned || 0) + ' XP</strong></div>' +
+                '</div>' +
+                '<button id="paymentDetailCloseBtn" class="btn btn-primary btn-block">Close</button>' +
+            '</div>';
+
+        document.body.appendChild(modal);
+        var close = function() { modal.remove(); };
+        document.getElementById('paymentDetailCloseBtn').addEventListener('click', close);
+        modal.addEventListener('click', function(e) { if (e.target === modal) close(); });
+    }
+
     var BILL_TYPES      = ['Electricity','Water','Internet','Property Tax','Phone','Gas'];
     var BILL_ICONS_PAGE = { Electricity:'⚡', Water:'💧', Internet:'🌐', 'Property Tax':'🏠', Phone:'📱', Gas:'🔥' };
     var LOADED_BILLS    = []; // store bills for urgency badge lookup
@@ -450,6 +508,49 @@
         if (pctEl)  pctEl.textContent  = pct + '% of monthly bills paid this session';
         var remaining = Math.max(0, ESTIMATED_MONTHLY - totalPaid);
         if (remEl)  remEl.textContent  = pct < 100 ? 'ƒ' + remaining.toFixed(2) + ' remaining' : '✓ All bills covered!';
+    }
+
+    /* ── Usage history mini-trend (usage-based bills only) ────────────
+       Reuses the payments already fetched for the streak badges below —
+       filters to this bill's own type, keeps only readings that actually
+       carry a usage number, and renders the last up to 6 as a compact
+       CSS-only horizontal bar list (oldest to newest) so a glance shows
+       whether usage has been trending up or down. Returns '' (nothing
+       rendered) when there's 0-1 data points, since there's no trend to
+       show yet. */
+    function renderUsageTrendHtml(billName, allPayments) {
+        var typePays = (allPayments || []).filter(function(p) { return p.type === billName && p.usage != null; });
+        // allPayments comes from DigifinwizDB.getPayments(), which the server
+        // returns sorted newest-first — so the first N here are the most
+        // recent readings.
+        var recentDesc = typePays.slice(0, 6);
+        if (recentDesc.length < 2) return '';
+        var chronological = recentDesc.slice().reverse();
+        var maxUsage = Math.max.apply(null, chronological.map(function(p) { return p.usage; }));
+        var latest = recentDesc[0].usage;
+        var previous = recentDesc[1].usage;
+        var trendLabel = latest > previous
+            ? '<span style="color:#dc2626">▲ trending up</span>'
+            : (latest < previous
+                ? '<span style="color:#16a34a">▼ trending down</span>'
+                : '<span style="color:var(--color-gray-400)">→ steady</span>');
+        var rows = chronological.map(function(p, i) {
+            var d = p.timestamp ? new Date(p.timestamp) : new Date(p.date);
+            var label = isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-US', { month: 'short' });
+            var pct = maxUsage > 0 ? Math.max(6, Math.round((p.usage / maxUsage) * 100)) : 0;
+            var isLatest = i === chronological.length - 1;
+            var barColor = isLatest ? 'var(--color-primary-500)' : 'var(--color-gray-300)';
+            return '<div style="display:flex;align-items:center;gap:0.5rem;font-size:0.68rem;margin-bottom:3px">' +
+                '<span style="width:30px;flex-shrink:0;color:var(--color-gray-400)">' + label + '</span>' +
+                '<div style="flex:1;background:var(--color-gray-100);border-radius:4px;height:7px;overflow:hidden"><div style="width:' + pct + '%;height:100%;background:' + barColor + ';border-radius:4px"></div></div>' +
+                '<span style="width:58px;text-align:right;flex-shrink:0;color:var(--color-gray-600);font-weight:600">' + Number(p.usage).toLocaleString() + (p.unit ? ' ' + escHU(p.unit) : '') + '</span>' +
+            '</div>';
+        }).join('');
+        return '<div class="bill-usage-trend" style="margin:0 0 0.75rem;padding:0.55rem 0.65rem;background:var(--color-gray-50);border-radius:var(--radius-md)">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.66rem;font-weight:700;color:var(--color-gray-500);text-transform:uppercase;letter-spacing:0.03em;margin-bottom:0.35rem">' +
+                '<span>Usage Trend</span>' + trendLabel +
+            '</div>' + rows +
+        '</div>';
     }
 
     /* ── Bill cards ────────────────────────────────────────────────── */
@@ -555,16 +656,17 @@
             var payAllCount = document.getElementById('payAllCount');
             if (payAllWrap) payAllWrap.style.display = unpaidCount > 0 ? '' : 'none';
             if (payAllCount) payAllCount.textContent = unpaidCount + ' bill' + (unpaidCount!==1?'s':'') + ' unpaid';
-            // Inject streak badges
+            // Inject streak badges + usage trend (both derived from the same
+            // full payment history, so share one fetch).
             DigifinwizDB.getPayments(1000).then(function(allPays) {
                 var streaks = computeStreaks(allPays);
                 bills.forEach(function(b) {
+                    var billEl = document.getElementById('bill-' + b.id);
+                    if (!billEl) return;
+                    var bodyEl = billEl.querySelector('.bill-body');
+                    if (!bodyEl) return;
                     var count = streaks[b.name] || 0;
                     if (count >= 2) {
-                        var billEl = document.getElementById('bill-' + b.id);
-                        if (!billEl) return;
-                        var bodyEl = billEl.querySelector('.bill-body');
-                        if (!bodyEl) return;
                         var old = bodyEl.querySelector('.streak-badge');
                         if (old) old.remove();
                         var badge = document.createElement('div');
@@ -572,6 +674,15 @@
                         badge.style.cssText = 'display:inline-flex;align-items:center;gap:0.3rem;background:linear-gradient(135deg,#fef3c7,#fde68a);border:1.5px solid #f59e0b;border-radius:99px;padding:0.25rem 0.75rem;font-size:0.74rem;font-weight:700;color:#92400e;margin-bottom:0.5rem';
                         badge.textContent = '🔥 ' + count + 'x paid';
                         bodyEl.insertBefore(badge, bodyEl.firstChild);
+                    }
+                    if (b.billingType === 'usage') {
+                        var trendHtml = renderUsageTrendHtml(b.name, allPays);
+                        var old2 = bodyEl.querySelector('.bill-usage-trend');
+                        if (old2) old2.remove();
+                        if (trendHtml) {
+                            var payBtn = document.getElementById('payBtn-' + b.id);
+                            if (payBtn) payBtn.insertAdjacentHTML('beforebegin', trendHtml);
+                        }
                     }
                 });
             }).catch(function(){});

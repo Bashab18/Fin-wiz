@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InStyl - Order Details</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="shopping-styles.css">
+    <script src="config.js"></script>
+    <script>window.APP_MODULE = 'ecommerce';</script>
+    <script src="module-auth.js"></script>
+</head>
+<body class="instyl-theme">
+    <header class="shop-header">
+        <div class="shop-container amz-unified-bar">
+            <div class="shop-logo">InStyl.</div>
+            <nav class="shop-nav">
+                <a href="ecommerce.html?sale=true">On Sale</a>
+                <a href="ecommerce.html?category=women">Women</a>
+                <a href="ecommerce.html?category=men">Men</a>
+                <a href="ecommerce.html?category=outdoors">Outdoors</a>
+                <a href="ecommerce.html?category=cooking">Cooking</a>
+                <a href="ecommerce.html?category=electronics">Electronics</a>
+                <a href="ecommerce.html?category=accessories">Accessories</a>
+            </nav>
+            <div class="amz-progress-compact" title="Game progress">
+                <span class="amz-progress-level">Lvl <strong>2/50</strong></span>
+                <div class="amz-progress-mini"><div class="amz-progress-mini-fill" style="width: 40%"></div></div>
+                <span class="amz-progress-pct">40% completed</span>
+                <span class="amz-progress-stat"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg><span>1400 XP</span></span>
+                <span class="amz-progress-stat coins"><div class="coin-icon">&#402;</div><span>3400</span></span>
+            </div>
+            <div class="shop-header-right">
+                <div class="shop-search-box"><input type="text" placeholder="Search..."></div>
+                <div class="shop-icons">
+                    <button class="shop-icon-btn home" onclick="window.location.href='shop-account.html'">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+                    </button>
+                    <button class="shop-icon-btn user"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg></button>
+                    <button class="shop-icon-btn bookmark" onclick="window.location.href='shop-saved-items.html'">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
+                    </button>
+                    <button class="shop-icon-btn cart" onclick="window.location.href='shop-cart.html'"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg></button>
+                </div>
+                <a href="#" class="amz-header-logout" data-logout title="Logout">Logout</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="shop-main-content">
+        <div class="shop-container">
+            <aside class="shop-sidebar">
+                <nav class="shop-sidebar-nav">
+                    <a href="shop-account.html" class="shop-nav-item">Account Summary</a>
+                    <a href="shop-profile.html" class="shop-nav-item">Profile</a>
+                    <a href="shop-change-password.html" class="shop-nav-item">Change Password</a>
+                    <a href="shop-address-book.html" class="shop-nav-item">Address Book</a>
+                    <a href="shop-order-history.html" class="shop-nav-item active">Order History</a>
+                    <a href="shop-order-status.html" class="shop-nav-item">Order Status</a>
+                    <a href="shop-wallet.html" class="shop-nav-item">Wallet</a>
+                    <a href="shop-saved-items.html" class="shop-nav-item">Saved Items</a>
+                    <a href="shop-cart.html" class="shop-nav-item">Cart</a>
+                    <a href="shop-alerts.html" class="shop-nav-item">Alerts</a>
+                    <a href="ecommerce.html" class="shop-nav-item back-link">&#8592; Back to Store</a>
+                </nav>
+            </aside>
+
+            <main class="shop-content-area">
+                <div class="shop-page-header"><h1>Order Details</h1></div>
+
+                <div style="margin-bottom:1rem">
+                    <a href="shop-order-history.html" class="add-link">&#8592; Back to Order History</a>
+                </div>
+
+                <div id="orderDetailContent">
+                    <p style="color:#64748b;font-size:0.875rem;text-align:center;padding:1rem">Loading order&hellip;</p>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="db.js"></script>
+    <script src="shop-bridge.js"></script>
+    <script src="shopping-script.js"></script>
+    <script>
+    function escH(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+            return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+        });
+    }
+    function money(n) { return 'ƒ' + Number(n || 0).toFixed(2); }
+
+    function getQueryParam(name) {
+        var m = new RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+        return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : null;
+    }
+
+    // Same status icon/CSS-class mapping and timeline renderer as
+    // shop-order-status.html, so the tracking timeline looks identical
+    // wherever it appears.
+    var STATUS_ICONS   = { processing: '&#9881;', shipped: '&#10003;', out_for_delivery: '&#128666;', delivered: '&#128230;' };
+    var STATUS_CSS_CLS = { processing: 'processing', shipped: 'shipped', out_for_delivery: 'in-transit', delivered: 'delivered' };
+
+    function buildTimeline(trackingSteps) {
+        var steps = [{ label: 'Order Placed', done: true, icon: '&#10003;' }].concat(
+            (trackingSteps || []).map(function(s) {
+                return { label: s.label, done: s.done, icon: STATUS_ICONS[s.key] || '&#8226;' };
+            })
+        );
+        var activeIdx = steps.findIndex(function(s) { return !s.done; });
+        return steps.map(function(s, i) {
+            var cls = s.done ? 'completed' : (i === activeIdx ? 'active' : '');
+            return '<div class="timeline-step ' + cls + '">' +
+                '<div class="timeline-icon">' + (s.done ? '&#10003;' : s.icon) + '</div>' +
+                '<div class="timeline-content"><h4>' + s.label + '</h4>' +
+                (s.done ? '<p>Completed</p>' : (i === activeIdx ? '<p>In progress</p>' : '<p>Pending</p>')) +
+                '</div></div>';
+        }).join('');
+    }
+
+    // Same row-based cost-breakdown layout as the checkout modal in
+    // ecommerce.js (renderCheckoutSummary), reused here for the order's
+    // final, locked-in totals.
+    function costRow(label, amount, opts) {
+        opts = opts || {};
+        return '<div style="display:flex;justify-content:space-between;margin-bottom:0.25rem' + (opts.strong ? ';border-top:1px solid #e2e8f0;padding-top:0.5rem;margin-top:0.4rem' : '') + '">' +
+            '<span' + (opts.strong ? '' : ' style="color:#64748b"') + '>' + label + '</span>' +
+            '<span' + (opts.color ? ' style="color:' + opts.color + '"' : '') + '>' + amount + '</span></div>';
+    }
+
+    function cardWrap(inner, extraStyle) {
+        return '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:1.25rem;margin-bottom:1.25rem' + (extraStyle || '') + '">' + inner + '</div>';
+    }
+
+    function renderOrder(order) {
+        var container = document.getElementById('orderDetailContent');
+        if (!container) return;
+
+        var orderNum   = order.orderId || ('#' + String(order.id || '').padStart(6, '0'));
+        var dateStr    = order.date || (order.timestamp ? new Date(order.timestamp).toLocaleDateString() : '');
+        var cssCls     = STATUS_CSS_CLS[order.status] || 'processing';
+        var estDate    = order.estimatedDelivery ? new Date(order.estimatedDelivery).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+        var items      = order.items || [];
+        var addr       = order.address || {};
+        var pm         = order.paymentMethod || {};
+
+        // ── Header: order number, date, status badge, tracking timeline ──────
+        var headerCard = cardWrap(
+            '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.75rem;margin-bottom:1rem;padding-bottom:1rem;border-bottom:2px solid #e0e0e0">' +
+                '<div>' +
+                    '<h2 style="font-size:1.15rem;font-weight:700;margin:0 0 0.25rem">Order ' + escH(orderNum) + '</h2>' +
+                    '<p style="color:#64748b;font-size:0.85rem;margin:0">Placed ' + escH(dateStr) +
+                    (estDate && order.status !== 'delivered' ? ' &middot; Est. delivery ' + estDate : '') + '</p>' +
+                '</div>' +
+                '<span class="tracking-status ' + cssCls + '">' + escH(order.statusLabel || 'Processing') + '</span>' +
+            '</div>' +
+            '<div class="tracking-timeline">' + buildTimeline(order.trackingSteps) + '</div>'
+        );
+
+        // ── Itemized table ────────────────────────────────────────────────────
+        var itemRows = items.map(function(it) {
+            var qty  = it.quantity || 1;
+            var line = (it.price || 0) * qty;
+            return '<tr>' +
+                '<td style="padding:0.6rem 0.5rem;border-bottom:1px solid #f1f5f9">' + escH(it.name) + '</td>' +
+                '<td style="padding:0.6rem 0.5rem;border-bottom:1px solid #f1f5f9;text-align:right">' + money(it.price) + '</td>' +
+                '<td style="padding:0.6rem 0.5rem;border-bottom:1px solid #f1f5f9;text-align:center">' + qty + '</td>' +
+                '<td style="padding:0.6rem 0.5rem;border-bottom:1px solid #f1f5f9;text-align:right;font-weight:600">' + money(line) + '</td>' +
+                '</tr>';
+        }).join('');
+        var itemsCard = cardWrap(
+            '<h3 style="font-size:1rem;font-weight:700;margin:0 0 1rem;padding-bottom:0.6rem;border-bottom:2px solid #e0e0e0">Items (' + items.length + ')</h3>' +
+            '<table style="width:100%;border-collapse:collapse;font-size:0.875rem">' +
+                '<thead><tr style="color:#64748b;text-align:left">' +
+                    '<th style="padding:0 0.5rem 0.5rem;text-align:left">Item</th>' +
+                    '<th style="padding:0 0.5rem 0.5rem;text-align:right">Unit Price</th>' +
+                    '<th style="padding:0 0.5rem 0.5rem;text-align:center">Qty</th>' +
+                    '<th style="padding:0 0.5rem 0.5rem;text-align:right">Subtotal</th>' +
+                '</tr></thead>' +
+                '<tbody>' + (itemRows || '<tr><td colspan="4" style="padding:0.6rem 0.5rem;color:#64748b">No items on this order.</td></tr>') + '</tbody>' +
+            '</table>'
+        );
+
+        // ── Cost breakdown (mirrors the checkout modal summary) ─────────────
+        var breakdownCard = cardWrap(
+            '<h3 style="font-size:1rem;font-weight:700;margin:0 0 1rem;padding-bottom:0.6rem;border-bottom:2px solid #e0e0e0">Order Summary</h3>' +
+            costRow('Subtotal', money(order.subtotal)) +
+            (order.promoCode && order.discount > 0 ? costRow('Discount (' + escH(order.promoCode) + ')', '&minus;' + money(order.discount), { color: '#10b981' }) : '') +
+            costRow('Shipping' + (order.shippingMethod ? ' (' + escH(order.shippingMethod) + ')' : ''), order.shippingCost > 0 ? money(order.shippingCost) : 'FREE', { color: order.shippingCost > 0 ? '' : '#10b981' }) +
+            costRow('Tax' + (order.taxRate ? ' (' + (order.taxRate * 100).toFixed(2) + '%)' : ''), money(order.tax)) +
+            costRow('<strong>Total</strong>', '<strong style="color:#6366f1">' + money(order.total) + '</strong>', { strong: true }) +
+            '<div style="display:flex;gap:1.25rem;margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid #f1f5f9;font-size:0.85rem">' +
+                '<span style="color:#10b981;font-weight:600">+' + (order.pointsEarned || 0) + ' XP earned</span>' +
+                '<span style="color:#f59e0b;font-weight:600"><span class="coin-icon" style="display:inline-block;vertical-align:-2px">&#402;</span> +' + (order.coinsEarned || 0) + ' coins earned</span>' +
+            '</div>'
+        );
+
+        // ── Address + payment method snapshots, side by side ────────────────
+        var addrLine2 = addr.street2 ? ('<p>' + escH(addr.street2) + '</p>') : '';
+        var addressCard =
+            '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:1.25rem;flex:1;min-width:240px">' +
+                '<h3 style="font-size:1rem;font-weight:700;margin:0 0 1rem;padding-bottom:0.6rem;border-bottom:2px solid #e0e0e0">Shipping Address</h3>' +
+                '<div class="address-content">' +
+                    '<p style="font-weight:600">' + escH(addr.fullName) + '</p>' +
+                    '<p>' + escH(addr.street) + '</p>' +
+                    addrLine2 +
+                    '<p>' + escH(addr.city) + ', ' + escH(addr.state) + ' ' + escH(addr.zip) + '</p>' +
+                    '<p>' + escH(addr.country) + '</p>' +
+                '</div>' +
+            '</div>';
+        var paymentCard =
+            '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:1.25rem;flex:1;min-width:240px">' +
+                '<h3 style="font-size:1rem;font-weight:700;margin:0 0 1rem;padding-bottom:0.6rem;border-bottom:2px solid #e0e0e0">Payment Method</h3>' +
+                '<div class="wallet-content">' +
+                    '<label>Charged to</label>' +
+                    '<p>' + escH((pm.brand || '').toUpperCase()) + ' &bull;&bull;&bull;&bull; ' + escH(pm.last4 || '----') + '</p>' +
+                '</div>' +
+            '</div>';
+        var snapshotRow = '<div style="display:flex;gap:1.25rem;flex-wrap:wrap;margin-bottom:1.25rem">' + addressCard + paymentCard + '</div>';
+
+        container.innerHTML = headerCard + itemsCard + breakdownCard + snapshotRow +
+            '<div><a href="shop-order-history.html" class="add-link">&#8592; Back to Order History</a></div>';
+    }
+
+    function loadOrderDetail() {
+        var id = getQueryParam('id');
+        var container = document.getElementById('orderDetailContent');
+        if (!id) {
+            if (container) container.innerHTML = '<p style="color:#dc2626;padding:1rem">No order specified.</p>';
+            return;
+        }
+        DigifinwizDB.getOrder(id).then(function(order) {
+            renderOrder(order);
+        }).catch(function(err) {
+            if (container) container.innerHTML = '<p style="color:#dc2626;padding:1rem">' + escH((err && err.message) || 'Order not found.') + '</p>';
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        DigifinwizDB.init().then(loadOrderDetail);
+    });
+    </script>
+</body>
+</html>
