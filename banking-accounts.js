@@ -239,7 +239,7 @@ function updateLoanPreview() {
         '<div style="display:flex;justify-content:space-between;margin-bottom:0.3rem"><span>APR</span><strong>' + preview.apr + '%</strong></div>' +
         '<div style="display:flex;justify-content:space-between;margin-bottom:0.3rem"><span>Total Interest</span><strong>' + fmtBA(preview.totalInterest) + '</strong></div>' +
         '<div style="display:flex;justify-content:space-between;margin-bottom:0.3rem"><span>Total to Repay</span><strong>' + fmtBA(preview.totalOwed) + '</strong></div>' +
-        '<div style="display:flex;justify-content:space-between;border-top:1px solid var(--color-border);padding-top:0.4rem;margin-top:0.2rem"><span>Monthly Payment</span><strong style="color:#6366f1">' + fmtBA(preview.monthlyPayment) + '</strong></div>';
+        '<div style="display:flex;justify-content:space-between;border-top:1px solid var(--color-border);padding-top:0.4rem;margin-top:0.2rem"><span>Monthly Payment</span><strong style="color:var(--color-primary-600)">' + fmtBA(preview.monthlyPayment) + '</strong></div>';
 }
 
 function loadLoansTab() {
@@ -285,15 +285,15 @@ function renderLoanSummary(loan) {
     var paidSoFar  = Math.max(0, parseFloat((totalOwed - loan.balance).toFixed(2)));
     var pct = totalOwed > 0 ? Math.min(100, Math.round((paidSoFar / totalOwed) * 100)) : 0;
     el.innerHTML =
-        '<h2>🏠 Your Loan</h2>' +
+        '<h2>Your Loan</h2>' +
         '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:0.75rem;margin:1rem 0">' +
-            '<div style="text-align:center;background:#eff6ff;border-radius:10px;padding:0.875rem;border:1px solid #bfdbfe"><div style="font-size:1.25rem;font-weight:700;color:#2563eb">' + fmtBA(loan.principal) + '</div><div style="font-size:0.75rem;color:var(--color-gray-500)">Original Loan</div></div>' +
-            '<div style="text-align:center;background:#fef2f2;border-radius:10px;padding:0.875rem;border:1px solid #fecaca"><div style="font-size:1.25rem;font-weight:700;color:#dc2626">' + fmtBA(loan.balance) + '</div><div style="font-size:0.75rem;color:var(--color-gray-500)">Remaining Balance</div></div>' +
-            '<div style="text-align:center;background:#f0fdf4;border-radius:10px;padding:0.875rem;border:1px solid #bbf7d0"><div style="font-size:1.25rem;font-weight:700;color:#059669">' + fmtBA(loan.monthlyPayment) + '</div><div style="font-size:0.75rem;color:var(--color-gray-500)">Monthly Payment</div></div>' +
-            '<div style="text-align:center;background:#fffbeb;border-radius:10px;padding:0.875rem;border:1px solid #fde68a"><div style="font-size:1.25rem;font-weight:700;color:#d97706">' + loan.apr + '%</div><div style="font-size:0.75rem;color:var(--color-gray-500)">APR</div></div>' +
+            '<div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.875rem;border:1px solid var(--color-border)"><div style="font-size:1.25rem;font-weight:700;color:var(--color-gray-800)">' + fmtBA(loan.principal) + '</div><div style="font-size:0.75rem;color:var(--color-gray-500)">Original Loan</div></div>' +
+            '<div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.875rem;border:1px solid var(--color-border)"><div style="font-size:1.25rem;font-weight:700;color:var(--color-gray-800)">' + fmtBA(loan.balance) + '</div><div style="font-size:0.75rem;color:var(--color-gray-500)">Remaining Balance</div></div>' +
+            '<div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.875rem;border:1px solid var(--color-border)"><div style="font-size:1.25rem;font-weight:700;color:#2f855a">' + fmtBA(loan.monthlyPayment) + '</div><div style="font-size:0.75rem;color:var(--color-gray-500)">Monthly Payment</div></div>' +
+            '<div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.875rem;border:1px solid var(--color-border)"><div style="font-size:1.25rem;font-weight:700;color:var(--color-gray-800)">' + loan.apr + '%</div><div style="font-size:0.75rem;color:var(--color-gray-500)">APR</div></div>' +
         '</div>' +
         '<div style="display:flex;justify-content:space-between;font-size:0.78rem;color:var(--color-gray-500);margin-bottom:0.3rem"><span>Payoff Progress</span><span>' + pct + '%</span></div>' +
-        '<div style="height:10px;background:#e2e8f0;border-radius:99px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#6366f1,#10b981);transition:width 0.6s"></div></div>' +
+        '<div style="height:10px;background:#e2e8f0;border-radius:99px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,var(--color-primary-600),#2f855a);transition:width 0.6s"></div></div>' +
         '<div style="font-size:0.75rem;color:var(--color-gray-400);margin-top:0.5rem">' + loan.termMonths + '-month term · opened ' + (loan.openedAt ? new Date(loan.openedAt).toLocaleDateString() : '') + '</div>';
 }
 
@@ -392,7 +392,7 @@ function loadGoalsTab() {
                 '</div>' +
                 '<div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:0.3rem"><span>' + fmtBA(g.current) + ' of ' + fmtBA(g.target) + '</span><span>' + pct + '%</span></div>' +
                 '<div style="height:8px;background:#e2e8f0;border-radius:99px;overflow:hidden;margin-bottom:0.75rem">' +
-                    '<div style="height:100%;width:' + pct + '%;background:' + (isDone ? '#10b981' : 'linear-gradient(90deg,#6366f1,#8b5cf6)') + ';transition:width 0.5s"></div>' +
+                    '<div style="height:100%;width:' + pct + '%;background:' + (isDone ? '#10b981' : 'var(--color-primary-600)') + ';transition:width 0.5s"></div>' +
                 '</div>' +
                 '<div style="display:flex;gap:0.5rem">' +
                     '<input type="number" class="form-input" id="goalAmt-' + g.id + '" placeholder="Amount" min="0.01" step="0.01" style="flex:1;min-width:0;padding:0.4rem 0.6rem;font-size:0.82rem">' +
@@ -737,7 +737,7 @@ function renderDashGoalsSummary(goals) {
         return '<div style="margin-bottom:0.9rem">' +
             '<div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:0.25rem"><strong>' + escBA(g.name) + '</strong><span>' + pct + '%</span></div>' +
             '<div style="height:6px;background:#e2e8f0;border-radius:99px;overflow:hidden">' +
-                '<div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#6366f1,#8b5cf6)"></div>' +
+                '<div style="height:100%;width:' + pct + '%;background:var(--color-primary-600)"></div>' +
             '</div>' +
             '</div>';
     }).join('');
