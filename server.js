@@ -451,7 +451,8 @@ async function executeOneScheduledTransfer(userId, scheduleId, userStore = 'user
                 active:       !isOneTime,
                 nextRunDate:  isOneTime ? sched.nextRunDate : advanceScheduleDate(sched.nextRunDate, sched.frequency),
                 lastRunAt:    Date.now(),
-                lastRunStatus:'skipped'
+                lastRunStatus:'skipped',
+                lastRunReason:'insufficient_funds'
             });
             await writeJSON(scheduledTransferStore, schedules);
             return;
@@ -482,7 +483,8 @@ async function executeOneScheduledTransfer(userId, scheduleId, userStore = 'user
             active:        !isOneTime,
             nextRunDate:   isOneTime ? sched.nextRunDate : advanceScheduleDate(sched.nextRunDate, sched.frequency),
             lastRunAt:     Date.now(),
-            lastRunStatus: 'completed'
+            lastRunStatus: 'completed',
+            lastRunReason: null
         }, isOneTime ? { completed: true } : {});
         await writeJSON(scheduledTransferStore, schedules);
     });
@@ -2181,16 +2183,29 @@ app.get('/api/me/messages', async (req, res) => {
     res.json(all.filter(m => m.recipientId === 'all' || m.recipientId === req.userId));
 });
 
+// Locked: rewrites the whole shared message array, which system alerts
+// (balance alerts, autopay/overdue notices) also append to under the lock —
+// an unlocked write here could drop a just-pushed alert. Only a message the
+// caller can actually see (addressed to them or to everyone) can be marked.
 app.patch('/api/me/messages/:id', async (req, res) => {
-    const id  = Number(req.params.id);
-    const all = await readJSON(req.messageStore);
-    const idx = all.findIndex(m => m.id === id);
-    if (idx === -1) return res.status(404).json({ error: 'Message not found' });
-    const readBy = Array.from(all[idx].readBy || []);
-    if (!readBy.includes(req.userId)) readBy.push(req.userId);
-    all[idx] = Object.assign({}, all[idx], { readBy });
-    await writeJSON(req.messageStore, all);
-    res.json(all[idx]);
+    const id = Number(req.params.id);
+    try {
+        const msg = await withUserLock(req.userId, async () => {
+            const all = await readJSON(req.messageStore);
+            const idx = all.findIndex(m => m.id === id && (m.recipientId === 'all' || m.recipientId === req.userId));
+            if (idx === -1) throw httpError(404, 'Message not found');
+            const readBy = Array.from(all[idx].readBy || []);
+            if (!readBy.includes(req.userId)) {
+                readBy.push(req.userId);
+                all[idx] = Object.assign({}, all[idx], { readBy });
+                await writeJSON(req.messageStore, all);
+            }
+            return all[idx];
+        });
+        res.json(msg);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
 });
 
 // ── Me: alert preferences ───────────────────────────────────────────────────
