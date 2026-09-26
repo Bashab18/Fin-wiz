@@ -13,7 +13,7 @@
 <body class="instyl-theme">
     <header class="shop-header">
         <div class="shop-container amz-unified-bar">
-            <div class="shop-logo">InStyl.</div>
+            <a href="ecommerce.html" class="shop-logo" title="Back to the store">InStyl.</a>
             <nav class="shop-nav">
                 <a href="ecommerce.html?sale=true">On Sale</a>
                 <a href="ecommerce.html?category=women">Women</a>
@@ -24,23 +24,24 @@
                 <a href="ecommerce.html?category=accessories">Accessories</a>
             </nav>
             <div class="amz-progress-compact" title="Game progress">
-                <span class="amz-progress-level">Lvl <strong>2/50</strong></span>
-                <div class="amz-progress-mini"><div class="amz-progress-mini-fill" style="width: 40%"></div></div>
-                <span class="amz-progress-pct">40% completed</span>
-                <span class="amz-progress-stat"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg><span>1400 XP</span></span>
-                <span class="amz-progress-stat coins"><div class="coin-icon">&#402;</div><span>3400</span></span>
+                <span class="amz-progress-level">Lvl <strong id="shopProgressLevel">&ndash;/50</strong></span>
+                <div class="amz-progress-mini"><div class="amz-progress-mini-fill" id="shopProgressFill" style="width: 0%"></div></div>
+                <span class="amz-progress-pct" id="shopProgressText">&ndash;% completed</span>
+                <span class="amz-progress-stat"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg><span id="shopProgressXP">&ndash; XP</span></span>
+                <span class="amz-progress-stat coins"><div class="coin-icon">&#402;</div><span id="shopProgressCoins">&ndash;</span></span>
             </div>
             <div class="shop-header-right">
                 <div class="shop-search-box"><input type="text" placeholder="Search..."></div>
                 <div class="shop-icons">
-                    <button class="shop-icon-btn home" onclick="window.location.href='shop-account.html'">
+                    <button class="shop-icon-btn home" onclick="window.location.href='shop-account.html'" title="Account Summary" aria-label="Account Summary">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
                     </button>
-                    <button class="shop-icon-btn user"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg></button>
-                    <button class="shop-icon-btn bookmark" onclick="window.location.href='shop-saved-items.html'">
+                    <button class="shop-icon-btn user" onclick="window.location.href='shop-account.html'" title="My Account" aria-label="My Account"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg></button>
+                    <button class="shop-icon-btn bookmark" onclick="window.location.href='shop-saved-items.html'" title="Saved Items" aria-label="Saved Items">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
+                    <span class="amz-icon-badge" id="headerWishlistBadge" style="display:none">0</span>
                     </button>
-                    <button class="shop-icon-btn cart" onclick="window.location.href='shop-cart.html'"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg></button>
+                    <button class="shop-icon-btn cart" onclick="window.location.href='shop-cart.html'" title="View Cart" aria-label="View Cart"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg><span class="amz-icon-badge" id="headerCartBadge" style="display:none">0</span></button>
                 </div>
                 <a href="#" class="amz-header-logout" data-logout title="Logout">Logout</a>
             </div>
@@ -61,6 +62,7 @@
                     <a href="shop-saved-items.html" class="shop-nav-item active">Saved Items</a>
                     <a href="shop-cart.html" class="shop-nav-item">Cart</a>
                     <a href="shop-alerts.html" class="shop-nav-item">Alerts</a>
+                    <a href="shop-messages.html" class="shop-nav-item">Messages <span class="shop-msg-badge" style="display:none;margin-left:6px;background:#f08804;color:#fff;border-radius:999px;font-size:0.72rem;font-weight:700;padding:1px 7px;vertical-align:1px">0</span></a>
                     <a href="ecommerce.html" class="shop-nav-item back-link">&#8592; Back to Store</a>
                 </nav>
             </aside>
@@ -69,100 +71,134 @@
                 <div class="shop-page-header"><h1>Saved Items</h1></div>
 
                 <div class="saved-items-count">
-                    <p>You have <strong id="savedItemsCount">0</strong> items saved</p>
+                    <p id="savedItemsSummary">Loading your saved items&hellip;</p>
                 </div>
 
-                <div class="products-grid">
-                    <div class="product-card">
-                        <button class="bookmark-btn">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
-                        </button>
-                        <div class="product-image-container"><div class="product-placeholder">PRODUCT IMAGE</div></div>
-                        <div class="product-info">
-                            <h3 class="product-title">Green Cotton Sweatshirt</h3>
-                            <p class="product-category">Men's Clothing</p>
-                            <div class="product-rating"><span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span><span class="rating-count">(245)</span></div>
-                            <div class="product-price-row"><span class="product-price">ƒ35.99</span></div>
-                            <button class="btn btn-primary btn-block">Add to Cart</button>
-                        </div>
-                    </div>
-
-                    <div class="product-card">
-                        <button class="bookmark-btn">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
-                        </button>
-                        <div class="product-image-container"><div class="product-placeholder">PRODUCT IMAGE</div></div>
-                        <div class="product-info">
-                            <h3 class="product-title">Wireless Headphones</h3>
-                            <p class="product-category">Electronics</p>
-                            <div class="product-rating"><span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span><span class="rating-count">(532)</span></div>
-                            <div class="product-price-row"><span class="product-price">ƒ299.99</span><span class="product-original-price">ƒ349.00</span></div>
-                            <button class="btn btn-primary btn-block">Add to Cart</button>
-                        </div>
-                    </div>
-
-                    <div class="product-card">
-                        <button class="bookmark-btn">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
-                        </button>
-                        <div class="product-image-container"><div class="product-placeholder">PRODUCT IMAGE</div></div>
-                        <div class="product-info">
-                            <h3 class="product-title">Sport Backpack</h3>
-                            <p class="product-category">Accessories</p>
-                            <div class="product-rating"><span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span><span class="rating-count">(189)</span></div>
-                            <div class="product-price-row"><span class="product-price">ƒ89.99</span></div>
-                            <button class="btn btn-primary btn-block">Add to Cart</button>
-                        </div>
-                    </div>
-
-                    <div class="product-card">
-                        <button class="bookmark-btn">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
-                        </button>
-                        <div class="product-image-container"><div class="product-placeholder">PRODUCT IMAGE</div></div>
-                        <div class="product-info">
-                            <h3 class="product-title">10-Piece Stainless Cookware Set</h3>
-                            <p class="product-category">Cooking</p>
-                            <div class="product-rating"><span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span><span class="rating-count">(421)</span></div>
-                            <div class="product-price-row"><span class="product-price">ƒ189.99</span></div>
-                            <button class="btn btn-primary btn-block">Add to Cart</button>
-                        </div>
-                    </div>
-
-                    <div class="product-card">
-                        <button class="bookmark-btn">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
-                        </button>
-                        <div class="product-image-container"><div class="product-placeholder">PRODUCT IMAGE</div></div>
-                        <div class="product-info">
-                            <h3 class="product-title">Sunglasses</h3>
-                            <p class="product-category">Accessories</p>
-                            <div class="product-rating"><span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span><span class="rating-count">(78)</span></div>
-                            <div class="product-price-row"><span class="product-price">ƒ149.99</span></div>
-                            <button class="btn btn-primary btn-block">Add to Cart</button>
-                        </div>
-                    </div>
-
-                    <div class="product-card">
-                        <button class="bookmark-btn">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
-                        </button>
-                        <div class="product-image-container"><div class="product-placeholder">PRODUCT IMAGE</div></div>
-                        <div class="product-info">
-                            <h3 class="product-title">Running Shoes</h3>
-                            <p class="product-category">Accessories</p>
-                            <div class="product-rating"><span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span><span class="rating-count">(612)</span></div>
-                            <div class="product-price-row"><span class="product-price">ƒ120.00</span></div>
-                            <button class="btn btn-primary btn-block">Add to Cart</button>
-                        </div>
-                    </div>
-                </div>
+                <div class="products-grid" id="savedItemsGrid"></div>
             </main>
         </div>
     </div>
 
+    <style>
+        .saved-card-img { height: 170px; display: flex; align-items: center; justify-content: center; font-size: 4rem; }
+        .saved-card-actions { display: flex; gap: 8px; }
+        .saved-card-actions .btn { flex: 1; }
+        .saved-stock { font-size: 0.78rem; font-weight: 600; margin: -6px 0 12px; }
+        .saved-stock.low { color: #b45309; }
+        .saved-stock.out { color: #dc2626; }
+        .saved-stock.ok { color: #16a34a; }
+        .saved-empty { grid-column: 1 / -1; text-align: center; padding: 48px 16px; color: #64748b; background: #fff; border: 1px dashed #d5d9d9; border-radius: 12px; }
+        .saved-empty strong { display: block; color: #0f1111; font-size: 1.05rem; margin-bottom: 6px; }
+        .btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+    </style>
+
     <script src="db.js"></script>
     <script src="shop-bridge.js"></script>
     <script src="shopping-script.js"></script>
+    <script>
+    // Saved items are the per-user list of catalog product ids the store's
+    // hearts write (ShopBridge.getSavedIds); every card below comes from the
+    // live catalog, so prices, ratings and stock are real.
+    var GRADIENTS = [
+        'linear-gradient(135deg, #d4e4bc 0%, #c8ddb0 100%)', 'linear-gradient(135deg, #f4d4d4 0%, #f0c8c8 100%)',
+        'linear-gradient(135deg, #c4dcd4 0%, #b8d4c8 100%)', 'linear-gradient(135deg, #ffd4a3 0%, #ffcb8e 100%)',
+        'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)', 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+        'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)', 'linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%)',
+        'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)', 'linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)',
+        'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)', 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)'
+    ];
+    var _catalog = [];
+
+    function esc(s) { return ShopBridge.escapeHtml(s); }
+    function stars(r) {
+        r = Number(r) || 0;
+        var full = Math.floor(r), half = (r - full) >= 0.5;
+        return '★'.repeat(full) + (half ? '½' : '') + '☆'.repeat(5 - full - (half ? 1 : 0));
+    }
+    function catLabel(c) { return c ? c.charAt(0).toUpperCase() + c.slice(1) : ''; }
+
+    function renderSaved() {
+        var grid = document.getElementById('savedItemsGrid');
+        var summary = document.getElementById('savedItemsSummary');
+        var ids = ShopBridge.getSavedIds();
+        var products = ids.map(function(id) { return _catalog.find(function(p) { return p.id === id; }); }).filter(Boolean);
+        // Drop ids that no longer exist in the catalog.
+        if (products.length !== ids.length && _catalog.length) {
+            ids.forEach(function(id) { if (!_catalog.some(function(p) { return p.id === id; })) ShopBridge.removeSaved(id); });
+        }
+        ShopBridge.renderSavedBadge();
+        summary.innerHTML = 'You have <strong id="savedItemsCount">' + products.length + '</strong> item' + (products.length === 1 ? '' : 's') + ' saved';
+        if (products.length === 0) {
+            grid.innerHTML = '<div class="saved-empty"><strong>No saved items yet</strong>' +
+                'Tap the &#9825; on any product in the <a href="ecommerce.html" style="color:#007185">store</a> to save it here for later.</div>';
+            return;
+        }
+        grid.innerHTML = products.map(function(p) {
+            var out = !(p.stock > 0);
+            var stock = out ? '<p class="saved-stock out">Out of stock</p>'
+                : p.stock <= 3 ? '<p class="saved-stock low">Only ' + p.stock + ' left</p>'
+                : '<p class="saved-stock ok">In stock</p>';
+            return '<div class="product-card" data-id="' + p.id + '">' +
+                '<button type="button" class="bookmark-btn active" data-action="remove" title="Remove from saved items" aria-label="Remove ' + esc(p.name) + ' from saved items">' +
+                    '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>' +
+                '</button>' +
+                '<div class="saved-card-img" style="background:' + GRADIENTS[p.id % GRADIENTS.length] + '" aria-hidden="true">' + esc(p.icon || '🛍️') + '</div>' +
+                '<div class="product-info">' +
+                    '<h3 class="product-title">' + esc(p.name) + '</h3>' +
+                    '<p class="product-category">' + esc(p.brand) + ' &middot; ' + esc(catLabel(p.category)) + '</p>' +
+                    '<div class="product-rating"><span class="stars" aria-label="' + p.rating + ' out of 5 stars">' + stars(p.rating) + '</span><span class="rating-count">' + p.rating + ' (' + Number(p.reviewCount || 0).toLocaleString() + ')</span></div>' +
+                    '<div class="product-price-row"><span class="product-price">ƒ' + Number(p.price).toFixed(2) + '</span>' +
+                        (p.originalPrice ? '<span class="product-original-price">ƒ' + Number(p.originalPrice).toFixed(2) + '</span>' : '') + '</div>' +
+                    stock +
+                    '<div class="saved-card-actions">' +
+                        '<button type="button" class="btn btn-primary" data-action="add"' + (out ? ' disabled' : '') + '>' + (out ? 'Out of stock' : 'Add to Cart') + '</button>' +
+                        '<button type="button" class="btn btn-secondary" data-action="remove">Remove</button>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+    }
+
+    function onGridClick(e) {
+        var btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        var card = btn.closest('.product-card');
+        var id = Number(card.dataset.id);
+        var p = _catalog.find(function(x) { return x.id === id; });
+        if (!p) return;
+        if (btn.dataset.action === 'remove') {
+            ShopBridge.removeSaved(id);
+            renderSaved();
+            showShopToast(p.name + ' removed from saved items.');
+            return;
+        }
+        if (btn.dataset.action === 'add') {
+            if (!(p.stock > 0)) return;
+            btn.disabled = true;
+            btn.textContent = 'Adding…';
+            ShopBridge.addToCart(p, 1).then(function() {
+                showShopToast(p.name + ' added to cart.');
+                btn.textContent = '✓ Added';
+                setTimeout(function() { btn.textContent = 'Add to Cart'; btn.disabled = false; }, 1200);
+            }).catch(function(err) {
+                showShopToast((err && err.message) || 'Could not add to cart.', true);
+                btn.textContent = 'Add to Cart';
+                btn.disabled = false;
+            });
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('savedItemsGrid').addEventListener('click', onGridClick);
+        DigifinwizDB.getProducts().then(function(products) {
+            _catalog = products || [];
+            renderSaved();
+        }).catch(function(err) {
+            document.getElementById('savedItemsSummary').textContent = 'Could not load the product catalog: ' + ((err && err.message) || 'please refresh.');
+        });
+        // Hearts toggled in another tab
+        window.addEventListener('storage', function() { if (_catalog.length) renderSaved(); });
+    });
+    </script>
 </body>
 </html>

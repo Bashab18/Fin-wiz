@@ -6,6 +6,11 @@
     <title>Digifinwiz - Ecommerce</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="shopping-styles.css">
+    <style>
+        /* Out-of-stock cards: dimmed, with a disabled button instead of Add to Cart */
+        body.instyl-theme .amz-oos-btn { flex: 1; background: #e5e7eb; color: #6b7280; border: 1px solid #d1d5db; cursor: not-allowed; }
+        body.instyl-theme .product-card.out-of-stock .product-icon { opacity: 0.45; }
+    </style>
 </head>
 <body class="instyl-theme">
     <!-- InStyl Shop Header — logo, categories, game progress, search, account/wishlist/cart,
@@ -23,19 +28,20 @@
                 <a href="#" onclick="shopNavFilter('electronics');return false;">Electronics</a>
                 <a href="#" onclick="shopNavFilter('accessories');return false;">Accessories</a>
                 <a href="shop-account.html">My Account</a>
+                <a href="shop-messages.html">Messages<span class="shop-msg-badge" style="display:none;margin-left:5px;background:#f08804;color:#fff;border-radius:999px;font-size:0.68rem;font-weight:700;padding:1px 6px">0</span></a>
             </nav>
 
             <div class="amz-progress-compact" title="Game progress">
-                <span class="amz-progress-level">Lvl <strong id="shopProgressLevel">1/50</strong></span>
+                <span class="amz-progress-level">Lvl <strong id="shopProgressLevel">&ndash;/50</strong></span>
                 <div class="amz-progress-mini"><div class="amz-progress-mini-fill" id="shopProgressFill" style="width: 0%"></div></div>
-                <span class="amz-progress-pct" id="shopProgressText">0% completed</span>
+                <span class="amz-progress-pct" id="shopProgressText">&ndash;% completed</span>
                 <span class="amz-progress-stat">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg>
-                    <span id="shopProgressXP">0 XP</span>
+                    <span id="shopProgressXP">&ndash; XP</span>
                 </span>
                 <span class="amz-progress-stat coins">
                     <div class="coin-icon">&#402;</div>
-                    <span id="shopProgressCoins">0</span>
+                    <span id="shopProgressCoins">&ndash;</span>
                 </span>
             </div>
 
@@ -133,6 +139,7 @@
                     <div style="text-align:right;flex-shrink:0">
                         <div style="font-size:1.1rem;font-weight:700;color:#1e293b" id="ecoRecentTotal">—</div>
                         <div style="font-size:0.75rem;color:#10b981;font-weight:600" id="ecoRecentXp">—</div>
+                        <a id="ecoRecentLink" href="shop-order-history.html" style="font-size:0.75rem;color:#007185;font-weight:600">View order details &rarr;</a>
                     </div>
                 </div>
             </div>
@@ -318,7 +325,8 @@
                 ? '<span style="text-decoration:line-through;color:#94a3b8;font-size:0.78rem;margin-right:0.35rem">ƒ' + Number(p.originalPrice).toFixed(2) + '</span>'
                 : '') + 'ƒ' + Number(p.price).toFixed(2) +
                 (discountPct > 0 ? '<span class="amz-discount-badge">-' + discountPct + '%</span>' : '');
-            return '<div class="product-card" data-category="' + escHE(p.category) + '" data-price="' + p.price + '" data-name="' + escHE(p.name) + '" data-badge="' + escHE(p.badge || '') + '" data-rating="' + p.rating + '" data-stock="' + p.stock + '">' +
+            var outOfStock = !(p.stock > 0);
+            return '<div class="product-card' + (outOfStock ? ' out-of-stock' : '') + '" data-id="' + p.id + '" data-category="' + escHE(p.category) + '" data-price="' + p.price + '" data-name="' + escHE(p.name) + '" data-badge="' + escHE(p.badge || '') + '" data-rating="' + p.rating + '" data-stock="' + p.stock + '">' +
                 '<div class="product-image" style="background: ' + gradient + ';">' +
                     '<span class="product-icon">' + p.icon + '</span>' +
                     (p.badge ? '<span class="product-badge ' + badgeClass(p.badge) + '">' + escHE(p.badge) + '</span>' : '') +
@@ -330,14 +338,18 @@
                     '<p class="product-description">' + escHE(p.description) + '</p>' +
                     '<div class="product-footer">' +
                         '<div><span class="product-price">' + priceHtml + '</span></div>' +
-                        '<div class="amz-add-row">' +
-                            '<div class="amz-qty-stepper">' +
-                                '<button type="button" class="amz-qty-btn" onclick="var i=this.parentElement.children[1];if(+i.value>1)i.value=+i.value-1;">-</button>' +
-                                '<input type="number" class="amz-qty-input" value="1" min="1" max="99" aria-label="Quantity">' +
-                                '<button type="button" class="amz-qty-btn" onclick="var i=this.parentElement.children[1];i.value=+i.value+1;">+</button>' +
-                            '</div>' +
-                            "<button class=\"btn btn-primary btn-sm\" onclick='addToCart(" + jsAttr(p.name) + ',' + p.price + ",this)'>Add to Cart</button>" +
-                        '</div>' +
+                        (outOfStock
+                            // Stock is checked again at checkout, but there's no point
+                            // letting the user add something that can't be bought.
+                            ? '<div class="amz-add-row"><button type="button" class="btn btn-sm amz-oos-btn" disabled aria-disabled="true">Out of stock</button></div>'
+                            : '<div class="amz-add-row">' +
+                                '<div class="amz-qty-stepper">' +
+                                    '<button type="button" class="amz-qty-btn" aria-label="Decrease quantity" onclick="stepQty(this,-1)">-</button>' +
+                                    '<input type="number" class="amz-qty-input" value="1" min="1" max="' + Math.min(99, p.stock) + '" step="1" inputmode="numeric" aria-label="Quantity">' +
+                                    '<button type="button" class="amz-qty-btn" aria-label="Increase quantity" onclick="stepQty(this,1)">+</button>' +
+                                '</div>' +
+                                "<button class=\"btn btn-primary btn-sm\" onclick='addToCart(" + jsAttr(p.name) + ',' + p.price + ',this,' + Number(p.id) + ")'>Add to Cart</button>" +
+                            '</div>') +
                     '</div>' +
                 '</div>' +
                 '</div>';
@@ -351,8 +363,32 @@
     var currentPriceFilter = 'all';
     var currentMinRating   = 0;
 
+    // Quantity stepper: whole numbers 1..max (max = min(99, stock)).
+    function stepQty(btn, delta) {
+        var i = btn.parentElement.querySelector('.amz-qty-input');
+        var max = parseInt(i.getAttribute('max'), 10) || 99;
+        var v = parseInt(i.value, 10);
+        if (!(v >= 1)) v = 1;
+        i.value = Math.max(1, Math.min(max, v + delta));
+    }
+
+    // Distinct catalog categories (for the "Product Expert" challenge).
+    function catalogCategories() {
+        var cats = [];
+        ALL_PRODUCTS.forEach(function(p) { if (p.category && cats.indexOf(p.category) === -1) cats.push(p.category); });
+        return cats;
+    }
+
     function setCategory(category, evt) {
         currentCategory = category;
+        if (typeof ShopBridge !== 'undefined' && ALL_PRODUCTS.length) {
+            ShopBridge.recordCategoryView(category, catalogCategories()).then(function(res) {
+                if (res && res.challenge) {
+                    showNotification('🏅 Challenge complete: "' + res.challenge.title + '" +' + (res.challenge.points || 0) + ' XP — you browsed every category!', 'success');
+                    if (res.leveledUp) showNotification('🎉 Level Up! You\'re now level ' + res.newLevel + '!', 'success');
+                }
+            });
+        }
         var list = document.getElementById('amzDeptFilters');
         if (list) list.querySelectorAll('.amz-filter-item').forEach(function(b){ b.classList.remove('active'); });
         if (evt && evt.target) evt.target.classList.add('active');
@@ -451,54 +487,66 @@
         overlay.innerHTML =
             '<div class="quick-view-modal">' +
             '<button class="quick-view-close" onclick="document.getElementById(\'quickViewModal\').remove()">×</button>' +
-            '<div class="quick-view-img" style="' + (p.imgStyle || '') + '">' + escHE(p.icon || '🛒') + '</div>' +
+            '<div class="quick-view-img" style="background:' + GRADIENT_PALETTE[p.id % GRADIENT_PALETTE.length] + '">' + escHE(p.icon || '🛒') + '</div>' +
             '<div class="quick-view-title">'  + escHE(p.name)  + '</div>' +
             '<div class="quick-view-brand">'  + escHE(p.brand) + '</div>' +
             (p.rating ? '<div class="quick-view-rating">' + stars + ' <span style="color:#94a3b8;font-size:0.8rem">(' + p.rating + ')</span></div>' : '') +
-            '<div class="quick-view-desc">'   + escHE(p.desc)  + '</div>' +
+            '<div class="quick-view-desc">'   + escHE(p.description)  + '</div>' +
             '<div class="quick-view-price">ƒ' + Number(p.price).toFixed(2) + '</div>' +
-            '<button class="btn btn-primary btn-block" onclick=\'' + (p.addFn || '') + ';document.getElementById("quickViewModal").remove()\'>Add to Cart</button>' +
+            (p.stock > 0
+                ? "<button class=\"btn btn-primary btn-block\" onclick='addToCart(" + jsAttr(p.name) + ',' + Number(p.price) + ',null,' + Number(p.id) + ");document.getElementById(\"quickViewModal\").remove()'>Add to Cart</button>"
+                : '<button class="btn btn-block" disabled>Out of stock</button>') +
             '</div>';
         document.body.appendChild(overlay);
         overlay.addEventListener('click', function(e){ if (e.target === overlay) overlay.remove(); });
     }
 
     // ── Recently Viewed / Recommendations ─────────────────────────────────────
+    // Per-user list of catalog product ids, rendered from the live catalog.
+    function recentKey() {
+        var sess = (typeof DigifinwizModuleAuth !== 'undefined') ? DigifinwizModuleAuth.getSession() : null;
+        return sess && sess.userId != null ? 'instyl_recently_viewed_u' + sess.userId : null;
+    }
+    function getRecentIds() {
+        try { var k = recentKey(); var v = k ? JSON.parse(localStorage.getItem(k) || '[]') : []; return Array.isArray(v) ? v : []; }
+        catch (e) { return []; }
+    }
+    function productById(id) { return ALL_PRODUCTS.find(function(p) { return p.id === Number(id); }); }
+
     function trackRecentlyViewed(p) {
-        var recent = JSON.parse(localStorage.getItem('digifinwiz_recently_viewed') || '[]');
-        recent = recent.filter(function(r){ return r.name !== p.name; });
-        recent.unshift({ name:p.name, price:p.price, brand:p.brand, icon:p.icon, imgStyle:p.imgStyle, desc:p.desc, rating:p.rating, addFn:p.addFn });
-        if (recent.length > 6) recent = recent.slice(0, 6);
-        localStorage.setItem('digifinwiz_recently_viewed', JSON.stringify(recent));
+        var k = recentKey();
+        if (!k || p.id == null) return;
+        var ids = getRecentIds().filter(function(id) { return id !== p.id; });
+        ids.unshift(p.id);
+        try { localStorage.setItem(k, JSON.stringify(ids.slice(0, 6))); } catch (e) { /* ignore */ }
         renderRecommendations();
     }
 
     function renderRecommendations() {
-        var recent  = JSON.parse(localStorage.getItem('digifinwiz_recently_viewed') || '[]');
         var section = document.getElementById('recommendationsSection');
         var grid    = document.getElementById('recommendationsGrid');
         if (!section || !grid) return;
+        var recent = getRecentIds().map(productById).filter(Boolean);
         if (recent.length === 0) { section.style.display = 'none'; return; }
         section.style.display = '';
-        grid.innerHTML = recent.slice(0, 4).map(function(p, i) {
-            return '<div class="rec-card" data-rec-idx="' + i + '">' +
-                '<div class="rec-card-img" style="' + (p.imgStyle || '') + '">' + escHE(p.icon || '🛒') + '</div>' +
+        grid.innerHTML = recent.slice(0, 4).map(function(p) {
+            return '<div class="rec-card" data-product-id="' + p.id + '" role="button" tabindex="0">' +
+                '<div class="rec-card-img" style="background:' + GRADIENT_PALETTE[p.id % GRADIENT_PALETTE.length] + '">' + escHE(p.icon || '🛒') + '</div>' +
                 '<div class="rec-card-body">' +
                 '<div class="rec-card-name">'  + escHE(p.name) + '</div>' +
                 '<div class="rec-card-price">ƒ' + Number(p.price).toFixed(2) + '</div>' +
                 '</div></div>';
         }).join('');
         grid.querySelectorAll('.rec-card').forEach(function(card) {
-            card.addEventListener('click', function() {
-                var idx    = parseInt(this.dataset.recIdx);
-                var recent2 = JSON.parse(localStorage.getItem('digifinwiz_recently_viewed') || '[]');
-                if (recent2[idx]) openQuickView(recent2[idx]);
-            });
+            function open() { var p = productById(card.dataset.productId); if (p) openQuickView(p); }
+            card.addEventListener('click', open);
+            card.addEventListener('keydown', function(e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
         });
     }
 
     function clearRecentlyViewed() {
-        localStorage.removeItem('digifinwiz_recently_viewed');
+        var k = recentKey();
+        try { if (k) localStorage.removeItem(k); } catch (e) { /* ignore */ }
         renderRecommendations();
     }
 
@@ -541,6 +589,8 @@
                 set('ecoRecentDate', last.date || '—');
                 set('ecoRecentTotal', 'ƒ' + Number(last.total||0).toFixed(2));
                 set('ecoRecentXp', '+' + (last.pointsEarned||0) + ' XP earned');
+                var linkEl = document.getElementById('ecoRecentLink');
+                if (linkEl) linkEl.href = 'shop-order-detail.html?id=' + encodeURIComponent(last.id);
             }
         }).catch(function(){});
     }
@@ -550,39 +600,30 @@
         if (typeof updateBalanceLabel === 'function') updateBalanceLabel();
     }
 
-    /* ── Wishlist helpers ───────────────────────────────────────────── */
-    function toggleWishlist(btn, name) {
-        var saved = JSON.parse(localStorage.getItem('digifinwiz_wishlist') || '{}');
-        if (saved[name]) {
-            delete saved[name];
-            btn.innerHTML = '♡';
-            btn.classList.remove('wishlisted');
-            btn.title = 'Save to wishlist';
-            if (typeof showNotification === 'function') showNotification('Removed from wishlist', 'info');
-        } else {
-            saved[name] = true;
-            btn.innerHTML = '♥';
-            btn.classList.add('wishlisted');
-            btn.title = 'Remove from wishlist';
-            if (typeof showNotification === 'function') showNotification(name + ' saved to wishlist ♥', 'success');
-        }
-        localStorage.setItem('digifinwiz_wishlist', JSON.stringify(saved));
+    /* ── Wishlist (Saved Items) ───────────────────────────────────────
+       One per-user store keyed by catalog product id (ShopBridge), shared
+       with the header badge and shop-saved-items.html. */
+    function paintHeart(btn, saved) {
+        btn.innerHTML = saved ? '♥' : '♡';
+        btn.classList.toggle('wishlisted', saved);
+        btn.title = saved ? 'Remove from saved items' : 'Save for later';
+        btn.setAttribute('aria-pressed', saved ? 'true' : 'false');
+    }
+
+    function toggleWishlist(btn, id) {
+        var p = productById(id);
+        var saved = ShopBridge.toggleSaved(id);
+        paintHeart(btn, saved);
+        showNotification(saved ? (p ? p.name : 'Item') + ' saved ♥' : 'Removed from saved items', saved ? 'success' : 'info');
         updateWishlistCounter();
     }
 
     function updateWishlistCounter() {
-        var saved = JSON.parse(localStorage.getItem('digifinwiz_wishlist') || '{}');
-        var count = Object.keys(saved).length;
+        var count = ShopBridge.renderSavedBadge();
         var infoEl  = document.getElementById('wishlistCountInfo');
         var countEl = document.getElementById('wishlistCount');
         if (infoEl)  infoEl.style.display = count > 0 ? '' : 'none';
         if (countEl) countEl.textContent   = count;
-        var headerBadge = document.getElementById('headerWishlistBadge');
-        if (headerBadge) {
-            headerBadge.textContent = count;
-            headerBadge.style.display = count > 0 ? '' : 'none';
-        }
-        // Also update panel count if panel is open
         var panelCntEl = document.getElementById('wishlistPanelCount');
         if (panelCntEl) panelCntEl.textContent = count;
         var panel = document.getElementById('wishlistQuickPanel');
@@ -632,32 +673,22 @@
             imgDiv.title = 'Quick view';
             imgDiv.addEventListener('click', function(e) {
                 if (e.target.classList.contains('wishlist-btn') || e.target.classList.contains('product-badge')) return;
-                var addBtn = card.querySelector('.btn.btn-primary');
-                openQuickView({
-                    name:     card.dataset.name    || '',
-                    price:    card.dataset.price   || '0',
-                    brand:    ((card.querySelector('.product-brand') || {}).textContent || ''),
-                    desc:     ((card.querySelector('.product-description') || {}).textContent || ''),
-                    rating:   card.dataset.rating  || '',
-                    icon:     ((card.querySelector('.product-icon') || {}).textContent || '🛒'),
-                    imgStyle: imgDiv.getAttribute('style') || '',
-                    addFn:    addBtn ? addBtn.getAttribute('onclick') : ''
-                });
+                var p = productById(card.dataset.id);
+                if (p) openQuickView(p);
             });
         });
 
         // ── Inject wishlist heart buttons onto every product card ────
-        var savedWishlist = JSON.parse(localStorage.getItem('digifinwiz_wishlist') || '{}');
         document.querySelectorAll('.product-card').forEach(function(card) {
             var imgDiv = card.querySelector('.product-image');
             if (!imgDiv || imgDiv.querySelector('.wishlist-btn')) return;
-            var name = card.dataset.name || '';
-            var btn  = document.createElement('button');
-            btn.className   = 'wishlist-btn' + (savedWishlist[name] ? ' wishlisted' : '');
-            btn.title       = savedWishlist[name] ? 'Remove from wishlist' : 'Save to wishlist';
-            btn.setAttribute('aria-label', 'Wishlist');
-            btn.innerHTML   = savedWishlist[name] ? '♥' : '♡';
-            btn.addEventListener('click', function(e) { e.stopPropagation(); toggleWishlist(btn, name); });
+            var id  = Number(card.dataset.id);
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'wishlist-btn';
+            btn.setAttribute('aria-label', 'Save ' + (card.dataset.name || 'item') + ' for later');
+            paintHeart(btn, ShopBridge.isSaved(id));
+            btn.addEventListener('click', function(e) { e.stopPropagation(); toggleWishlist(btn, id); });
             imgDiv.appendChild(btn);
         });
         updateWishlistCounter();
@@ -679,6 +710,11 @@
         // Otherwise just run the default filter/sort/count pass once so the
         // count indicator and card order are correct on first paint.
         var params = new URLSearchParams(window.location.search);
+        if (params.get('q')) {
+            var q = params.get('q');
+            var ps = document.getElementById('productSearch'); if (ps) ps.value = q;
+            var hs = document.getElementById('headerSearchInput'); if (hs) hs.value = q;
+        }
         if (params.get('sale') === 'true') shopNavFilter('sale');
         else if (params.get('category')) shopNavFilter(params.get('category'));
         else applyFilters();
@@ -688,48 +724,32 @@
         // Restore last active tab
         switchEcoPageTab(sessionStorage.getItem('eco_page_tab') || 'shop');
 
-        // Populate InStyl game progress bar from ShopBridge
-        if (typeof ShopBridge !== 'undefined') {
-            ShopBridge.getXPData().then(function(xp) {
-                var pct = Math.round(((xp.xp % 1000) / 1000) * 100);
-                var set = function(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
-                set('shopProgressLevel', xp.level + '/50');
-                set('shopProgressText', pct + '% completed');
-                set('shopProgressXP', xp.xp.toLocaleString() + ' XP');
-                set('shopProgressCoins', xp.coins.toLocaleString());
-                var fillEl = document.getElementById('shopProgressFill');
-                if (fillEl) fillEl.style.width = pct + '%';
-            }).catch(function(){});
-        }
-
-        // ── Load recently viewed recommendations ────────────────────
-        renderRecommendations();
-
         // ── Fetch the catalog, render it, then wire up per-card behavior ──
         DigifinwizDB.getProducts().then(function(products) {
             ALL_PRODUCTS = products;
             renderProductGrid(products);
             initProductCardBehaviors();
+            renderRecommendations();
+            if (typeof renderCart === 'function') renderCart(); // re-mark in-cart badges on the fresh cards
         }).catch(function(err) {
             console.error('Failed to load products:', err);
             var grid = document.getElementById('productsGrid');
             if (grid) grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:#ef4444;padding:2rem">Could not load products. Please refresh the page.</p>';
         });
-
-        // Update cart XP preview whenever cart count changes
-        var observer = new MutationObserver(function() {
-            var count = parseInt(document.getElementById('cartCount').textContent) || 0;
-            var xpEl = document.getElementById('cartXpPreview');
-            if (xpEl) xpEl.textContent = '+' + (count * 45) + ' XP';
-        });
-        var cartCountEl = document.getElementById('cartCount');
-        if (cartCountEl) observer.observe(cartCountEl, { childList: true, characterData: true, subtree: true });
     });
 
     // Refresh challenge tracker when user returns to this tab
     document.addEventListener('visibilitychange', function() {
         if (document.visibilityState === 'visible') {
             refreshEcoPage();
+            ShopBridge.refreshProgress();
+            ShopBridge.refreshUnreadBadge();
+            if (ALL_PRODUCTS.length) {
+                document.querySelectorAll('.product-card .wishlist-btn').forEach(function(btn) {
+                    paintHeart(btn, ShopBridge.isSaved(btn.closest('.product-card').dataset.id));
+                });
+                updateWishlistCounter();
+            }
             switchEcoPageTab(sessionStorage.getItem('eco_page_tab') || 'shop');
         }
     });
@@ -754,31 +774,24 @@
     }
 
     function renderWishlistPanel() {
-        var saved  = JSON.parse(localStorage.getItem('digifinwiz_wishlist') || '{}');
-        var names  = Object.keys(saved);
-        var grid   = document.getElementById('wishlistPanelGrid');
-        var cntEl  = document.getElementById('wishlistPanelCount');
-        if (cntEl) cntEl.textContent = names.length;
+        var products = ShopBridge.getSavedIds().map(productById).filter(Boolean);
+        var grid  = document.getElementById('wishlistPanelGrid');
+        var cntEl = document.getElementById('wishlistPanelCount');
+        if (cntEl) cntEl.textContent = products.length;
         if (!grid) return;
-        if (names.length === 0) { grid.innerHTML = '<p style="font-size:0.82rem;color:#94a3b8;padding:0.5rem 0">Your wishlist is empty.</p>'; return; }
-        // Find product data from DOM cards
-        var productData = {};
-        document.querySelectorAll('.product-card').forEach(function(c) {
-            var n = c.dataset.name || '';
-            if (n) productData[n] = { price: c.dataset.price || '0', addFn: (c.querySelector('.btn.btn-primary')||{}).getAttribute('onclick') || '' };
-        });
-        grid.innerHTML = names.map(function(n) {
-            var pd = productData[n] || {};
-            var price = parseFloat(pd.price || 0);
-            var safeAdd = (pd.addFn || '').replace(/"/g,'&quot;');
+        if (products.length === 0) { grid.innerHTML = '<p style="font-size:0.82rem;color:#94a3b8;padding:0.5rem 0">Nothing saved yet.</p>'; return; }
+        grid.innerHTML = products.map(function(p) {
             return '<div class="wishlist-item">' +
                 '<div class="wishlist-item-info">' +
-                '<div class="wishlist-item-name" title="' + escHE(n) + '">' + escHE(n) + '</div>' +
-                '<div class="wishlist-item-price">' + (price > 0 ? 'ƒ'+price.toFixed(2) : '—') + '</div>' +
+                '<div class="wishlist-item-name" title="' + escHE(p.name) + '">' + escHE(p.name) + '</div>' +
+                '<div class="wishlist-item-price">ƒ' + Number(p.price).toFixed(2) + '</div>' +
                 '</div>' +
-                (pd.addFn ? '<button class="wishlist-item-add" onclick="' + safeAdd + ';renderWishlistPanel()">+ Cart</button>' : '') +
+                (p.stock > 0
+                    ? "<button type=\"button\" class=\"wishlist-item-add\" onclick='addToCart(" + jsAttr(p.name) + ',' + Number(p.price) + ',null,' + Number(p.id) + ")'>+ Cart</button>"
+                    : '<span style="font-size:0.72rem;color:#dc2626;font-weight:600">Out of stock</span>') +
                 '</div>';
-        }).join('');
+        }).join('') +
+        '<a href="shop-saved-items.html" style="font-size:0.78rem;color:#007185;font-weight:600;grid-column:1/-1">Manage saved items &rarr;</a>';
     }
 
     // ── Stock level chips ──────────────────────────────────────────────────
