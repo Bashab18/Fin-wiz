@@ -4,8 +4,59 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Digifinwiz - Utilities</title>
+    <link rel="icon" href="data:,">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="shopping-styles.css">
+    <style>
+        /* ── Page-local DigiPay styles (bills backlog, messages, chips) ── */
+        .bills-section-head { grid-column:1/-1; display:flex; align-items:baseline; justify-content:space-between; gap:0.75rem; margin:0.5rem 0 -0.25rem; padding-bottom:0.35rem; border-bottom:1px solid var(--color-border); }
+        .bills-section-head h3 { margin:0; font-size:0.9rem; font-weight:700; color:var(--color-gray-800); }
+        .bills-section-head span { font-size:0.75rem; color:var(--color-gray-500); }
+        .bills-section-head.past h3 { color:#b91c1c; }
+        .bill-card.bill-card--past { border:2px solid #fca5a5; }
+        .bill-past-ribbon { background:#fef2f2; color:#b91c1c; font-size:0.72rem; font-weight:700; padding:0.35rem 0.9rem; letter-spacing:0.02em; border-bottom:1px solid #fecaca; }
+        .bill-grace-line { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; border-radius:8px; padding:0.45rem 0.6rem; font-size:0.75rem; font-weight:600; margin-bottom:0.6rem; }
+        .bill-autopay-fail { background:#fef2f2; border:1px solid #fecaca; color:#b91c1c; border-radius:8px; padding:0.5rem 0.65rem; font-size:0.76rem; font-weight:600; margin-bottom:0.6rem; }
+        .bill-autopay-fail a { color:#991b1b; text-decoration:underline; cursor:pointer; }
+        .bill-next-month-hint { font-size:0.72rem; color:var(--color-gray-500); margin:-0.25rem 0 0.5rem; }
+        .bill-older-autopay-note { font-size:0.72rem; color:var(--color-gray-500); margin-top:0.6rem; }
+        .bill-card-actions { display:flex; gap:0.5rem; margin-top:0.6rem; }
+        .bill-card-actions button { flex:1; background:none; border:1px solid var(--color-border); border-radius:8px; padding:0.35rem 0.5rem; font-size:0.75rem; font-weight:600; cursor:pointer; color:var(--color-gray-600); }
+        .bill-card-actions button:hover { border-color:var(--color-primary-400); color:var(--color-primary-700); }
+        .bill-card-actions .bill-remove-btn:hover { border-color:#fca5a5; color:#b91c1c; }
+        .util-chip { display:inline-block; font-size:0.66rem; font-weight:700; padding:1px 7px; border-radius:99px; margin-left:0.25rem; vertical-align:middle; white-space:nowrap; }
+        .util-chip-auto   { background:#e0f2fe; color:#075985; }
+        .util-chip-late   { background:#fee2e2; color:#b91c1c; }
+        .util-chip-ontime { background:#dcfce7; color:#166534; }
+        .util-chip-past   { background:#fee2e2; color:#b91c1c; }
+        .custom-bill-cap { font-size:0.75rem; color:var(--color-gray-500); align-self:center; }
+        .util-form-error { display:none; background:#fef2f2; border:1px solid #fecaca; color:#b91c1c; border-radius:8px; padding:0.55rem 0.75rem; font-size:0.8rem; margin-bottom:0.75rem; }
+        /* Messages inbox */
+        .util-msg-toolbar { display:flex; justify-content:space-between; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-bottom:1rem; }
+        .util-msg-filters { display:flex; gap:0.4rem; flex-wrap:wrap; }
+        .util-msg-filter { border:1px solid var(--color-border); background:var(--color-surface); border-radius:99px; padding:0.3rem 0.85rem; font-size:0.78rem; font-weight:600; cursor:pointer; color:var(--color-gray-600); }
+        .util-msg-filter.active { background:var(--color-primary-500); border-color:var(--color-primary-500); color:#fff; }
+        .util-msg { background:var(--color-surface); border:1px solid var(--color-border); border-left:4px solid var(--color-gray-200); border-radius:var(--radius-lg); padding:0.85rem 1rem; margin-bottom:0.6rem; cursor:pointer; transition:box-shadow 0.15s; }
+        .util-msg:hover { box-shadow:0 2px 10px rgba(15,23,42,0.08); }
+        .util-msg:focus-visible { outline:2px solid var(--color-primary-500); outline-offset:2px; }
+        .util-msg.unread { background:#fffbf7; }
+        .util-msg.urgent { border-left-color:#dc2626; }
+        .util-msg.good { border-left-color:#16a34a; }
+        .util-msg.alert { border-left-color:#d97706; }
+        .util-msg.info { border-left-color:var(--color-primary-400); }
+        .util-msg-head { display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; }
+        .util-msg-subject { flex:1; min-width:0; font-size:0.9rem; color:var(--color-gray-800); }
+        .util-msg.unread .util-msg-subject { font-weight:700; }
+        .util-msg-date { font-size:0.72rem; color:var(--color-gray-500); white-space:nowrap; }
+        .util-msg-dot { width:8px; height:8px; border-radius:50%; background:var(--color-primary-500); flex-shrink:0; }
+        .util-msg-type { font-size:0.66rem; font-weight:700; padding:2px 8px; border-radius:99px; text-transform:uppercase; letter-spacing:0.03em; white-space:nowrap; }
+        .util-msg-preview { font-size:0.8rem; color:var(--color-gray-500); margin-top:0.3rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .util-msg-body { font-size:0.85rem; color:var(--color-gray-700); line-height:1.6; margin-top:0.5rem; white-space:pre-wrap; word-break:break-word; }
+        .util-msg-action { margin-top:0.6rem; }
+        .util-msg-action a { font-size:0.8rem; font-weight:600; color:var(--color-primary-600); cursor:pointer; text-decoration:none; }
+        .util-inbox-link { color:var(--color-primary-600); font-weight:600; text-decoration:underline; cursor:pointer; }
+        @media (max-width: 640px) { .util-msg-date { width:100%; } }
+    </style>
 </head>
 <body class="digipay-theme">
     <!-- DigiPay Header — logo, tabs, game progress, account icons, and logout
@@ -40,6 +91,10 @@
                     </button>
                     <button class="shop-icon-btn bookmark" onclick="switchUtilPageTab('history')" title="Payment History">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+                    </button>
+                    <button class="shop-icon-btn bookmark" onclick="switchUtilPageTab('messages')" title="Messages" aria-label="Messages">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
+                        <span class="amz-icon-badge" id="utilHeaderMsgBadge" style="display:none"></span>
                     </button>
                     <button class="shop-icon-btn cart" onclick="switchUtilPageTab('bills')" title="Pay Bills">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
@@ -129,13 +184,13 @@
             <div id="utilBudgetRow" style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:1rem;margin-bottom:1.25rem">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
                     <div style="font-size:0.8rem;font-weight:700;color:var(--color-gray-700)">Monthly Bill Budget</div>
-                    <div style="font-size:0.75rem;color:var(--color-gray-500)">Paid <strong id="utilBudgetPaid">ƒ0</strong> of est. <strong id="utilBudgetTotal">ƒ585.24</strong></div>
+                    <div style="font-size:0.75rem;color:var(--color-gray-500)">Paid <strong id="utilBudgetPaid">ƒ0.00</strong> of <strong id="utilBudgetTotal">—</strong> billed this month</div>
                 </div>
                 <div class="budget-bar-wrap">
                     <div class="budget-bar" id="utilBudgetBar" style="width:0%;background:linear-gradient(90deg,#10b981,#059669)"></div>
                 </div>
                 <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--color-gray-400);margin-top:0.25rem">
-                    <span id="utilBudgetPct">0% of monthly bills paid this session</span>
+                    <span id="utilBudgetPct">Loading this month's bills…</span>
                     <span id="utilBudgetRemaining"></span>
                 </div>
             </div>
@@ -150,6 +205,7 @@
                     <a href="#" class="nav-item" id="tab-btn-bills" onclick="switchUtilPageTab('bills');return false;">Bills</a>
                     <a href="#" class="nav-item" id="tab-btn-autopay" onclick="switchUtilPageTab('autopay');return false;">Auto-Pay</a>
                     <a href="#" class="nav-item" id="tab-btn-history" onclick="switchUtilPageTab('history');return false;">History</a>
+                    <a href="#" class="nav-item" id="tab-btn-messages" onclick="switchUtilPageTab('messages');return false;">Messages <span class="nav-badge" id="utilMsgBadge" style="display:none"></span></a>
                     <a href="#" class="nav-item" id="tab-btn-profile" onclick="switchUtilPageTab('profile');return false;">Profile</a>
                     <a href="#" class="nav-item" id="tab-btn-alerts" onclick="switchUtilPageTab('alerts');return false;">Alerts</a>
                 </nav>
@@ -188,6 +244,7 @@
                                 <a href="#" onclick="switchUtilPageTab('bills');return false;" class="btn btn-block" style="text-align:left">Pay a Bill</a>
                                 <a href="#" onclick="switchUtilPageTab('autopay');return false;" class="btn btn-block" style="text-align:left">Manage Auto-Pay</a>
                                 <a href="#" onclick="switchUtilPageTab('history');return false;" class="btn btn-block" style="text-align:left">View Payment History</a>
+                                <a href="#" onclick="switchUtilPageTab('messages');return false;" class="btn btn-block" style="text-align:left">Messages <span id="utilQuickMsgCount" style="color:var(--color-gray-500);font-weight:400"></span></a>
                             </div>
                         </div>
 
@@ -231,6 +288,7 @@
                         </button>
                     </div>
                     <button class="btn" id="addCustomBillBtn" onclick="showCustomBillForm()" style="font-size:0.9rem;padding:0.75rem 1.25rem">+ Add Your Own Bill</button>
+                    <span class="custom-bill-cap" id="customBillCapHint"></span>
                 </div>
 
                 <!-- Add Custom Bill form (hidden until toggled) -->
@@ -331,12 +389,33 @@
             </div><!-- /panel-profile -->
 
             <!-- ═══════════════════════════════════════════════════════
+                 MESSAGES TAB — overdue notices, auto-pay results, balance
+                 alerts and security notices the server writes for this
+                 module.
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel" id="panel-messages">
+                <div class="banking-section full-width">
+                    <h2>Messages</h2>
+                    <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1rem">Bill reminders, auto-pay results, balance alerts and account notices. Click a message to read it.</p>
+                    <div class="util-msg-toolbar">
+                        <div class="util-msg-filters">
+                            <button type="button" class="util-msg-filter active" data-filter="all" onclick="setUtilMsgFilter('all')">All</button>
+                            <button type="button" class="util-msg-filter" data-filter="unread" onclick="setUtilMsgFilter('unread')">Unread</button>
+                            <button type="button" class="util-msg-filter" data-filter="bills" onclick="setUtilMsgFilter('bills')">Bills &amp; Auto-pay</button>
+                        </div>
+                        <button type="button" class="btn" id="utilMsgMarkAll" onclick="markAllUtilMessagesRead()" style="font-size:0.8rem;padding:0.4rem 0.9rem">Mark all as read</button>
+                    </div>
+                    <div id="utilMessagesList"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">Loading…</p></div>
+                </div>
+            </div><!-- /panel-messages -->
+
+            <!-- ═══════════════════════════════════════════════════════
                  ALERTS TAB
             ═══════════════════════════════════════════════════════ -->
             <div class="page-tab-panel" id="panel-alerts">
                 <div class="banking-section full-width">
                     <h2>Alert Preferences</h2>
-                    <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1.25rem">Alerts are delivered to your Messages inbox.</p>
+                    <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1.25rem">Alerts are delivered to your <a href="#" class="util-inbox-link" onclick="switchUtilPageTab('messages');return false;">Messages inbox</a>.</p>
                     <form id="alertPrefsForm">
                         <div class="alert-pref-row">
                             <label class="autopay-switch"><input type="checkbox" id="alertLowBalEnabled"><span class="autopay-slider"></span></label>
@@ -366,21 +445,21 @@
     <script src="utilities.js"></script>
     <script>
     /* ── Tab switching ──────────────────────────────────────────────── */
-    // Each new tab lazy-loads (and refreshes on every visit) via a loader
-    // function named below — keeps Bills/History's own logic (already
-    // wired to run on DOMContentLoaded) untouched while the new tabs
-    // (Dashboard/Auto-Pay/Profile/Alerts) always show fresh data.
+    // Each tab lazy-loads (and refreshes on every visit) via the loader
+    // function named below.
     var UTIL_PAGE_TAB_LOADERS = {
         dashboard: 'loadDashboardTab',
         bills:     'loadBills',
         autopay:   'loadAutopayTab',
         history:   'updatePaymentHistory',
+        messages:  'loadMessagesTab',
         profile:   'loadProfileTab',
         alerts:    'loadAlertsTab'
     };
 
     function switchUtilPageTab(name) {
-        ['dashboard','bills','autopay','history','profile','alerts'].forEach(function(t) {
+        if (!UTIL_PAGE_TAB_LOADERS[name]) name = 'dashboard';
+        Object.keys(UTIL_PAGE_TAB_LOADERS).forEach(function(t) {
             var panel = document.getElementById('panel-' + t);
             var btn   = document.getElementById('tab-btn-' + t);
             if (!panel || !btn) return;
@@ -388,15 +467,15 @@
             panel.classList.toggle('active', active);
             btn.classList.toggle('active', active);
         });
-        sessionStorage.setItem('util_page_tab', name);
+        try { sessionStorage.setItem('util_page_tab', name); } catch (e) {}
         var loaderName = UTIL_PAGE_TAB_LOADERS[name];
         if (loaderName && typeof window[loaderName] === 'function') window[loaderName]();
     }
 
-    // Legacy alias used by older inline onclick on history tab button (no-op, kept for safety)
-    function switchUtilTab(name) { switchUtilPageTab(name === 'bills' ? 'bills' : name === 'history' ? 'history' : name); }
+    // Legacy alias used by older inline onclick on history tab button (kept for safety)
+    function switchUtilTab(name) { switchUtilPageTab(name); }
 
-    function escHU(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''; }
+    function escHU(s) { return (s === null || s === undefined || s === '') ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
     // Safe to splice into a single-quoted HTML attribute: JSON.stringify() a value for use as a JS
     // argument literal, then neutralize any characters that could break out of the attribute or be
     // decoded as an HTML entity before the JS parser ever sees them.
@@ -405,17 +484,21 @@
             .replace(/&/g, '\\u0026').replace(/</g, '\\u003C').replace(/>/g, '\\u003E').replace(/'/g, '\\u0027');
     }
 
+    function utilSessionUserId() {
+        var s = (typeof DigifinwizModuleAuth !== 'undefined' && DigifinwizModuleAuth.getSession) ? DigifinwizModuleAuth.getSession() : null;
+        return s && s.userId != null ? Number(s.userId) : null;
+    }
+
     /* ── Payment detail modal ──────────────────────────────────────────
-       Surfaces the full stored payment record (usage/unit/lateFee/full
-       timestamp/etc.) that the History list only ever shows a one-line
-       summary of. Same centered-overlay-card visual language as the
-       bill-payment confirm modal in utilities.js. */
+       Surfaces every stored field of a payment record (see
+       attemptPayBillCycle in server.js): amount, lateFee, usage/unit,
+       accountNumber, fromAccount, timestamp, pointsEarned, autoPaid. */
     function showPaymentDetailModal(payment) {
         if (!payment) return;
         var existing = document.getElementById('paymentDetailModal');
         if (existing) existing.remove();
 
-        var icon = BILL_ICONS_PAGE[payment.type] || '🧾';
+        var icon = utilBillIcon(payment.type);
         var d = payment.timestamp ? new Date(payment.timestamp) : (payment.date ? new Date(payment.date) : null);
         var fullDateTime = (d && !isNaN(d.getTime()))
             ? d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) +
@@ -424,48 +507,70 @@
         var fromLbl = payment.fromAccount
             ? (payment.fromAccount.charAt(0).toUpperCase() + payment.fromAccount.slice(1)) + ' Account'
             : '—';
+        var row = function(label, valueHtml) {
+            return '<div style="display:flex;justify-content:space-between;gap:1rem;margin-bottom:0.5rem"><span style="color:#64748b">' + label + '</span>' + valueHtml + '</div>';
+        };
+        var lateFee  = Number(payment.lateFee || 0);
+        var onTime   = utilPaymentWasOnTime(payment);
+        var baseAmt  = Math.round((Number(payment.amount || 0) - lateFee) * 100) / 100;
 
         var usageLine = (payment.usage != null && payment.unit)
-            ? '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem"><span style="color:#64748b">Usage</span><strong>' +
-              Number(payment.usage).toLocaleString() + ' ' + escHU(payment.unit) + '</strong></div>'
+            ? row('Usage', '<strong>' + Number(payment.usage).toLocaleString() + ' ' + escHU(payment.unit) + '</strong>')
             : '';
-        var lateFeeBanner = (payment.lateFee > 0)
-            ? '<div style="background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:8px;padding:0.55rem 0.75rem;font-size:0.8rem;margin-bottom:1rem;font-weight:600">⚠ Includes late fee of $' +
-              Number(payment.lateFee).toFixed(2) + '</div>'
+        var lateFeeBanner = lateFee > 0
+            ? '<div style="background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:8px;padding:0.55rem 0.75rem;font-size:0.8rem;margin-bottom:1rem;font-weight:600">⚠ Paid late — includes a late fee of ' + fmtFlorin(lateFee) + '</div>'
             : '';
+        var methodLine = row('Payment method', payment.autoPaid
+            ? '<span><span class="util-chip util-chip-auto" style="margin-left:0">Auto-pay</span></span>'
+            : '<span>Manual payment</span>');
+        var timingLine = row('Timing', lateFee > 0
+            ? '<span style="color:#b91c1c;font-weight:600">Late</span>'
+            : (onTime ? '<span style="color:#166534;font-weight:600">On time</span>' : '<span>—</span>'));
+        var xpDetail = '+' + (payment.pointsEarned || 0) + ' XP' + (onTime ? ' <span style="font-weight:400;color:#64748b;font-size:0.75rem">(incl. +15 on-time bonus)</span>' : '');
 
         var modal = document.createElement('div');
         modal.id = 'paymentDetailModal';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
         modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;animation:fadeIn 0.2s';
 
         modal.innerHTML =
-            '<div style="background:#fff;border-radius:16px;padding:2rem;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2)">' +
+            '<div style="background:#fff;border-radius:16px;padding:2rem;max-width:440px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2);max-height:90vh;overflow:auto">' +
                 '<div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.25rem">' +
-                    '<div style="width:48px;height:48px;background:#f0fdf4;border:2px solid #bbf7d0;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0">' + icon + '</div>' +
+                    '<div style="width:48px;height:48px;background:#fff7ed;border:2px solid #fed7aa;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0">' + icon + '</div>' +
                     '<div><h2 style="font-size:1.15rem;font-weight:700;margin:0;color:#1e293b">' + escHU(payment.type) + ' Bill</h2>' +
-                        '<div style="font-size:0.78rem;color:#64748b">Payment details</div></div>' +
+                        '<div style="font-size:0.78rem;color:#64748b">Payment #' + Number(payment.id) + '</div></div>' +
                 '</div>' +
                 lateFeeBanner +
                 '<div style="background:#f1f5f9;border-radius:10px;padding:1rem;margin-bottom:1.25rem;font-size:0.875rem">' +
-                    '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem"><span style="color:#64748b">Amount Charged</span><strong style="color:var(--color-primary-600);font-size:1.1rem">ƒ' + Number(payment.amount || 0).toFixed(2) + '</strong></div>' +
+                    row('Amount Charged', '<strong style="color:var(--color-primary-600);font-size:1.1rem">' + fmtFlorin(payment.amount) + '</strong>') +
+                    (lateFee > 0 ? row('Bill amount', '<span>' + fmtFlorin(baseAmt) + '</span>') + row('Late fee', '<span style="color:#b91c1c">' + fmtFlorin(lateFee) + '</span>') : '') +
                     usageLine +
-                    '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem"><span style="color:#64748b">Account No.</span><span style="font-family:monospace">' + escHU(payment.accountNumber || '—') + '</span></div>' +
-                    '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem"><span style="color:#64748b">Paid From</span><span>' + escHU(fromLbl) + '</span></div>' +
-                    '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem"><span style="color:#64748b">Date &amp; Time</span><span>' + escHU(fullDateTime) + '</span></div>' +
-                    '<div style="display:flex;justify-content:space-between;border-top:1px solid #e2e8f0;padding-top:0.5rem;margin-top:0.5rem"><span style="color:#64748b">XP Earned</span><strong style="color:#10b981">+' + (payment.pointsEarned || 0) + ' XP</strong></div>' +
+                    row('Account No.', '<span style="font-family:monospace">' + escHU(payment.accountNumber || '—') + '</span>') +
+                    row('Paid From', '<span>' + escHU(fromLbl) + '</span>') +
+                    methodLine +
+                    timingLine +
+                    row('Date &amp; Time', '<span style="text-align:right">' + escHU(fullDateTime) + '</span>') +
+                    '<div style="display:flex;justify-content:space-between;border-top:1px solid #e2e8f0;padding-top:0.5rem;margin-top:0.5rem"><span style="color:#64748b">XP Earned</span><strong style="color:#10b981;text-align:right">' + xpDetail + '</strong></div>' +
                 '</div>' +
                 '<button id="paymentDetailCloseBtn" class="btn btn-primary btn-block">Close</button>' +
             '</div>';
 
         document.body.appendChild(modal);
-        var close = function() { modal.remove(); };
+        var onKey = function(e) { if (e.key === 'Escape') close(); };
+        var close = function() { modal.remove(); document.removeEventListener('keydown', onKey); };
+        document.addEventListener('keydown', onKey);
         document.getElementById('paymentDetailCloseBtn').addEventListener('click', close);
         modal.addEventListener('click', function(e) { if (e.target === modal) close(); });
     }
 
     var BILL_TYPES      = ['Electricity','Water','Internet','Property Tax','Phone','Gas'];
     var BILL_ICONS_PAGE = { Electricity:'⚡', Water:'💧', Internet:'🌐', 'Property Tax':'🏠', Phone:'📱', Gas:'🔥' };
-    var LOADED_BILLS    = []; // store bills for urgency badge lookup
+    var LOADED_BILLS    = [];   // every cycle from GET /api/me/bills (unpaid any month + this month's)
+    var AUTOPAY_PREFS   = {};   // billDefKey -> pref record
+    var CUSTOM_BILLS    = [];   // the user's custom bill definitions
+    var CUSTOM_BILLS_BY_ID = {};
+    var BILLS_LOADED_ONCE = false;
 
     var BILL_TIPS = {
         'Electricity':   '💡 Switching to LED bulbs can cut this bill by up to 20%.',
@@ -476,53 +581,115 @@
         'Gas':           '🔥 Lowering your thermostat 1–2°C can reduce heating costs by around 10%.'
     };
 
-    /* ── Due-date urgency badge ────────────────────────────────────── */
-    // Overdue/days-left are computed server-side (GET /api/me/bills) from the
-    // cycle's real due date and grace period, not re-derived from a display
-    // string here — the server is the single source of truth for whether a
-    // late fee applies.
-    function getDueBadge(cycle) {
-        if (cycle.status === 'paid') return '<span class="due-badge due-badge-paid">✓ Paid</span>';
+    function utilPlural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+
+    // Due-status text shared by the bill cards and the dashboard list. All
+    // inputs come from the server (GET /api/me/bills): overdue, lateFee,
+    // inGracePeriod/graceDaysLeft, daysUntilDue.
+    function utilDueStatus(cycle) {
+        if (cycle.status === 'paid') return { level: 'paid', text: '✓ Paid' };
         if (cycle.overdue) {
-            return '<span class="due-badge" style="background:#fca5a5;color:#7f1d1d;animation:urgentPulse 1.5s infinite">⚠ Overdue · ' + cycle.daysOverdue + 'd</span>';
+            return { level: 'overdue', text: '⚠ Overdue · ' + fmtFlorin(cycle.lateFee) + ' late fee' };
         }
-        var daysLeft = cycle.daysUntilDue;
-        if (daysLeft === 0)  return '<span class="due-badge" style="background:#fca5a5;color:#7f1d1d;animation:urgentPulse 1.5s infinite">Due Today!</span>';
-        if (daysLeft <= 3)   return '<span class="due-badge" style="background:#fed7aa;color:#92400e">Due in ' + daysLeft + 'd</span>';
-        if (daysLeft <= 7)   return '<span class="due-badge" style="background:#fef08a;color:#713f12">Due in ' + daysLeft + 'd</span>';
-        return '<span class="due-badge due-badge-normal">' + daysLeft + 'd left</span>';
+        if (cycle.inGracePeriod) {
+            var n = cycle.graceDaysLeft != null ? cycle.graceDaysLeft : 0;
+            return { level: 'grace', text: n > 0 ? 'Past due — ' + utilPlural(n, 'day') + ' before late fee' : 'Past due — late fee starts today' };
+        }
+        var d = cycle.daysUntilDue;
+        if (d === 0) return { level: 'today', text: 'Due today' };
+        return { level: d <= 3 ? 'soon' : (d <= 7 ? 'week' : 'normal'), text: 'Due in ' + utilPlural(d, 'day') };
+    }
+
+    /* ── Due-date urgency badge ────────────────────────────────────── */
+    function getDueBadge(cycle) {
+        var st = utilDueStatus(cycle);
+        var style = {
+            paid:    null,
+            overdue: 'background:#fca5a5;color:#7f1d1d;animation:urgentPulse 1.5s infinite',
+            grace:   'background:#fed7aa;color:#7c2d12',
+            today:   'background:#fca5a5;color:#7f1d1d',
+            soon:    'background:#fed7aa;color:#92400e',
+            week:    'background:#fef08a;color:#713f12',
+            normal:  null
+        }[st.level];
+        var cls = st.level === 'paid' ? 'due-badge due-badge-paid' : (style ? 'due-badge' : 'due-badge due-badge-normal');
+        return '<span class="' + cls + '"' + (style ? ' style="' + style + '"' : '') + '>' + escHU(st.text) + '</span>';
+    }
+
+    // The late fee a still-in-grace bill will pick up (the server's rule:
+    // amount × lateFeeRate, rounded to cents).
+    function utilProjectedLateFee(cycle) {
+        return Math.round((cycle.amount || 0) * (cycle.lateFeeRate != null ? cycle.lateFeeRate : 0.05) * 100) / 100;
+    }
+
+    // Auto-pay runs on every GET /api/me/bills for any unpaid cycle whose
+    // due date has passed. If one is still unpaid afterwards with auto-pay
+    // on, the charge failed (insufficient funds).
+    function utilAutopayFailed(cycle) {
+        var pref = AUTOPAY_PREFS[cycle.billDefKey];
+        return !!(pref && pref.enabled && cycle.status !== 'paid' && Date.now() >= cycle.dueDate);
+    }
+
+    // One representative cycle per bill definition (the current month's, or
+    // the newest one) — per-bill controls (auto-pay switch, notes, edit)
+    // live on that card only, so backlog cards don't duplicate them.
+    function utilRepresentativeCycles(bills) {
+        var reps = {};
+        (bills || []).forEach(function(b) {
+            var cur = reps[b.billDefKey];
+            if (!cur || String(b.cycleMonth || '') > String(cur.cycleMonth || '')) reps[b.billDefKey] = b;
+        });
+        return reps;
     }
 
     /* ── Budget bar ────────────────────────────────────────────────── */
-    var ESTIMATED_MONTHLY = 585.24; // sum of all default bills
-    function updateBudgetBar(payments) {
-        var totalPaid = payments.reduce(function(s,p){ return s+(p.amount||0); }, 0);
-        var pct       = Math.min(100, Math.round((totalPaid / ESTIMATED_MONTHLY) * 100));
-        var bar       = document.getElementById('utilBudgetBar');
-        var paidEl    = document.getElementById('utilBudgetPaid');
-        var pctEl     = document.getElementById('utilBudgetPct');
-        var remEl     = document.getElementById('utilBudgetRemaining');
-        if (bar)    bar.style.width = pct + '%';
-        if (bar)    bar.style.background = pct >= 100 ? 'linear-gradient(90deg,#10b981,#10b981)' : pct > 70 ? 'linear-gradient(90deg,#f59e0b,#d97706)' : 'linear-gradient(90deg,#6366f1,#4f46e5)';
-        if (paidEl) paidEl.textContent = 'ƒ' + totalPaid.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-        if (pctEl)  pctEl.textContent  = pct + '% of monthly bills paid this session';
-        var remaining = Math.max(0, ESTIMATED_MONTHLY - totalPaid);
-        if (remEl)  remEl.textContent  = pct < 100 ? 'ƒ' + remaining.toFixed(2) + ' remaining' : '✓ All bills covered!';
+    // Measures THIS calendar month only: the current month's bill cycles
+    // (amount billed vs. amount of those paid), plus everything actually
+    // spent on bills since the 1st (which can include past-month bills).
+    function utilStartOfMonthTs() {
+        var d = new Date();
+        return new Date(d.getFullYear(), d.getMonth(), 1).getTime();
     }
 
-    /* ── Usage history mini-trend (usage-based bills only) ────────────
-       Reuses the payments already fetched for the streak badges below —
-       filters to this bill's own type, keeps only readings that actually
-       carry a usage number, and renders the last up to 6 as a compact
-       CSS-only horizontal bar list (oldest to newest) so a glance shows
-       whether usage has been trending up or down. Returns '' (nothing
-       rendered) when there's 0-1 data points, since there's no trend to
-       show yet. */
+    function updateBudgetBar() {
+        if (!BILLS_LOADED_ONCE) return Promise.resolve();
+        var month   = utilCurrentCycleMonth();
+        var current = LOADED_BILLS.filter(function(b) { return b.cycleMonth === month; });
+        var billed  = current.reduce(function(s, b) { return s + (b.amount || 0); }, 0);
+        var covered = current.filter(function(b) { return b.status === 'paid'; })
+                             .reduce(function(s, b) { return s + (b.amount || 0); }, 0);
+        var backlog = LOADED_BILLS.filter(function(b) { return b.status !== 'paid' && utilIsPastMonthCycle(b); });
+        var backlogDue = backlog.reduce(function(s, b) { return s + (b.totalDue || 0); }, 0);
+        var pct = billed > 0 ? Math.min(100, Math.round((covered / billed) * 100)) : 0;
+
+        var bar    = document.getElementById('utilBudgetBar');
+        var paidEl = document.getElementById('utilBudgetPaid');
+        var totEl  = document.getElementById('utilBudgetTotal');
+        var pctEl  = document.getElementById('utilBudgetPct');
+        var remEl  = document.getElementById('utilBudgetRemaining');
+        if (bar) {
+            bar.style.width = pct + '%';
+            bar.style.background = pct >= 100 ? 'linear-gradient(90deg,#10b981,#059669)' : pct > 70 ? 'linear-gradient(90deg,#f59e0b,#d97706)' : 'linear-gradient(90deg,#fb923c,#ea580c)';
+        }
+        if (paidEl) paidEl.textContent = fmtFlorin(covered);
+        if (totEl)  totEl.textContent  = fmtFlorin(billed);
+        var remaining = Math.max(0, billed - covered);
+        var remText = billed > 0 && covered >= billed ? '✓ All of this month\'s bills paid' : fmtFlorin(remaining) + ' left this month';
+        if (backlog.length) remText += ' · + ' + fmtFlorin(backlogDue) + ' past due from earlier months';
+        if (remEl) { remEl.textContent = remText; remEl.style.color = backlog.length ? '#b91c1c' : ''; }
+
+        var label = pct + '% of this month\'s bills paid';
+        if (pctEl) pctEl.textContent = label;
+        return DigifinwizDB.getPaymentsSince(utilStartOfMonthTs()).then(function(pays) {
+            var spent = (pays || []).reduce(function(s, p) { return s + (p.amount || 0); }, 0);
+            if (pctEl) pctEl.textContent = label + ' · ' + fmtFlorin(spent) + ' spent on bills this month';
+        }).catch(function() {});
+    }
+
+    /* ── Usage history mini-trend (usage-based bills only) ──────────── */
     function renderUsageTrendHtml(billName, allPayments) {
         var typePays = (allPayments || []).filter(function(p) { return p.type === billName && p.usage != null; });
-        // allPayments comes from DigifinwizDB.getPayments(), which the server
-        // returns sorted newest-first — so the first N here are the most
-        // recent readings.
+        // getPayments() is newest-first, so the first N are the most recent.
         var recentDesc = typePays.slice(0, 6);
         if (recentDesc.length < 2) return '';
         var chronological = recentDesc.slice().reverse();
@@ -553,148 +720,299 @@
         '</div>';
     }
 
-    /* ── Bill cards ────────────────────────────────────────────────── */
-    // Each bill is now the user's actual current-month cycle (from
-    // GET /api/me/bills) — carries a real usage reading + computed amount
-    // for usage-based bills, and a live overdue/late-fee status, instead of
-    // a shared flat template plus a client-side "does any payment of this
-    // type exist" guess at whether it's "paid."
+    /* ── Bill notes (per user, per bill definition) ─────────────────── */
+    function utilNotesKey() {
+        var uid = utilSessionUserId();
+        return 'digifinwiz_bill_notes_u' + (uid != null ? uid : 'anon');
+    }
+    function utilReadNotes() {
+        try { return JSON.parse(localStorage.getItem(utilNotesKey()) || '{}') || {}; } catch (e) { return {}; }
+    }
+    function utilWriteNotes(notes) {
+        try { localStorage.setItem(utilNotesKey(), JSON.stringify(notes)); return true; } catch (e) { return false; }
+    }
+
+    /* ── Bills data: one shared fetch feeds every view ─────────────────
+       GET /api/me/bills also runs the server's auto-pay sweep and writes
+       overdue/auto-pay messages, so after every fetch we also refresh the
+       header, balance and messages badge. Concurrent callers share one
+       in-flight request (plus at most one queued follow-up). */
+    var _billsInflight = null, _billsQueued = null;
+
     function loadBills() {
-        Promise.all([
-            DigifinwizDB.getMyBills(),
-            DigifinwizDB.getAutopayPrefs()
-        ]).then(function(results) {
-            var bills = results[0];
-            var autopayPrefs = {};
-            results[1].forEach(function(p) { autopayPrefs[p.billDefKey] = p.enabled; });
-            LOADED_BILLS      = bills;
-            ESTIMATED_MONTHLY = bills.reduce(function(s,b){ return s + (b.amount||0); }, 0);
-            var totalEl = document.getElementById('utilBudgetTotal');
-            if (totalEl) totalEl.textContent = 'ƒ' + ESTIMATED_MONTHLY.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-            BILL_TYPES = bills.map(function(b){ return b.name; });
-            bills.forEach(function(b){ BILL_ICONS_PAGE[b.name] = b.icon || '🧾'; });
-            var grid = document.getElementById('billsGrid');
-            if (!grid) return;
-            if (bills.length === 0) {
-                grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--color-gray-500);padding:2rem">No bills yet — add one above!</div>';
-                return;
+        if (typeof DigifinwizDB === 'undefined') return Promise.resolve();
+        if (_billsInflight) {
+            if (!_billsQueued) {
+                _billsQueued = _billsInflight.catch(function(){}).then(function() { _billsQueued = null; return loadBills(); });
             }
-            var autopayState = JSON.parse(localStorage.getItem('digifinwiz_autopay') || '{}');
-            grid.innerHTML = bills.map(function(b) {
-                var isPaid       = b.status === 'paid';
-                var urgencyBadge = getDueBadge(b);
-                var tip          = BILL_TIPS[b.name] ? '<div class="bill-tip">' + BILL_TIPS[b.name] + '</div>' : '';
-                var isAutopay    = !!autopayPrefs[b.billDefKey];
-                var isCustom     = (b.billDefKey || '').indexOf('custom:') === 0;
-                var autopayRow   =
-                    '<div class="autopay-row">' +
-                        '<span class="autopay-label">Auto-pay</span>' +
-                        '<label class="autopay-switch">' +
-                            '<input type="checkbox" id="autopay-' + b.id + '" ' + (isAutopay ? 'checked' : '') +
-                                " onchange='toggleAutopay(" + b.id + ',' + jsAttr(b.billDefKey) + ',' + jsAttr(b.name) + ")'>" +
-                            '<span class="autopay-slider"></span>' +
-                        '</label>' +
-                    '</div>';
-                // Bill notes
-                var notes     = JSON.parse(localStorage.getItem('digifinwiz_bill_notes') || '{}');
-                var savedNote = notes[b.name] || '';
-                var noteHtml  =
-                    '<div class="bill-note-wrap">' +
-                        '<button id="billNote-btn-' + b.id + "\" class=\"bill-note-btn\" onclick='toggleBillNote(" + b.id + ',' + jsAttr(b.name) + ")'>📝 " + (savedNote ? 'Edit note' : 'Add note') + '</button>' +
-                        '<textarea id="billNote-area-' + b.id + '" class="bill-note-area" rows="2" placeholder="Personal reminder…" ' +
-                            "onblur='saveBillNote(" + b.id + ',' + jsAttr(b.name) + ")'>" + '</textarea>' +
-                        '<div id="billNote-disp-' + b.id + '" class="bill-note-display" style="' + (savedNote ? '' : 'display:none') + '">' + escHU(savedNote) + '</div>' +
-                    '</div>';
-                var savingsChip = !isAutopay
-                    ? '<div class="bill-savings-chip">Enable auto-pay · avoid late fees automatically</div>'
-                    : '<div class="bill-savings-chip" style="background:#dcfce7;color:#166534;border-color:#bbf7d0">Auto-pay on · this bill will be paid for you when due</div>';
-                // Usage breakdown for usage-based bills — shows the reading
-                // that actually drove this month's charge.
-                var usageLine = (b.billingType === 'usage' && b.usage != null)
-                    ? '<div class="bill-usage-line">📟 ' + b.usage.toLocaleString() + ' ' + escHU(b.unit) + ' × ƒ' + Number(b.ratePerUnit).toFixed(3) + '/' + escHU(b.unit) +
-                      (b.baseFee ? ' + ƒ' + Number(b.baseFee).toFixed(2) + ' base fee' : '') + '</div>'
-                    : '';
-                var totalDue    = isPaid ? (b.paidAmount != null ? b.paidAmount : b.amount) : b.totalDue;
-                var lateFeeLine = (!isPaid && b.lateFee > 0)
-                    ? '<div class="bill-late-fee-line">⚠ Includes ƒ' + Number(b.lateFee).toFixed(2) + ' late fee (' + b.daysOverdue + 'd overdue)</div>'
-                    : '';
-                var customBadge = isCustom ? '<span class="bill-custom-badge">Your Bill</span>' : '';
-                var deleteBtn   = (isCustom && !isPaid)
-                    ? "<button class=\"bill-custom-delete\" onclick='deleteCustomBill(" + Number(b.billDefKey.split(':')[1]) + ")' title=\"Remove this bill\">Remove</button>"
-                    : '';
-                return '<div class="bill-card" id="bill-' + b.id + '" style="' + (isPaid ? 'opacity:0.85' : '') + '">' +
-                    '<div class="bill-header" style="background:' + escHU(b.gradient||'#6366f1') + '">' +
-                        '<div class="bill-icon">' + escHU(b.icon||'🧾') + '</div>' +
-                        '<div>' +
-                            '<h3>' + escHU(b.name) + ' Bill ' + customBadge + '</h3>' +
-                            '<p style="font-size:0.75rem;opacity:0.85">Due ' + new Date(b.dueDate).toLocaleDateString('en-US',{month:'short',day:'numeric'}) + '</p>' +
-                        '</div>' +
-                        '<div style="margin-left:auto" id="billStatus-' + b.id + '">' + urgencyBadge + '</div>' +
-                    '</div>' +
-                    '<div class="bill-body">' +
-                        '<div class="bill-info"><span class="label">Account Number:</span><span class="value">' + escHU(b.accountNumber||'—') + '</span></div>' +
-                        usageLine +
-                        '<div class="bill-amount"><span>Amount Due:</span><strong>ƒ' + Number(totalDue).toFixed(2) + '</strong></div>' +
-                        lateFeeLine +
-                        '<div style="font-size:0.75rem;color:var(--color-success);margin-bottom:0.5rem">Earns +45 XP when paid' + (!isPaid && !b.overdue ? ' (+15 on-time bonus)' : '') + '</div>' +
-                        savingsChip +
-                        tip +
-                        '<button class="btn btn-primary btn-block" id="payBtn-' + b.id + '" ' +
-                            (isPaid ? 'disabled style="opacity:0.6"' : '') + ' ' +
-                            "onclick='payBill(" + b.id + ")'>" +
-                            (isPaid ? 'Paid This Month ✓' : 'Pay Now') +
-                        '</button>' +
-                        autopayRow +
-                        noteHtml +
-                        deleteBtn +
-                    '</div>' +
-                '</div>';
-            }).join('');
-            // Show/hide pay-all button
-            var unpaidCount = bills.filter(function(b){ return b.status !== 'paid'; }).length;
-            var payAllWrap = document.getElementById('payAllWrap');
-            var payAllCount = document.getElementById('payAllCount');
-            if (payAllWrap) payAllWrap.style.display = unpaidCount > 0 ? '' : 'none';
-            if (payAllCount) payAllCount.textContent = unpaidCount + ' bill' + (unpaidCount!==1?'s':'') + ' unpaid';
-            // Inject streak badges + usage trend (both derived from the same
-            // full payment history, so share one fetch).
-            DigifinwizDB.getPayments(1000).then(function(allPays) {
-                var streaks = computeStreaks(allPays);
-                bills.forEach(function(b) {
-                    var billEl = document.getElementById('bill-' + b.id);
-                    if (!billEl) return;
-                    var bodyEl = billEl.querySelector('.bill-body');
-                    if (!bodyEl) return;
-                    var count = streaks[b.name] || 0;
-                    if (count >= 2) {
-                        var old = bodyEl.querySelector('.streak-badge');
-                        if (old) old.remove();
-                        var badge = document.createElement('div');
-                        badge.className = 'streak-badge';
-                        badge.style.cssText = 'display:inline-flex;align-items:center;gap:0.3rem;background:linear-gradient(135deg,#fef3c7,#fde68a);border:1.5px solid #f59e0b;border-radius:99px;padding:0.25rem 0.75rem;font-size:0.74rem;font-weight:700;color:#92400e;margin-bottom:0.5rem';
-                        badge.textContent = '🔥 ' + count + 'x paid';
-                        bodyEl.insertBefore(badge, bodyEl.firstChild);
-                    }
-                    if (b.billingType === 'usage') {
-                        var trendHtml = renderUsageTrendHtml(b.name, allPays);
-                        var old2 = bodyEl.querySelector('.bill-usage-trend');
-                        if (old2) old2.remove();
-                        if (trendHtml) {
-                            var payBtn = document.getElementById('payBtn-' + b.id);
-                            if (payBtn) payBtn.insertAdjacentHTML('beforebegin', trendHtml);
-                        }
-                    }
-                });
-            }).catch(function(){});
-            DigifinwizDB.getPayments(1000).then(function(payments) { updateBudgetBar(payments || []); }).catch(function(){});
-        }).catch(function(err) {
-            console.error('loadBills:', err);
-            /* keep loading placeholder */
+            return _billsQueued;
+        }
+        _billsInflight = fetchAndRenderBills().then(function(r) { _billsInflight = null; return r; },
+                                                   function(e) { _billsInflight = null; throw e; });
+        return _billsInflight.catch(function(err) { console.error('loadBills:', err); });
+    }
+
+    function fetchAndRenderBills() {
+        var prevUnpaid = {};
+        LOADED_BILLS.forEach(function(b) { if (b.status !== 'paid') prevUnpaid[b.id] = b; });
+        var hadData = BILLS_LOADED_ONCE;
+        return Promise.all([
+            DigifinwizDB.getMyBills(),
+            DigifinwizDB.getAutopayPrefs(),
+            DigifinwizDB.getCustomBills().catch(function() { return null; })
+        ]).then(function(results) {
+            var bills = results[0] || [];
+            AUTOPAY_PREFS = {};
+            (results[1] || []).forEach(function(p) { AUTOPAY_PREFS[p.billDefKey] = p; });
+            if (results[2]) {
+                CUSTOM_BILLS = results[2];
+                CUSTOM_BILLS_BY_ID = {};
+                CUSTOM_BILLS.forEach(function(c) { CUSTOM_BILLS_BY_ID[c.id] = c; });
+            }
+            LOADED_BILLS = bills;
+            BILLS_LOADED_ONCE = true;
+
+            var names = [];
+            bills.forEach(function(b) {
+                if (names.indexOf(b.name) === -1) names.push(b.name);
+                BILL_ICONS_PAGE[b.name] = b.icon || '🧾';
+            });
+            BILL_TYPES = names;
+
+            renderBillsGrid();
+            renderPayAllButton();
+            renderCustomBillCapHint();
+            renderDashUpcomingBills(bills);
+            renderAutopayList();
+            updateBudgetBar();
+            refreshHeaderProgress();
+            refreshHeaderBalance();
+            loadMessagesBadge();
+
+            // Cycles that were unpaid on our last fetch and are now paid
+            // without this page paying them were settled by auto-pay.
+            if (hadData) {
+                var autoPaid = bills.filter(function(b) { return b.status === 'paid' && prevUnpaid[b.id] && !UTIL_PAID_BY_PAGE[b.id]; });
+                if (autoPaid.length) {
+                    showNotification('Auto-pay paid ' + autoPaid.map(function(b) { return b.name; }).join(', ') + '.', 'success');
+                    updatePaymentHistory();
+                    loadUtilStats();
+                    loadUtilityChallenges();
+                    utilRunChallengeCheck();
+                }
+            }
+            return bills;
         });
+    }
+
+    function renderPayAllButton() {
+        var unpaid  = LOADED_BILLS.filter(function(b){ return b.status !== 'paid'; });
+        var past    = unpaid.filter(utilIsPastMonthCycle).length;
+        var wrap    = document.getElementById('payAllWrap');
+        var btn     = document.getElementById('payAllBtn');
+        if (wrap) wrap.style.display = (unpaid.length > 0 || payAllRunning) ? '' : 'none';
+        if (!btn || payAllRunning) return;
+        btn.disabled = false;
+        btn.innerHTML = 'Pay All Unpaid Bills <span id="payAllCount" style="background:rgba(255,255,255,0.25);border-radius:99px;padding:0.1rem 0.6rem;font-size:0.8rem;margin-left:0.4rem">' +
+            utilPlural(unpaid.length, 'bill') + ' unpaid' + (past ? ' · ' + past + ' from earlier months' : '') + '</span>';
+    }
+
+    function renderCustomBillCapHint() {
+        var el = document.getElementById('customBillCapHint');
+        if (el) el.textContent = CUSTOM_BILLS.length ? CUSTOM_BILLS.length + ' of 10 custom bills used' : '';
+    }
+
+    function renderBillCard(b, reps, notes) {
+        var isPaid   = b.status === 'paid';
+        var isPast   = utilIsPastMonthCycle(b);
+        var isRep    = reps[b.billDefKey] === b;
+        var monthLbl = utilCycleMonthLabel(b.cycleMonth);
+        var pref     = AUTOPAY_PREFS[b.billDefKey];
+        var isAutopay= !!(pref && pref.enabled);
+        var isCustom = (b.billDefKey || '').indexOf('custom:') === 0;
+        var customId = isCustom ? Number(b.billDefKey.split(':')[1]) : null;
+        var dueStr   = new Date(b.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        var tip      = (isRep && BILL_TIPS[b.name]) ? '<div class="bill-tip">' + BILL_TIPS[b.name] + '</div>' : '';
+
+        var autopayRow = '';
+        if (isRep) {
+            autopayRow =
+                '<div class="autopay-row">' +
+                    '<span class="autopay-label">Auto-pay</span>' +
+                    '<label class="autopay-switch">' +
+                        '<input type="checkbox" id="autopay-' + b.id + '" ' + (isAutopay ? 'checked' : '') +
+                            " onchange='toggleAutopay(" + b.id + ',' + jsAttr(b.billDefKey) + ',' + jsAttr(b.name) + ")'>" +
+                        '<span class="autopay-slider"></span>' +
+                    '</label>' +
+                '</div>';
+        } else {
+            autopayRow = '<div class="bill-older-autopay-note">Auto-pay is ' + (isAutopay ? 'on' : 'off') + ' for ' + escHU(b.name) + ' — change it on the newest ' + escHU(b.name) + ' bill or the Auto-Pay tab.</div>';
+        }
+
+        var noteHtml = '';
+        if (isRep) {
+            var noteKey   = b.billDefKey || b.name;
+            var savedNote = notes[noteKey] || '';
+            noteHtml =
+                '<div class="bill-note-wrap">' +
+                    '<button id="billNote-btn-' + b.id + "\" class=\"bill-note-btn\" onclick='toggleBillNote(" + b.id + ',' + jsAttr(noteKey) + ")'>📝 " + (savedNote ? 'Edit note' : 'Add note') + '</button>' +
+                    '<textarea id="billNote-area-' + b.id + '" class="bill-note-area" rows="2" placeholder="Personal reminder…" ' +
+                        "onblur='saveBillNote(" + b.id + ',' + jsAttr(noteKey) + ',' + jsAttr(b.name) + ")'>" + '</textarea>' +
+                    '<div id="billNote-disp-' + b.id + '" class="bill-note-display" style="' + (savedNote ? '' : 'display:none') + '">' + escHU(savedNote) + '</div>' +
+                '</div>';
+        }
+
+        var savingsChip = '';
+        if (isRep && !isPaid) {
+            savingsChip = !isAutopay
+                ? '<div class="bill-savings-chip">Enable auto-pay · avoid late fees automatically</div>'
+                : '<div class="bill-savings-chip" style="background:#dcfce7;color:#166534;border-color:#bbf7d0">Auto-pay on · this bill will be paid for you when due</div>';
+        }
+
+        var usageLine = (b.billingType === 'usage' && b.usage != null)
+            ? '<div class="bill-usage-line">📟 ' + Number(b.usage).toLocaleString() + ' ' + escHU(b.unit) + ' × ƒ' + Number(b.ratePerUnit).toFixed(3) + '/' + escHU(b.unit) +
+              (b.baseFee ? ' + ƒ' + Number(b.baseFee).toFixed(2) + ' base fee' : '') + '</div>'
+            : '';
+        var shownTotal = isPaid ? (b.paidAmount != null ? b.paidAmount : b.amount) : b.totalDue;
+
+        var statusLine = '';
+        if (!isPaid && b.overdue) {
+            statusLine = '<div class="bill-late-fee-line">⚠ Includes ' + fmtFlorin(b.lateFee) + ' late fee — the grace period ended' + (b.graceEndsAt ? ' ' + new Date(b.graceEndsAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '') + ' (due ' + dueStr + ')</div>';
+        } else if (!isPaid && b.inGracePeriod) {
+            statusLine = '<div class="bill-grace-line">Past due since ' + dueStr + '. Pay within ' + utilPlural(b.graceDaysLeft || 0, 'day') + ' to avoid a ' + fmtFlorin(utilProjectedLateFee(b)) + ' late fee.</div>';
+        }
+        var autopayFail = utilAutopayFailed(b)
+            ? '<div class="bill-autopay-fail">Auto-pay couldn\'t charge this bill — check your balance, then pay it manually. <a onclick="switchUtilPageTab(\'messages\')">View message</a></div>'
+            : '';
+
+        // Edits to a custom bill only shape future months — surface what the
+        // next generated bill will look like when it differs from this one.
+        var nextHint = '';
+        var def = isCustom ? CUSTOM_BILLS_BY_ID[customId] : null;
+        if (isRep && def) {
+            if (def.billingType === 'flat' && def.amount != null && Math.abs(def.amount - (b.amount || 0)) > 0.004) {
+                nextHint = '<div class="bill-next-month-hint">From next month: ' + fmtFlorin(def.amount) + '</div>';
+            } else if (def.billingType === 'usage' && def.ratePerUnit != null && b.ratePerUnit != null && Math.abs(def.ratePerUnit - b.ratePerUnit) > 0.0000001) {
+                nextHint = '<div class="bill-next-month-hint">From next month: ƒ' + Number(def.ratePerUnit).toFixed(3) + '/' + escHU(def.unit || 'unit') + '</div>';
+            }
+            if (def.name && def.name !== b.name) nextHint += '<div class="bill-next-month-hint">Renamed to “' + escHU(def.name) + '” from next month</div>';
+        }
+
+        var customBadge = isCustom ? '<span class="bill-custom-badge">Your Bill</span>' : '';
+        var actions = '';
+        if (isRep && isCustom) {
+            actions = '<div class="bill-card-actions">' +
+                "<button type=\"button\" onclick='showEditCustomBillModal(" + customId + ")' title=\"Edit this bill\">Edit</button>" +
+                "<button type=\"button\" class=\"bill-remove-btn\" onclick='deleteCustomBill(" + customId + ")' title=\"Remove this bill\">Remove</button>" +
+            '</div>';
+        }
+
+        var payLabel = isPaid ? (isPast ? 'Paid ✓' : 'Paid This Month ✓') : 'Pay Now';
+        var payDisabled = isPaid || payAllRunning;
+        var subtitle = isPast
+            ? '<strong>' + escHU(monthLbl) + ' bill</strong> · Due ' + dueStr
+            : escHU(monthLbl) + ' · Due ' + dueStr;
+
+        return '<div class="bill-card' + (isPast ? ' bill-card--past' : '') + '" id="bill-' + b.id + '" data-cycle-month="' + escHU(b.cycleMonth || '') + '" style="' + (isPaid ? 'opacity:0.85' : '') + '">' +
+            (isPast ? '<div class="bill-past-ribbon">Unpaid ' + escHU(monthLbl) + ' bill</div>' : '') +
+            '<div class="bill-header" style="background:' + escHU(b.gradient || '#6366f1') + '">' +
+                '<div class="bill-icon">' + escHU(b.icon || '🧾') + '</div>' +
+                '<div>' +
+                    '<h3>' + escHU(b.name) + ' Bill ' + customBadge + '</h3>' +
+                    '<p style="font-size:0.75rem;opacity:0.9">' + subtitle + '</p>' +
+                '</div>' +
+                '<div style="margin-left:auto" id="billStatus-' + b.id + '">' + getDueBadge(b) + '</div>' +
+            '</div>' +
+            '<div class="bill-body">' +
+                '<div class="bill-info"><span class="label">Account Number:</span><span class="value">' + escHU(b.accountNumber || '—') + '</span></div>' +
+                usageLine +
+                '<div class="bill-amount"><span>' + (isPaid ? 'Amount Paid:' : 'Amount Due:') + '</span><strong>' + fmtFlorin(shownTotal) + '</strong></div>' +
+                nextHint +
+                statusLine +
+                autopayFail +
+                (isPaid ? '' : '<div style="font-size:0.75rem;color:var(--color-success);margin-bottom:0.5rem">Earns +45 XP when paid' + (!b.overdue ? ' (+15 on-time bonus)' : '') + '</div>') +
+                savingsChip +
+                tip +
+                '<button class="btn btn-primary btn-block bill-pay-btn" id="payBtn-' + b.id + '" data-paid="' + (isPaid ? '1' : '0') + '" ' +
+                    (payDisabled ? 'disabled style="opacity:0.6"' : '') + ' ' +
+                    "onclick='payBill(" + b.id + ")'>" + payLabel +
+                '</button>' +
+                autopayRow +
+                noteHtml +
+                actions +
+            '</div>' +
+        '</div>';
+    }
+
+    function renderBillsGrid() {
+        var grid = document.getElementById('billsGrid');
+        if (!grid) return;
+        var bills = utilSortBillsForDisplay(LOADED_BILLS);
+        if (bills.length === 0) {
+            grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--color-gray-500);padding:2rem">No bills yet — add one above!</div>';
+            return;
+        }
+        var reps  = utilRepresentativeCycles(bills);
+        var notes = utilReadNotes();
+        var past    = bills.filter(function(b) { return b.status !== 'paid' && utilIsPastMonthCycle(b); });
+        var current = bills.filter(function(b) { return b.status !== 'paid' && !utilIsPastMonthCycle(b); });
+        var paid    = bills.filter(function(b) { return b.status === 'paid'; });
+        var head = function(cls, title, sub) {
+            return '<div class="bills-section-head ' + cls + '"><h3>' + title + '</h3><span>' + sub + '</span></div>';
+        };
+        var html = '';
+        if (past.length) {
+            var pastDue = past.reduce(function(s, b) { return s + (b.totalDue || 0); }, 0);
+            html += head('past', 'Unpaid from earlier months', utilPlural(past.length, 'bill') + ' · ' + fmtFlorin(pastDue) + ' due');
+            html += past.map(function(b) { return renderBillCard(b, reps, notes); }).join('');
+        }
+        if (current.length) {
+            var curDue = current.reduce(function(s, b) { return s + (b.totalDue || 0); }, 0);
+            html += head('', utilCycleMonthLabel(utilCurrentCycleMonth()) + ' bills', utilPlural(current.length, 'bill') + ' unpaid · ' + fmtFlorin(curDue) + ' due');
+            html += current.map(function(b) { return renderBillCard(b, reps, notes); }).join('');
+        }
+        if (paid.length) {
+            html += head('', 'Paid this month', utilPlural(paid.length, 'bill'));
+            html += paid.map(function(b) { return renderBillCard(b, reps, notes); }).join('');
+        }
+        grid.innerHTML = html;
+
+        // Streak badges + usage trend on each bill's representative card
+        // (both derived from the same payment history, so one fetch).
+        DigifinwizDB.getPayments(1000).then(function(allPays) {
+            var streaks = computeStreaks(allPays);
+            Object.keys(reps).forEach(function(key) {
+                var b = reps[key];
+                var billEl = document.getElementById('bill-' + b.id);
+                if (!billEl) return;
+                var bodyEl = billEl.querySelector('.bill-body');
+                if (!bodyEl) return;
+                var count = streaks[b.name] || 0;
+                var old = bodyEl.querySelector('.streak-badge');
+                if (old) old.remove();
+                if (count >= 2) {
+                    var badge = document.createElement('div');
+                    badge.className = 'streak-badge';
+                    badge.style.cssText = 'display:inline-flex;align-items:center;gap:0.3rem;background:linear-gradient(135deg,#fef3c7,#fde68a);border:1.5px solid #f59e0b;border-radius:99px;padding:0.25rem 0.75rem;font-size:0.74rem;font-weight:700;color:#92400e;margin-bottom:0.5rem';
+                    badge.textContent = '🔥 ' + count + 'x paid';
+                    bodyEl.insertBefore(badge, bodyEl.firstChild);
+                }
+                if (b.billingType === 'usage') {
+                    var trendHtml = renderUsageTrendHtml(b.name, allPays);
+                    var old2 = bodyEl.querySelector('.bill-usage-trend');
+                    if (old2) old2.remove();
+                    if (trendHtml) {
+                        var payBtn = document.getElementById('payBtn-' + b.id);
+                        if (payBtn) payBtn.insertAdjacentHTML('beforebegin', trendHtml);
+                    }
+                }
+            });
+        }).catch(function(){});
     }
 
     /* ── Custom bills ──────────────────────────────────────────────────── */
     var CUSTOM_BILL_CATEGORY_LABELS = { electricity:'⚡ Electricity', water:'💧 Water', gas:'🔥 Gas', internet:'🌐 Internet', phone:'📱 Phone', tax:'🏠 Tax/Assessment', other:'🧾 Other' };
+    var MIN_CUSTOM_BILL_AMOUNT = 5;
 
     function showCustomBillForm() {
         var fc = document.getElementById('customBillFormContainer');
@@ -702,12 +1020,13 @@
         fc.innerHTML =
             '<div class="form-container custom-bill-form">' +
             '<h3 style="margin:0 0 1rem;font-size:1rem;font-weight:700">+ Add Your Own Bill</h3>' +
+            '<div class="util-form-error" id="cb_error"></div>' +
             '<div class="form-group"><label>Bill Name</label><input type="text" class="form-input" id="cb_name" placeholder="e.g. Acme Internet, HOA Dues" maxlength="40"></div>' +
             '<div class="form-row">' +
                 '<div class="form-group"><label>Category</label><select class="form-input" id="cb_category">' +
                     Object.keys(CUSTOM_BILL_CATEGORY_LABELS).map(function(k) { return '<option value="' + k + '">' + CUSTOM_BILL_CATEGORY_LABELS[k] + '</option>'; }).join('') +
                 '</select></div>' +
-                '<div class="form-group"><label>Account Number <span style="font-weight:400;color:var(--color-gray-400)">(Optional)</span></label><input type="text" class="form-input" id="cb_account" placeholder="Account #"></div>' +
+                '<div class="form-group"><label>Account Number <span style="font-weight:400;color:var(--color-gray-400)">(Optional)</span></label><input type="text" class="form-input" id="cb_account" placeholder="Account #" maxlength="30"></div>' +
             '</div>' +
             '<div class="form-group"><label>Billing Type</label><select class="form-input" id="cb_billingType" onchange="toggleCustomBillFields()">' +
                 '<option value="flat">Flat rate (same amount every month)</option>' +
@@ -731,6 +1050,7 @@
                 '</div>' +
             '</div>' +
             '<div class="form-group"><label>Due Day of Month</label><input type="number" class="form-input" id="cb_dueDateDay" min="1" max="28" value="25" style="max-width:120px"></div>' +
+            '<p style="font-size:0.75rem;color:var(--color-gray-500);margin:0 0 0.75rem">You can have up to 10 custom bills. This month\'s bill is created right away.</p>' +
             '<div class="form-actions">' +
                 '<button type="button" class="btn btn-secondary" onclick="cancelCustomBillForm()">Cancel</button>' +
                 '<button type="button" class="btn btn-primary" id="cb_saveBtn" onclick="saveCustomBillForm()">Save Bill</button>' +
@@ -751,21 +1071,27 @@
         if (fc) fc.innerHTML = '';
     }
 
-    // Guards against a second submit firing while the first is still in
-    // flight (double-click on Save Bill) — without it, two requests can
-    // both read the store before either writes, and the second write
-    // silently clobbers the first (or leaves two records sharing an id).
+    function utilShowFormError(id, msg) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = msg || '';
+        el.style.display = msg ? 'block' : 'none';
+    }
+
+    // Guards against a second submit firing while the first is still in flight.
     var customBillSaveInFlight = false;
 
     function saveCustomBillForm() {
         if (customBillSaveInFlight) return;
+        var fail = function(msg) { utilShowFormError('cb_error', msg); showNotification(msg, 'error'); };
         var name        = (document.getElementById('cb_name') || {}).value || '';
         var category    = (document.getElementById('cb_category') || {}).value || 'other';
         var accountNum  = (document.getElementById('cb_account') || {}).value || '';
         var billingType = (document.getElementById('cb_billingType') || {}).value || 'flat';
         var dueDateDay  = parseInt((document.getElementById('cb_dueDateDay') || {}).value, 10) || 25;
+        utilShowFormError('cb_error', '');
 
-        if (!name.trim()) { showNotification('Enter a bill name.', 'error'); return; }
+        if (!name.trim()) { fail('Enter a bill name.'); return; }
 
         var payload = { name: name.trim(), category: category, accountNumber: accountNum.trim(), billingType: billingType, dueDateDay: dueDateDay };
         if (billingType === 'usage') {
@@ -774,13 +1100,13 @@
             payload.baseFee      = parseFloat((document.getElementById('cb_baseFee') || {}).value) || 0;
             payload.usageMin     = parseFloat((document.getElementById('cb_usageMin') || {}).value);
             payload.usageMax     = parseFloat((document.getElementById('cb_usageMax') || {}).value);
-            if (!payload.unit.trim()) { showNotification('Enter a usage unit (e.g. kWh).', 'error'); return; }
-            if (!payload.ratePerUnit || payload.ratePerUnit <= 0) { showNotification('Enter a valid rate per unit.', 'error'); return; }
-            if (!payload.usageMin || !payload.usageMax || payload.usageMax <= payload.usageMin) { showNotification('Enter a valid usage range (max must exceed min).', 'error'); return; }
-            if (payload.baseFee + payload.usageMin * payload.ratePerUnit < 5) { showNotification('Even at minimum usage this bill must total at least ƒ5.00.', 'error'); return; }
+            if (!payload.unit.trim()) { fail('Enter a usage unit (e.g. kWh).'); return; }
+            if (!payload.ratePerUnit || payload.ratePerUnit <= 0) { fail('Enter a valid rate per unit.'); return; }
+            if (!payload.usageMin || !payload.usageMax || payload.usageMax <= payload.usageMin) { fail('Enter a valid usage range (max must exceed min).'); return; }
+            if (payload.baseFee + payload.usageMin * payload.ratePerUnit < MIN_CUSTOM_BILL_AMOUNT) { fail('Even at minimum usage this bill must total at least ƒ5.00.'); return; }
         } else {
             payload.amount = parseFloat((document.getElementById('cb_amount') || {}).value);
-            if (!payload.amount || payload.amount < 5) { showNotification('Amount must be at least ƒ5.00.', 'error'); return; }
+            if (!payload.amount || payload.amount < MIN_CUSTOM_BILL_AMOUNT) { fail('Amount must be at least ƒ5.00.'); return; }
         }
 
         customBillSaveInFlight = true;
@@ -791,7 +1117,8 @@
             showNotification('Bill added!', 'success');
             loadBills();
         }).catch(function(err) {
-            showNotification(err && err.message ? err.message : 'Could not add bill.', 'error');
+            // Includes the server's 10-custom-bill cap message.
+            fail(err && err.message ? err.message : 'Could not add bill.');
         }).then(function() {
             customBillSaveInFlight = false;
             if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Bill'; }
@@ -799,7 +1126,13 @@
     }
 
     function deleteCustomBill(id) {
-        if (!confirm('Remove this bill? Any unpaid balance on it will be dropped.')) return;
+        var def = CUSTOM_BILLS_BY_ID[id];
+        var name = def ? def.name : 'this bill';
+        var unpaid = LOADED_BILLS.filter(function(b) { return b.billDefKey === 'custom:' + id && b.status !== 'paid'; });
+        var warn = unpaid.length
+            ? ' Its ' + utilPlural(unpaid.length, 'unpaid bill') + ' (' + fmtFlorin(unpaid.reduce(function(s, b) { return s + (b.totalDue || 0); }, 0)) + ') will be dropped.'
+            : '';
+        if (!confirm('Remove "' + name + '"?' + warn)) return;
         DigifinwizDB.deleteCustomBill(id).then(function() {
             showNotification('Bill removed.', 'info');
             loadBills();
@@ -808,24 +1141,120 @@
         });
     }
 
+    /* ── Edit custom bill ─────────────────────────────────────────────────
+       PUT /api/me/bills/custom/:id accepts name, accountNumber, and either
+       amount (flat bills) or ratePerUnit (usage bills), with the same ƒ5
+       minimum as creation. It only changes the definition — bills already
+       generated (this month's and any unpaid earlier ones) keep their
+       amounts; the change shows up from the next month's bill. */
+    var customBillEditInFlight = false;
+
+    function showEditCustomBillModal(id) {
+        var def = CUSTOM_BILLS_BY_ID[id];
+        if (!def) { showNotification('Could not find that bill. Please refresh.', 'error'); return; }
+        var existing = document.getElementById('editCustomBillModal');
+        if (existing) existing.remove();
+        var isUsage = def.billingType === 'usage';
+        var minRate = isUsage && def.usageMin ? Math.max(0, (MIN_CUSTOM_BILL_AMOUNT - (def.baseFee || 0)) / def.usageMin) : 0;
+
+        var modal = document.createElement('div');
+        modal.id = 'editCustomBillModal';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;animation:fadeIn 0.2s';
+        modal.innerHTML =
+            '<div style="background:#fff;border-radius:16px;padding:1.75rem;max-width:440px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,0.2);max-height:90vh;overflow:auto">' +
+                '<h2 style="font-size:1.15rem;font-weight:700;margin:0 0 0.35rem;color:#1e293b">Edit ' + escHU(def.name) + '</h2>' +
+                '<p style="font-size:0.78rem;color:#64748b;margin:0 0 1rem">Changes apply to bills generated from next month on. This month\'s bill and any unpaid earlier bills keep their current amount.</p>' +
+                '<div class="util-form-error" id="ecb_error"></div>' +
+                '<div class="form-group"><label>Bill Name</label><input type="text" class="form-input" id="ecb_name" maxlength="40" value="' + escHU(def.name) + '"></div>' +
+                '<div class="form-group"><label>Account Number <span style="font-weight:400;color:var(--color-gray-400)">(Optional)</span></label><input type="text" class="form-input" id="ecb_account" maxlength="30" value="' + escHU(def.accountNumber || '') + '"></div>' +
+                (isUsage
+                    ? '<div class="form-group"><label>Rate per ' + escHU(def.unit || 'unit') + ' (ƒ)</label><input type="number" class="form-input" id="ecb_rate" min="0.001" step="0.001" value="' + Number(def.ratePerUnit) + '">' +
+                        '<div style="font-size:0.74rem;color:var(--color-gray-500);margin-top:0.3rem">Usage ' + Number(def.usageMin).toLocaleString() + '–' + Number(def.usageMax).toLocaleString() + ' ' + escHU(def.unit) +
+                        (def.baseFee ? ' + ' + fmtFlorin(def.baseFee) + ' base fee' : '') + '. Minimum rate: ƒ' + (Math.ceil(minRate * 1000) / 1000).toFixed(3) + ' (so the smallest bill is at least ƒ5.00).</div>' +
+                        '<div id="ecb_preview" style="font-size:0.78rem;color:var(--color-gray-700);margin-top:0.3rem"></div></div>'
+                    : '<div class="form-group"><label>Monthly Amount (ƒ)</label><input type="number" class="form-input" id="ecb_amount" min="5" step="0.01" value="' + Number(def.amount).toFixed(2) + '">' +
+                        '<div style="font-size:0.74rem;color:var(--color-gray-500);margin-top:0.3rem">Minimum ƒ5.00.</div></div>') +
+                '<p style="font-size:0.74rem;color:var(--color-gray-500);margin:0 0 1rem">Category, billing type and due day can\'t be changed — remove the bill and add it again for that.</p>' +
+                '<div style="display:flex;gap:0.75rem">' +
+                    '<button type="button" id="ecb_cancel" class="btn" style="flex:1">Cancel</button>' +
+                    '<button type="button" id="ecb_save" class="btn btn-primary" style="flex:1">Save Changes</button>' +
+                '</div>' +
+            '</div>';
+        document.body.appendChild(modal);
+
+        var onKey = function(e) { if (e.key === 'Escape') close(); };
+        var close = function() { modal.remove(); document.removeEventListener('keydown', onKey); };
+        document.addEventListener('keydown', onKey);
+        document.getElementById('ecb_cancel').addEventListener('click', close);
+        modal.addEventListener('click', function(e) { if (e.target === modal) close(); });
+
+        var rateEl = document.getElementById('ecb_rate');
+        var updatePreview = function() {
+            var pv = document.getElementById('ecb_preview');
+            if (!pv || !rateEl) return;
+            var r = parseFloat(rateEl.value);
+            if (!(r > 0)) { pv.textContent = ''; return; }
+            var lo = (def.baseFee || 0) + def.usageMin * r, hi = (def.baseFee || 0) + def.usageMax * r;
+            pv.textContent = 'Future bills: about ' + fmtFlorin(lo) + ' – ' + fmtFlorin(hi) + ' a month';
+        };
+        if (rateEl) { rateEl.addEventListener('input', updatePreview); updatePreview(); }
+
+        document.getElementById('ecb_save').addEventListener('click', function() {
+            if (customBillEditInFlight) return;
+            var fail = function(msg) { utilShowFormError('ecb_error', msg); };
+            utilShowFormError('ecb_error', '');
+            var name = document.getElementById('ecb_name').value.trim();
+            var acct = document.getElementById('ecb_account').value.trim();
+            if (!name) { fail('Enter a bill name.'); return; }
+            var patch = {};
+            if (name !== def.name) patch.name = name;
+            if (acct !== (def.accountNumber || '')) patch.accountNumber = acct;
+            if (isUsage) {
+                var rate = parseFloat(rateEl.value);
+                if (!(rate > 0)) { fail('Enter a valid rate per unit.'); return; }
+                if ((def.baseFee || 0) + def.usageMin * rate < MIN_CUSTOM_BILL_AMOUNT) { fail('Even at minimum usage this bill must total at least ƒ5.00.'); return; }
+                if (Math.abs(rate - def.ratePerUnit) > 1e-9) patch.ratePerUnit = rate;
+            } else {
+                var amt = parseFloat(document.getElementById('ecb_amount').value);
+                if (!amt || amt < MIN_CUSTOM_BILL_AMOUNT) { fail('Amount must be at least ƒ5.00.'); return; }
+                amt = Math.round(amt * 100) / 100;
+                if (Math.abs(amt - def.amount) > 0.004) patch.amount = amt;
+            }
+            if (!Object.keys(patch).length) { close(); showNotification('No changes to save.', 'info'); return; }
+
+            customBillEditInFlight = true;
+            var saveBtn = document.getElementById('ecb_save');
+            saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
+            DigifinwizDB.updateCustomBill(id, patch).then(function(updated) {
+                close();
+                showNotification((updated && updated.name ? updated.name : 'Bill') + ' updated — changes apply from next month\'s bill.', 'success');
+                loadBills();
+            }).catch(function(err) {
+                fail(err && err.message ? err.message : 'Could not save changes.');
+                saveBtn.disabled = false; saveBtn.textContent = 'Save Changes';
+            }).then(function() { customBillEditInFlight = false; });
+        });
+        var first = document.getElementById('ecb_name');
+        if (first) first.focus();
+    }
+
     /* ── Auto-pay toggle ───────────────────────────────────────────────── */
-    // Persists to the server (checked on every /api/me/bills fetch, which
-    // auto-charges any due bill with this enabled) rather than localStorage,
-    // which never actually paid anything — the toggle used to claim a
-    // savings benefit it didn't deliver.
-    // The same preference is exposed from two places — the per-card switch
-    // on the Bills tab, and the consolidated list on the Auto-Pay tab — so
-    // both toggle functions below funnel through this one save+refresh
-    // routine to keep them in sync no matter which one was flipped.
+    // One server-side preference per bill definition (billDefKey), exposed
+    // on the newest bill card and on the Auto-Pay tab; both funnel through
+    // here and reload the shared bills data so they stay in sync. Turning
+    // it on makes the next bills fetch charge any bill already due.
     function setAutopayAndSync(enabled, billDefKey, billName, revertFn) {
+        var dueNow = LOADED_BILLS.filter(function(b) { return b.billDefKey === billDefKey && b.status !== 'paid' && Date.now() >= b.dueDate; });
         return DigifinwizDB.setAutopayPref(billDefKey, enabled).then(function() {
             if (enabled) {
-                showNotification('Auto-pay enabled for ' + billName, 'success');
+                showNotification('Auto-pay enabled for ' + billName +
+                    (dueNow.length ? ' — trying to pay ' + utilPlural(dueNow.length, 'bill') + ' already due now.' : ''), 'success');
             } else {
                 showNotification('Auto-pay disabled for ' + billName, 'info');
             }
-            loadBills();
-            if (typeof loadAutopayTab === 'function') loadAutopayTab();
+            return loadBills();
         }).catch(function(err) {
             if (revertFn) revertFn();
             showNotification(err && err.message ? err.message : 'Could not update auto-pay.', 'error');
@@ -838,54 +1267,65 @@
         setAutopayAndSync(enabled, billDefKey, billName, function() { if (toggle) toggle.checked = !enabled; });
     }
 
-    // Same preference, toggled from the consolidated Auto-Pay tab's list
-    // instead of a bill's own card — see setAutopayAndSync above.
-    function toggleAutopayPanel(id, billDefKey, billName) {
-        var toggle = document.getElementById('autopay-panel-' + id);
+    function toggleAutopayPanel(elId, billDefKey, billName) {
+        var toggle = document.getElementById(elId);
         var enabled = toggle ? toggle.checked : false;
         setAutopayAndSync(enabled, billDefKey, billName, function() { if (toggle) toggle.checked = !enabled; });
     }
 
-    /* ── Auto-Pay tab: consolidated list of every bill's auto-pay switch ── */
-    function renderAutopayList(bills, autopayPrefs) {
+    /* ── Auto-Pay tab: one switch per bill definition ─────────────────── */
+    function renderAutopayList() {
         var el = document.getElementById('autopayList');
         if (!el) return;
-        if (!bills || bills.length === 0) {
+        var reps = utilRepresentativeCycles(LOADED_BILLS);
+        var keys = Object.keys(reps);
+        if (!keys.length) {
             el.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem;text-align:center">No bills yet — add one from the Bills tab!</p>';
             return;
         }
-        el.innerHTML = bills.map(function(b) {
-            var isOn = !!autopayPrefs[b.billDefKey];
+        keys.sort(function(a, b) { return String(reps[a].name).localeCompare(String(reps[b].name)); });
+        el.innerHTML = keys.map(function(key, i) {
+            var b     = reps[key];
+            var pref  = AUTOPAY_PREFS[key];
+            var isOn  = !!(pref && pref.enabled);
+            var cycles = LOADED_BILLS.filter(function(c) { return c.billDefKey === key; });
+            var unpaid = cycles.filter(function(c) { return c.status !== 'paid'; });
+            var pastUnpaid = unpaid.filter(utilIsPastMonthCycle);
+            var failed = cycles.some(utilAutopayFailed);
+            var sub = isOn
+                ? 'Auto-pay is on' + (pref.enabledAt ? ' since ' + new Date(pref.enabledAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '')
+                : 'Auto-pay is off';
+            var extra = '';
+            if (unpaid.length) {
+                extra = ' · ' + utilPlural(unpaid.length, 'unpaid bill') + ' (' + fmtFlorin(unpaid.reduce(function(s, c) { return s + (c.totalDue || 0); }, 0)) + ')' +
+                    (pastUnpaid.length ? ', ' + pastUnpaid.length + ' from earlier months' : '');
+            } else {
+                extra = ' · this month paid';
+            }
+            var failLine = failed
+                ? '<div style="font-size:0.72rem;color:#b91c1c;font-weight:600;margin-top:0.15rem">Auto-pay couldn\'t charge this bill — check your balance.</div>'
+                : '';
+            var elId = 'autopay-panel-' + i;
             return '<div class="transaction-item">' +
                 '<div style="width:40px;height:40px;border-radius:50%;background:var(--color-gray-100);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">' + escHU(b.icon || '🧾') + '</div>' +
                 '<div class="transaction-details" style="flex:1;min-width:0">' +
                     '<div style="font-weight:600;font-size:0.875rem">' + escHU(b.name) + '</div>' +
-                    '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">' + (isOn ? 'Auto-pay is on' : 'Auto-pay is off') + '</div>' +
+                    '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">' + escHU(sub + extra) + '</div>' +
+                    failLine +
                 '</div>' +
                 '<label class="autopay-switch">' +
-                    '<input type="checkbox" id="autopay-panel-' + b.id + '" ' + (isOn ? 'checked' : '') +
-                        " onchange='toggleAutopayPanel(" + b.id + ',' + jsAttr(b.billDefKey) + ',' + jsAttr(b.name) + ")'>" +
+                    '<input type="checkbox" id="' + elId + '" ' + (isOn ? 'checked' : '') +
+                        " onchange='toggleAutopayPanel(" + jsAttr(elId) + ',' + jsAttr(key) + ',' + jsAttr(b.name) + ")'>" +
                     '<span class="autopay-slider"></span>' +
                 '</label>' +
                 '</div>';
         }).join('');
     }
 
-    function loadAutopayTab() {
-        if (typeof DigifinwizDB === 'undefined') return;
-        Promise.all([
-            DigifinwizDB.getMyBills(),
-            DigifinwizDB.getAutopayPrefs()
-        ]).then(function(results) {
-            var bills = results[0];
-            var prefs = {};
-            results[1].forEach(function(p) { prefs[p.billDefKey] = p.enabled; });
-            renderAutopayList(bills, prefs);
-        }).catch(function(err) { console.error('loadAutopayTab:', err); });
-    }
+    function loadAutopayTab() { return loadBills(); }
 
     /* ── Bill type breakdown chart ─────────────────────────────────────── */
-    var BREAKDOWN_COLORS = ['#6366f1','#10b981','#f59e0b','#3b82f6','#ec4899','#f97316'];
+    var BREAKDOWN_COLORS = ['#ea580c','#10b981','#f59e0b','#3b82f6','#ec4899','#64748b'];
 
     function renderBillBreakdown(payments) {
         var section = document.getElementById('billBreakdownSection');
@@ -941,7 +1381,7 @@
                 else if (c.condition==='transaction_count'){ pct=Math.min(100,Math.round((payments.length/(c.conditionValue||1))*100)); progressLabel=payments.length+' / '+(c.conditionValue||0)+' payments'; }
                 else if (c.condition==='manual')           { pct=0; progressLabel='Complete manually'; }
                 var done         = c.completed;
-                var barColor     = done?'#10b981':(pct>=75?'#10b981':(pct>=40?'#f59e0b':'#6366f1'));
+                var barColor     = done?'#10b981':(pct>=75?'#10b981':(pct>=40?'#f59e0b':'#ea580c'));
                 var completedDate= done&&c.completedAt?new Date(c.completedAt).toLocaleDateString():null;
                 return '<div style="background:'+(done?'#f0fdf4':'#f8fafc')+';border:1px solid '+(done?'#bbf7d0':'#e2e8f0')+';border-radius:10px;padding:0.875rem">'+
                     '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.5rem">'+
@@ -953,7 +1393,7 @@
                     '<div style="background:'+barColor+';width:'+pct+'%;height:100%;transition:width 0.6s ease;border-radius:4px"></div></div>'+
                     '<div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#94a3b8;margin-top:0.25rem">'+
                     '<span>'+(done&&completedDate?'Completed '+completedDate:done?'Completed!':pct+'% complete')+'</span>'+
-                    (progressLabel&&!done?'<span style="color:#6366f1;font-weight:600">'+escHU(progressLabel)+'</span>':'')+'</div></div>';
+                    (progressLabel&&!done?'<span style="color:var(--color-primary-600);font-weight:600">'+escHU(progressLabel)+'</span>':'')+'</div></div>';
             }).join('');
         }).catch(function(){});
     }
@@ -966,23 +1406,20 @@
         payments.forEach(function(p) {
             if (p.type && types.indexOf(p.type) === -1) types.push(p.type);
         });
+        if (types.indexOf(currentPayFilter) === -1) currentPayFilter = 'all';
         var wrap = document.getElementById('payHistTypePills');
         if (!wrap) return;
         wrap.innerHTML = types.map(function(t) {
             var icon = t === 'all' ? '📋' : (BILL_ICONS_PAGE[t] || '🧾');
             var cls  = t === currentPayFilter ? 'pay-hist-pill active' : 'pay-hist-pill';
-            return '<button class="' + cls + "\" onclick='setPayHistFilter(" + jsAttr(t) + ")'>" + icon + ' ' + (t === 'all' ? 'All' : escHU(t)) + '</button>';
+            return '<button class="' + cls + '" data-type="' + escHU(t) + "\" onclick='setPayHistFilter(" + jsAttr(t) + ")'>" + icon + ' ' + (t === 'all' ? 'All' : escHU(t)) + '</button>';
         }).join('');
     }
 
     function setPayHistFilter(type) {
         currentPayFilter = type;
-        var pills = document.querySelectorAll('.pay-hist-pill');
-        pills.forEach(function(p) {
-            var isActive = (p.textContent.trim().replace(/^[^\s]+\s/, '') === (type === 'all' ? 'All' : type)) ||
-                           (type === 'all' && p.textContent.indexOf('All') > -1) ||
-                           (type !== 'all' && p.textContent.indexOf(type) > -1);
-            p.classList.toggle('active', isActive);
+        document.querySelectorAll('.pay-hist-pill').forEach(function(p) {
+            p.classList.toggle('active', p.getAttribute('data-type') === type);
         });
         filterPayHistory();
     }
@@ -1003,13 +1440,11 @@
     }
 
     /* ── Bill personal notes ──────────────────────────────────────────── */
-    function toggleBillNote(id, billName) {
+    function toggleBillNote(id, noteKey) {
         var area = document.getElementById('billNote-area-' + id);
-        var disp = document.getElementById('billNote-disp-' + id);
         var btn  = document.getElementById('billNote-btn-' + id);
         if (!area) return;
-        var notes    = JSON.parse(localStorage.getItem('digifinwiz_bill_notes') || '{}');
-        var existing = notes[billName] || '';
+        var existing = utilReadNotes()[noteKey] || '';
         if (area.style.display === 'none' || !area.style.display) {
             area.value       = existing;
             area.style.display = 'block';
@@ -1021,22 +1456,54 @@
         }
     }
 
-    function saveBillNote(id, billName) {
+    function saveBillNote(id, noteKey, billName) {
         var area = document.getElementById('billNote-area-' + id);
         var disp = document.getElementById('billNote-disp-' + id);
         var btn  = document.getElementById('billNote-btn-' + id);
         if (!area) return;
-        var notes = JSON.parse(localStorage.getItem('digifinwiz_bill_notes') || '{}');
+        var notes = utilReadNotes();
         var val   = area.value.trim();
-        if (val) { notes[billName] = val; } else { delete notes[billName]; }
-        localStorage.setItem('digifinwiz_bill_notes', JSON.stringify(notes));
+        if (val) { notes[noteKey] = val; } else { delete notes[noteKey]; }
+        var ok = utilWriteNotes(notes);
         area.style.display = 'none';
         if (disp) {
             disp.textContent = val;
             disp.style.display = val ? '' : 'none';
         }
         if (btn) btn.textContent = '📝 ' + (val ? 'Edit note' : 'Add note');
+        if (!ok) { showNotification('Could not save the note in this browser.', 'error'); return; }
         showNotification(val ? 'Note saved for ' + billName : 'Note removed for ' + billName, 'info');
+    }
+
+    /* ── Header: level / XP / coins and total balance ─────────────────── */
+    function refreshHeaderProgress() {
+        if (typeof DigifinwizDB === 'undefined') return Promise.resolve();
+        return DigifinwizDB.getUserData().then(function(userData) {
+            if (!userData) return;
+            var level  = userData.level || 1;
+            var points = userData.points || 0;
+            var pToNext = userData.pointsToNextLevel != null ? userData.pointsToNextLevel : 1000;
+            var coins  = userData.coins || 0;
+            var earned = Math.max(0, 1000 - pToNext);
+            var pct    = Math.min(100, Math.round((earned / 1000) * 100));
+            var set = function(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
+            set('utilProgressLevel', level + '/50');
+            set('utilProgressText',  pct + '% completed');
+            set('utilProgressXP',    points.toLocaleString() + ' XP');
+            set('utilProgressCoins', coins.toLocaleString());
+            var fillEl = document.getElementById('utilProgressFill');
+            if (fillEl) fillEl.style.width = pct + '%';
+        }).catch(function(){});
+    }
+
+    function refreshHeaderBalance() {
+        if (typeof DigifinwizDB === 'undefined') return Promise.resolve();
+        return DigifinwizDB.getAllBalances().then(function(bals) {
+            var chk = (bals.find(function(b){ return b.account==='checking'; }) || {}).amount || 0;
+            var sav = (bals.find(function(b){ return b.account==='savings';  }) || {}).amount || 0;
+            var hdrEl = document.getElementById('utilHeaderBalance');
+            if (hdrEl) hdrEl.textContent = fmtFlorin(chk + sav);
+        }).catch(function(){});
     }
 
     /* ── Stats ─────────────────────────────────────────────────────── */
@@ -1053,41 +1520,185 @@
             set('utilNextMilestone', next ? payments.length+'/'+next+' bills' : 'Max reached!');
             var largest = payments.reduce(function(mx,p){ return Math.max(mx,p.amount||0); }, 0);
             var avg     = payments.length>0 ? totalPaid/payments.length : 0;
-            set('utilLargestPay', payments.length>0?'ƒ'+largest.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—');
-            set('utilAvgPay',     payments.length>0?'ƒ'+avg.toFixed(2):'—');
+            set('utilLargestPay', payments.length>0?fmtFlorin(largest):'—');
+            set('utilAvgPay',     payments.length>0?fmtFlorin(avg):'—');
             var typeCounts={};
             payments.forEach(function(p){ typeCounts[p.type]=(typeCounts[p.type]||0)+1; });
             var mostType=null; var mostCount=0;
             Object.keys(typeCounts).forEach(function(t){ if(typeCounts[t]>mostCount){ mostCount=typeCounts[t]; mostType=t; } });
             var billIcon = mostType?(BILL_ICONS_PAGE[mostType]||'🧾'):'';
             set('utilMostPaidType', mostType?(billIcon+' '+mostType):'—');
-            set('utilBillTypes',    Object.keys(typeCounts).length+' / '+BILL_TYPES.length);
+            // Distinct current bill types (not cycles — several months of
+            // the same bill can be open) that have at least one payment.
+            var paidTypes = BILL_TYPES.filter(function(t) { return typeCounts[t]; }).length;
+            set('utilBillTypes', paidTypes + ' / ' + BILL_TYPES.length);
             var countEl=document.getElementById('payHistoryCount');
             if (countEl) countEl.textContent=payments.length+' payment'+(payments.length!==1?'s':'');
-            updateBudgetBar(payments);
             renderBillBreakdown(payments);
-            buildPayHistTypePills(payments);
             if (payments.length>0) {
                 var last=payments[0];
                 var rowEl=document.getElementById('utilRecentPayRow');
                 if (rowEl) rowEl.style.display='';
-                var lastIcon=BILL_ICONS_PAGE[last.type]||'🧾';
                 var iconEl=document.getElementById('utilRecentIcon');
-                if (iconEl) iconEl.textContent=lastIcon;
-                set('utilRecentType',(last.type||'—')+' Bill');
-                set('utilRecentDate',last.date||'—');
+                if (iconEl) iconEl.textContent=BILL_ICONS_PAGE[last.type]||'🧾';
+                var ld = last.timestamp ? new Date(last.timestamp) : null;
+                set('utilRecentType',(last.type||'—')+' Bill'+(last.autoPaid?' · Auto-pay':''));
+                set('utilRecentDate',(ld && !isNaN(ld.getTime())) ? ld.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : (last.date||'—'));
                 set('utilRecentAcct',last.fromAccount?'From: '+last.fromAccount.charAt(0).toUpperCase()+last.fromAccount.slice(1)+' Account':'');
-                set('utilRecentAmt', 'ƒ'+Number(last.amount||0).toFixed(2));
+                set('utilRecentAmt', fmtFlorin(last.amount));
                 set('utilRecentXp',  '+'+(last.pointsEarned||0)+' XP earned');
             }
-            // Keep header balance in sync
-            DigifinwizDB.getAllBalances().then(function(bals) {
-                var chk = (bals.find(function(b){ return b.account==='checking'; }) || {}).amount || 0;
-                var sav = (bals.find(function(b){ return b.account==='savings';  }) || {}).amount || 0;
-                var hdrEl = document.getElementById('utilHeaderBalance');
-                if (hdrEl) hdrEl.textContent = 'ƒ' + (chk+sav).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-            }).catch(function(){});
+            refreshHeaderBalance();
         }).catch(function(){});
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       MESSAGES
+       ══════════════════════════════════════════════════════════════════ */
+    var UTIL_MESSAGES = [];
+    var UTIL_MSG_FILTER = 'all';
+    var UTIL_MSG_OPEN = {};
+
+    function utilMsgIsUnread(m) {
+        var uid = utilSessionUserId();
+        return !(m.readBy || []).some(function(id) { return Number(id) === uid; });
+    }
+
+    // Visual type for a message, from the subjects the server writes
+    // (runDueAutopays, notifyOverdueBillsForUser, maybeFireBalanceAlerts,
+    // the password-change route) with the stored `type` as fallback.
+    function utilClassifyMessage(m) {
+        var s = String(m.subject || '');
+        if (/^Auto-pay failed/i.test(s)) return { tone: 'urgent', label: 'Auto-pay failed', bg: '#fee2e2', fg: '#b91c1c', bills: true };
+        if (/^Bill overdue/i.test(s))     return { tone: 'urgent', label: 'Overdue',         bg: '#fee2e2', fg: '#b91c1c', bills: true };
+        if (/^Auto-pay/i.test(s))         return { tone: 'good',   label: 'Auto-pay',        bg: '#dcfce7', fg: '#166534', bills: true };
+        if (/balance alert|transaction alert/i.test(s)) return { tone: 'alert', label: 'Balance alert', bg: '#fef3c7', fg: '#92400e', bills: false };
+        if (/password/i.test(s))          return { tone: 'alert',  label: 'Security',        bg: '#e2e8f0', fg: '#334155', bills: false };
+        if (m.type === 'warning')         return { tone: 'alert',  label: 'Notice',          bg: '#fef3c7', fg: '#92400e', bills: false };
+        if (m.type === 'success')         return { tone: 'good',   label: 'Update',          bg: '#dcfce7', fg: '#166534', bills: false };
+        return { tone: 'info', label: 'Info', bg: '#ffedd5', fg: '#9a3412', bills: false };
+    }
+
+    function utilUnreadCount() {
+        return UTIL_MESSAGES.filter(utilMsgIsUnread).length;
+    }
+
+    function updateMsgBadges() {
+        var n = utilUnreadCount();
+        var label = n > 99 ? '99+' : String(n);
+        ['utilMsgBadge', 'utilHeaderMsgBadge'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            el.textContent = label;
+            el.style.display = n > 0 ? '' : 'none';
+        });
+        var q = document.getElementById('utilQuickMsgCount');
+        if (q) q.textContent = n > 0 ? '(' + n + ' unread)' : '';
+        var markAll = document.getElementById('utilMsgMarkAll');
+        if (markAll) markAll.disabled = n === 0;
+    }
+
+    function loadMessagesBadge() {
+        if (typeof DigifinwizDB === 'undefined') return Promise.resolve();
+        return DigifinwizDB.getMessagesForUser().then(function(msgs) {
+            UTIL_MESSAGES = (msgs || []).slice().sort(function(a, b) { return (b.sentAt || 0) - (a.sentAt || 0) || (b.id || 0) - (a.id || 0); });
+            updateMsgBadges();
+            var panel = document.getElementById('panel-messages');
+            if (panel && panel.classList.contains('active')) renderMessagesList();
+        }).catch(function(err) { console.error('loadMessages:', err); });
+    }
+
+    function loadMessagesTab() { return loadMessagesBadge().then(renderMessagesList); }
+
+    function setUtilMsgFilter(f) {
+        UTIL_MSG_FILTER = f;
+        document.querySelectorAll('.util-msg-filter').forEach(function(b) {
+            b.classList.toggle('active', b.getAttribute('data-filter') === f);
+        });
+        renderMessagesList();
+    }
+
+    function utilFormatMsgDate(ts) {
+        if (!ts) return '';
+        var d = new Date(ts);
+        if (isNaN(d.getTime())) return '';
+        var today = new Date();
+        var sameDay = d.toDateString() === today.toDateString();
+        return sameDay
+            ? 'Today, ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+            : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }
+
+    function renderMessagesList() {
+        var el = document.getElementById('utilMessagesList');
+        if (!el) return;
+        var list = UTIL_MESSAGES.filter(function(m) {
+            if (UTIL_MSG_FILTER === 'unread') return utilMsgIsUnread(m);
+            if (UTIL_MSG_FILTER === 'bills')  return utilClassifyMessage(m).bills;
+            return true;
+        });
+        if (!list.length) {
+            var empty = UTIL_MSG_FILTER === 'unread' ? 'You\'re all caught up — no unread messages.'
+                : UTIL_MSG_FILTER === 'bills' ? 'No bill or auto-pay messages yet.'
+                : 'No messages yet. Overdue-bill notices, auto-pay results and balance alerts will appear here.';
+            el.innerHTML = '<div style="text-align:center;color:var(--color-gray-500);padding:2rem 1rem"><div style="font-size:1.8rem;margin-bottom:0.4rem">📭</div>' + escHU(empty) + '</div>';
+            return;
+        }
+        el.innerHTML = list.map(function(m) {
+            var c = utilClassifyMessage(m);
+            var unread = utilMsgIsUnread(m);
+            var open = !!UTIL_MSG_OPEN[m.id];
+            var action = '';
+            if (open && c.bills && c.tone === 'urgent') {
+                action = '<div class="util-msg-action"><a onclick="event.stopPropagation();switchUtilPageTab(\'bills\')">Go to Bills →</a></div>';
+            } else if (open && c.label === 'Balance alert') {
+                action = '<div class="util-msg-action"><a onclick="event.stopPropagation();switchUtilPageTab(\'alerts\')">Alert settings →</a></div>';
+            }
+            return '<div class="util-msg ' + c.tone + (unread ? ' unread' : '') + '" role="button" tabindex="0" aria-expanded="' + open + '" data-msg-id="' + Number(m.id) + '" ' +
+                    'onclick="openUtilMessage(' + Number(m.id) + ')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openUtilMessage(' + Number(m.id) + ')}">' +
+                '<div class="util-msg-head">' +
+                    (unread ? '<span class="util-msg-dot" title="Unread"></span>' : '') +
+                    '<span class="util-msg-type" style="background:' + c.bg + ';color:' + c.fg + '">' + escHU(c.label) + '</span>' +
+                    '<span class="util-msg-subject">' + escHU(m.subject || '(no subject)') + '</span>' +
+                    '<span class="util-msg-date">' + escHU(utilFormatMsgDate(m.sentAt)) + '</span>' +
+                '</div>' +
+                (open
+                    ? '<div class="util-msg-body">' + escHU(m.body || '') + '</div>' + action
+                    : '<div class="util-msg-preview">' + escHU(m.body || '') + '</div>') +
+            '</div>';
+        }).join('');
+    }
+
+    function openUtilMessage(id) {
+        UTIL_MSG_OPEN[id] = !UTIL_MSG_OPEN[id];
+        var m = UTIL_MESSAGES.find(function(x) { return x.id === id; });
+        if (m && UTIL_MSG_OPEN[id] && utilMsgIsUnread(m)) {
+            var uid = utilSessionUserId();
+            m.readBy = (m.readBy || []).concat([uid]);   // optimistic
+            updateMsgBadges();
+            DigifinwizDB.markMessageRead(id).catch(function(err) {
+                m.readBy = (m.readBy || []).filter(function(x) { return Number(x) !== uid; });
+                updateMsgBadges();
+                renderMessagesList();
+                showNotification(err && err.message ? err.message : 'Could not mark the message as read.', 'error');
+            });
+        }
+        renderMessagesList();
+    }
+
+    function markAllUtilMessagesRead() {
+        var unread = UTIL_MESSAGES.filter(utilMsgIsUnread);
+        if (!unread.length) return;
+        var uid = utilSessionUserId();
+        unread.forEach(function(m) { m.readBy = (m.readBy || []).concat([uid]); });
+        updateMsgBadges();
+        renderMessagesList();
+        Promise.all(unread.map(function(m) { return DigifinwizDB.markMessageRead(m.id); })).then(function() {
+            showNotification('All messages marked as read.', 'info');
+        }).catch(function() {
+            showNotification('Some messages could not be marked as read.', 'error');
+            loadMessagesBadge();
+        });
     }
 
     /* ══════════════════════════════════════════════════════════════════
@@ -1103,30 +1714,41 @@
             '<p style="color:var(--color-gray-500);font-size:0.85rem;margin:0">Here\'s your bill-pay overview.</p>';
     }
 
+    function utilGoToBill(cycleId) {
+        switchUtilPageTab('bills');
+        setTimeout(function() {
+            var el = document.getElementById('bill-' + cycleId);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 150);
+    }
+
     function renderDashUpcomingBills(bills) {
         var el = document.getElementById('dashUpcomingBills');
         if (!el) return;
-        var unpaid = (bills || []).filter(function(b) { return b.status !== 'paid'; })
-            .sort(function(a, b) { return (a.dueDate || 0) - (b.dueDate || 0); })
-            .slice(0, 5);
+        var unpaidAll = utilSortBillsForDisplay((bills || []).filter(function(b) { return b.status !== 'paid'; }));
+        var unpaid = unpaidAll.slice(0, 6);
         if (unpaid.length === 0) {
             el.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem;text-align:center">No upcoming bills — you\'re all caught up!</p>';
             return;
         }
+        var colors = { overdue: '#dc2626', grace: '#c2410c', today: '#dc2626', soon: '#d97706', week: '#a16207', normal: 'var(--color-gray-500)' };
         el.innerHTML = unpaid.map(function(b) {
-            var due = new Date(b.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            var badge = b.overdue
-                ? '<span style="color:#dc2626;font-weight:600">⚠ Overdue ' + b.daysOverdue + 'd</span>'
-                : (b.daysUntilDue <= 3 ? '<span style="color:#d97706;font-weight:600">Due in ' + b.daysUntilDue + 'd</span>' : '<span style="color:var(--color-gray-400)">Due ' + due + '</span>');
-            return '<div class="transaction-item">' +
+            var st = utilDueStatus(b);
+            var isPast = utilIsPastMonthCycle(b);
+            var failNote = utilAutopayFailed(b) ? ' · <span style="color:#b91c1c;font-weight:600">auto-pay failed</span>' : '';
+            return '<div class="transaction-item" style="cursor:pointer" onclick="utilGoToBill(' + Number(b.id) + ')">' +
                 '<div style="width:40px;height:40px;border-radius:50%;background:var(--color-gray-100);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">' + escHU(b.icon || '🧾') + '</div>' +
                 '<div class="transaction-details" style="flex:1;min-width:0">' +
-                    '<div style="font-weight:600;font-size:0.875rem">' + escHU(b.name) + '</div>' +
-                    '<div style="font-size:0.72rem;margin-top:0.1rem">' + badge + '</div>' +
+                    '<div style="font-weight:600;font-size:0.875rem">' + escHU(b.name) +
+                        (isPast ? ' <span class="util-chip util-chip-past">' + escHU(utilCycleMonthLabel(b.cycleMonth)) + ' bill</span>' : '') + '</div>' +
+                    '<div style="font-size:0.72rem;margin-top:0.1rem"><span style="color:' + (colors[st.level] || 'inherit') + ';font-weight:600">' + escHU(st.text) + '</span>' + failNote + '</div>' +
                 '</div>' +
-                '<div class="transaction-amount">ƒ' + Number(b.totalDue != null ? b.totalDue : b.amount).toFixed(2) + '</div>' +
+                '<div class="transaction-amount">' + fmtFlorin(b.totalDue != null ? b.totalDue : b.amount) + '</div>' +
                 '</div>';
-        }).join('');
+        }).join('') +
+        (unpaidAll.length > unpaid.length
+            ? '<p style="font-size:0.78rem;color:var(--color-gray-500);text-align:center;margin:0.6rem 0 0">+ ' + utilPlural(unpaidAll.length - unpaid.length, 'more unpaid bill') + ' — <a href="#" onclick="switchUtilPageTab(\'bills\');return false;" style="color:var(--color-primary-600)">see all</a></p>'
+            : '');
     }
 
     function renderDashRecentPayments(payments) {
@@ -1138,13 +1760,16 @@
         }
         el.innerHTML = payments.map(function(p) {
             var icon = BILL_ICONS_PAGE[p.type] || '🧾';
-            return '<div class="transaction-item">' +
+            var d = p.timestamp ? new Date(p.timestamp) : null;
+            var dateStr = (d && !isNaN(d.getTime())) ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (p.date || '');
+            UTIL_PAYMENT_BY_ID[p.id] = p;
+            return '<div class="transaction-item" style="cursor:pointer" onclick="showPaymentDetailModal(UTIL_PAYMENT_BY_ID[' + Number(p.id) + '])">' +
                 '<div style="width:40px;height:40px;border-radius:50%;background:var(--color-gray-100);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">' + icon + '</div>' +
                 '<div class="transaction-details" style="flex:1;min-width:0">' +
-                    '<div style="font-weight:600;font-size:0.875rem">' + escHU(p.type) + ' Bill Paid</div>' +
-                    '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">' + escHU(p.date || '') + '</div>' +
+                    '<div style="font-weight:600;font-size:0.875rem">' + escHU(p.type) + ' Bill Paid ' + utilPaymentChips(p) + '</div>' +
+                    '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">' + escHU(dateStr) + '</div>' +
                 '</div>' +
-                '<div class="transaction-amount">ƒ' + Number(p.amount || 0).toFixed(2) + '</div>' +
+                '<div class="transaction-amount">' + fmtFlorin(p.amount) + '</div>' +
                 '</div>';
         }).join('');
     }
@@ -1152,13 +1777,9 @@
     function loadDashboardTab() {
         if (typeof DigifinwizDB === 'undefined') return;
         renderDashGreeting();
-        Promise.all([
-            DigifinwizDB.getMyBills(),
-            DigifinwizDB.getPayments(5)
-        ]).then(function(results) {
-            renderDashUpcomingBills(results[0]);
-            renderDashRecentPayments(results[1]);
-        }).catch(function(err) { console.error('loadDashboardTab:', err); });
+        loadBills();
+        DigifinwizDB.getPayments(5).then(renderDashRecentPayments)
+            .catch(function(err) { console.error('loadDashboardTab:', err); });
     }
 
     /* ══════════════════════════════════════════════════════════════════
@@ -1176,9 +1797,7 @@
         }).catch(function(err) { console.error('loadProfileTab:', err); });
     }
 
-    // Guards the Profile forms against a double-click/fast-resubmit while
-    // the previous request is still in flight, same purpose as
-    // customBillSaveInFlight above.
+    // Guards the Profile forms against a double-click/fast-resubmit.
     var profileActionInFlight = false;
     function withProfileActionLock(fn) {
         if (profileActionInFlight) {
@@ -1202,13 +1821,11 @@
             if (!email)    { showNotification('Enter an email address.', 'error'); return; }
             withProfileActionLock(function() {
                 return DigifinwizDB.setProfileData({ fullName: fullName, username: username, email: email }).then(function() {
-                    // Keep the module session (used for the dashboard greeting)
-                    // in sync with the saved name.
                     if (typeof DigifinwizModuleAuth !== 'undefined' && DigifinwizModuleAuth.updateSession) {
                         DigifinwizModuleAuth.updateSession({ fullName: fullName, username: username });
                     }
                     showNotification('Profile updated!', 'success');
-                    if (typeof loadDashboardTab === 'function') loadDashboardTab();
+                    renderDashGreeting();
                 }).catch(function(err) {
                     showNotification(err && err.message ? err.message : 'Could not save profile.', 'error');
                 });
@@ -1230,6 +1847,7 @@
                 return DigifinwizDB.changePassword(current, newPwd).then(function() {
                     passwordForm.reset();
                     showNotification('Password updated successfully!', 'success');
+                    loadMessagesBadge();   // the server posts a security notice
                 }).catch(function(err) {
                     showNotification(err && err.message === 'Current password is incorrect' ? 'Current password is incorrect.' : (err && err.message ? err.message : 'Could not update password.'), 'error');
                 });
@@ -1262,9 +1880,7 @@
             var lowBalanceThreshold = parseFloat(document.getElementById('alertLowBalThreshold').value);
             var largeTxEnabled      = document.getElementById('alertLargeTxEnabled').checked;
             var largeTxThreshold    = parseFloat(document.getElementById('alertLargeTxThreshold').value);
-            // A blank/zero threshold on an enabled alert isn't "no threshold" —
-            // for large-payment alerts it means every single payment
-            // qualifies (amount >= 0), spamming the inbox on every bill.
+            // A blank/zero threshold on an enabled alert would fire on every payment.
             if (lowBalanceEnabled && !(lowBalanceThreshold > 0)) {
                 showNotification('Enter a low-balance threshold above ƒ0, or turn the alert off.', 'error'); return;
             }
@@ -1285,41 +1901,37 @@
         });
     });
 
+    // Everything that isn't the bills data itself (loadBills covers that).
     function refreshUtilPage() {
         loadUtilityChallenges();
         loadUtilStats();
-        if (typeof loadDashboardTab === 'function') loadDashboardTab();
-        if (typeof loadAutopayTab === 'function') loadAutopayTab();
+        refreshHeaderProgress();
+        loadMessagesBadge();
+        DigifinwizDB.getPayments(5).then(renderDashRecentPayments).catch(function(){});
     }
 
     document.addEventListener('DOMContentLoaded', function() {
+        // Drop the dead shared-key state older versions of this page wrote.
+        try { localStorage.removeItem('digifinwiz_autopay'); } catch (e) {}
+        refreshHeaderProgress();
         DigifinwizDB.init().then(function() {
-            loadBills();
-            refreshUtilPage();
-            // Restore last active tab (default: dashboard)
-            switchUtilPageTab(sessionStorage.getItem('util_page_tab') || 'dashboard');
+            var initialTab = null;
+            try { initialTab = sessionStorage.getItem('util_page_tab'); } catch (e) {}
+            switchUtilPageTab(initialTab || 'dashboard');
+            // The first bills fetch may auto-pay due bills server-side, so
+            // history/stats/challenges load after it rather than racing it.
+            Promise.resolve(_billsInflight || loadBills()).catch(function(){}).then(function() {
+                refreshUtilPage();
+                updatePaymentHistory();
+                utilRunChallengeCheck();
+            });
         });
-        // Populate DigiPay game progress bar
-        DigifinwizDB.getUserData().then(function(userData) {
-            if (!userData) return;
-            var level  = userData.level || 1;
-            var points = userData.points || 0;
-            var pToNext = userData.pointsToNextLevel != null ? userData.pointsToNextLevel : 1000;
-            var coins  = userData.coins || 0;
-            var earned = Math.max(0, 1000 - pToNext);
-            var pct    = Math.min(100, Math.round((earned / 1000) * 100));
-            var set = function(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
-            set('utilProgressLevel', level + '/50');
-            set('utilProgressText',  pct + '% completed');
-            set('utilProgressXP',    points.toLocaleString() + ' XP');
-            set('utilProgressCoins', coins.toLocaleString());
-            var fillEl = document.getElementById('utilProgressFill');
-            if (fillEl) fillEl.style.width = pct + '%';
-        }).catch(function(){});
     });
 
     document.addEventListener('visibilitychange', function() {
-        if (document.visibilityState === 'visible') refreshUtilPage();
+        if (document.visibilityState === 'visible' && !payAllRunning && !paymentInFlight) {
+            loadBills().then(refreshUtilPage);
+        }
     });
 
     /* ── Compute payment streaks ────────────────────────────────────────── */
@@ -1333,37 +1945,48 @@
     }
 
     /* ── Pay All Bills ──────────────────────────────────────────────────── */
+    // Walks every unpaid cycle (oldest billing month first), one confirm
+    // modal at a time. Card Pay buttons are disabled while it runs; each
+    // payment re-fetches bills, so later bills are paid at their live total.
     function payAllBills() {
-        var unpaid = LOADED_BILLS.filter(function(b) { return b.status !== 'paid'; });
-        if (!unpaid.length) { showNotification('All bills are already paid!', 'info'); return; }
+        if (payAllRunning) return;
+        if (paymentInFlight) { showNotification('A payment is already in progress. Please wait.', 'error'); return; }
+        var queue = utilSortBillsForDisplay(LOADED_BILLS).filter(function(b) { return b.status !== 'paid'; }).map(function(b) { return b.id; });
+        if (!queue.length) { showNotification('All bills are already paid!', 'info'); return; }
+        payAllRunning = true;
+        utilSetCardPayButtonsDisabled(true);
         var btn = document.getElementById('payAllBtn');
-        if (btn) { btn.disabled = true; btn.textContent = 'Processing…'; }
-        var idx = 0;
-        var paidCount = 0;
-        // Wait for each bill's confirm modal to actually resolve (confirmed or
-        // cancelled) before moving to the next — previously this fired every
-        // modal on a fixed timer, so unconfirmed ones got clobbered by the
-        // next modal and were silently skipped while still reporting success.
-        function payNext() {
-            if (idx >= unpaid.length) {
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = '⚡ Pay All Unpaid Bills <span id="payAllCount" style="background:rgba(255,255,255,0.25);border-radius:99px;padding:0.1rem 0.6rem;font-size:0.8rem;margin-left:0.4rem">0 bills unpaid</span>';
-                }
-                if (paidCount === unpaid.length) {
-                    showNotification('All bills paid! 🎉', 'success');
-                } else if (paidCount > 0) {
-                    showNotification(paidCount + ' of ' + unpaid.length + ' bill' + (unpaid.length !== 1 ? 's' : '') + ' paid.', 'info');
-                } else {
-                    showNotification('No bills were paid.', 'info');
-                }
-                return;
-            }
-            var b = unpaid[idx++];
-            payBill(b.id).then(function(result) {
-                if (result && result.paid) paidCount++;
-                payNext();
+        var idx = 0, paidCount = 0, chargedTotal = 0, stopped = false;
+        var setBtn = function() {
+            if (btn) { btn.disabled = true; btn.textContent = 'Processing… (' + Math.min(idx, queue.length) + ' of ' + queue.length + ')'; }
+        };
+        setBtn();
+
+        function finish() {
+            payAllRunning = false;
+            loadBills().then(function() {
+                renderPayAllButton();   // loadBills re-rendered the cards with Pay enabled
+                var left = LOADED_BILLS.filter(function(b) { return b.status !== 'paid'; }).length;
+                var summary = paidCount
+                    ? utilPlural(paidCount, 'bill') + ' paid (' + fmtFlorin(chargedTotal) + ' charged).'
+                    : 'No bills were paid.';
+                showNotification(summary + (left ? ' ' + utilPlural(left, 'bill') + ' still unpaid.' : ' All bills are paid! 🎉'), paidCount ? 'success' : 'info');
             });
+        }
+
+        function payNext() {
+            if (stopped || idx >= queue.length) return finish();
+            var id = queue[idx++];
+            setBtn();
+            var cycle = utilFindLoadedCycle(id);
+            if (!cycle || cycle.status === 'paid') return payNext();
+            payBill(id, { fromPayAll: true, progress: 'Bill ' + idx + ' of ' + queue.length })
+                .then(function(result) {
+                    if (result && result.paid) { paidCount++; chargedTotal += result.amount || 0; }
+                    if (result && result.stopped) stopped = true;
+                    utilSetCardPayButtonsDisabled(true);
+                }, function(err) { console.error('Pay All step failed:', err); })
+                .then(payNext);
         }
         payNext();
     }
