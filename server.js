@@ -2753,9 +2753,9 @@ app.delete('/api/bills/:id', async (req, res) => {
 // actual per-user, per-month instance of one — generated lazily on read the
 // same way scheduled transfers execute lazily, so no background job is
 // needed. An unpaid cycle carries forward (accruing late fee, never
-// silently replaced) until the user pays it; only then does the next
-// month's cycle get generated, with a freshly generated usage reading for
-// usage-based bills.
+// silently replaced) until the user pays it, and every month still gets its
+// own cycle (with a fresh usage reading for usage-based bills) whether or
+// not earlier ones were paid — skipping a bill never makes it cheaper.
 function currentCycleMonth() {
     const d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
@@ -2780,55 +2780,82 @@ function billCycleDueDate(def, cycleMonth) {
     return new Date(y, m - 1, day).getTime();
 }
 
+// 'YYYY-MM' shifted by n months.
+function addCycleMonths(cycleMonth, n) {
+    const [y, m] = cycleMonth.split('-').map(Number);
+    const d = new Date(y, m - 1 + n, 1);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+const MAX_BILL_BACKLOG_MONTHS = 12;
+
+// Creates one cycle per template for every month from the month after that
+// template's latest cycle through the current month (capped at 12), paid or
+// not; a template with no cycles yet only gets the current month. Only
+// caller is GET /api/me/bills, outside any other lock.
 async function ensureCurrentBillCycles(userId, customBillStore = 'customBills', billCycleStore = 'billCycles') {
-    const [templates, customBills, cycles] = await Promise.all([
-        readJSON('bills'), readJSON(customBillStore), readJSON(billCycleStore)
-    ]);
-    const defs = templates.filter(b => b.active !== false).map(b => Object.assign({ defKey: 'catalog:' + b.id }, b))
-        .concat(customBills.filter(b => b.userId === userId && b.active !== false).map(b => Object.assign({ defKey: 'custom:' + b.id }, b)));
+    return withUserLock(userId, async () => {
+        const [templates, customBills, cycles] = await Promise.all([
+            readJSON('bills'), readJSON(customBillStore), readJSON(billCycleStore)
+        ]);
+        const defs = templates.filter(b => b.active !== false).map(b => Object.assign({ defKey: 'catalog:' + b.id }, b))
+            .concat(customBills.filter(b => b.userId === userId && b.active !== false).map(b => Object.assign({ defKey: 'custom:' + b.id }, b)));
 
-    const month = currentCycleMonth();
-    let all = cycles;
-    let changed = false;
+        const month = currentCycleMonth();
+        let all = cycles;
+        let changed = false;
 
-    for (const def of defs) {
-        const mine   = all.filter(c => c.userId === userId && c.billDefKey === def.defKey);
-        const latest = mine.reduce((a, b) => (!a || b.id > a.id) ? b : a, null);
-        const needsNew = !latest || (latest.status === 'paid' && latest.cycleMonth !== month);
-        if (!needsNew) continue;
-        const { usage, amount } = computeBillAmount(def);
-        const record = {
-            id: nextId(all), userId, billDefKey: def.defKey,
-            name: def.name, icon: def.icon, category: def.category, billingType: def.billingType,
-            unit: def.unit, ratePerUnit: def.ratePerUnit, baseFee: def.baseFee,
-            accountNumber: def.accountNumber, gradient: def.gradient,
-            usage, amount, cycleMonth: month, dueDate: billCycleDueDate(def, month),
-            lateFeeRate: def.lateFeeRate != null ? def.lateFeeRate : 0.05,
-            graceDays:   def.graceDays   != null ? def.graceDays   : 5,
-            status: 'open', createdAt: Date.now(), paidAt: null
-        };
-        all = all.concat([record]);
-        changed = true;
-    }
-    if (changed) await writeJSON(billCycleStore, all);
-    return all.filter(c => c.userId === userId);
+        for (const def of defs) {
+            const mine   = all.filter(c => c.userId === userId && c.billDefKey === def.defKey);
+            const latest = mine.reduce((a, b) => (!a || String(b.cycleMonth) > String(a.cycleMonth)) ? b : a, null);
+            const months = [];
+            if (!latest) months.push(month);
+            else if (latest.cycleMonth) {
+                for (let mo = addCycleMonths(latest.cycleMonth, 1); mo <= month; mo = addCycleMonths(mo, 1)) months.push(mo);
+            }
+            for (const mo of months.slice(-MAX_BILL_BACKLOG_MONTHS)) {
+                const { usage, amount } = computeBillAmount(def);
+                const record = {
+                    id: nextId(all), userId, billDefKey: def.defKey,
+                    name: def.name, icon: def.icon, category: def.category, billingType: def.billingType,
+                    unit: def.unit, ratePerUnit: def.ratePerUnit, baseFee: def.baseFee,
+                    accountNumber: def.accountNumber, gradient: def.gradient,
+                    usage, amount, cycleMonth: mo, dueDate: billCycleDueDate(def, mo),
+                    lateFeeRate: def.lateFeeRate != null ? def.lateFeeRate : 0.05,
+                    graceDays:   def.graceDays   != null ? def.graceDays   : 5,
+                    status: 'open', createdAt: Date.now(), paidAt: null
+                };
+                all = all.concat([record]);
+                changed = true;
+            }
+        }
+        if (changed) await writeJSON(billCycleStore, all);
+        return all.filter(c => c.userId === userId);
+    });
 }
 
 // Overdue/late-fee status is derived purely from elapsed time since the due
 // date, recomputed fresh on every read — the same "compute on read" pattern
 // used for e-commerce order status, so nothing needs a background sweep.
-function computeBillCycleStatus(cycle) {
-    if (cycle.status === 'paid') return { overdue: false, lateFee: 0, totalDue: 0, daysUntilDue: null, daysOverdue: 0 };
-    const now      = Date.now();
-    const graceMs  = (cycle.graceDays || 0) * 24 * 60 * 60 * 1000;
-    const overdue  = now > cycle.dueDate + graceMs;
+// The grace window runs from max(dueDate, createdAt), so a cycle generated
+// lazily after its due date (late registration, backlog months) still gets
+// its full grace period before any late fee. `now` lets autopay evaluate a
+// cycle as of its due date.
+function computeBillCycleStatus(cycle, now = Date.now()) {
+    if (cycle.status === 'paid') return { overdue: false, lateFee: 0, totalDue: 0, daysUntilDue: null, daysOverdue: 0, graceEndsAt: null, inGracePeriod: false, graceDaysLeft: null };
     const dayMs    = 24 * 60 * 60 * 1000;
+    const graceStart  = Math.max(cycle.dueDate, cycle.createdAt || 0);
+    const graceEndsAt = graceStart + (cycle.graceDays || 0) * dayMs;
+    const overdue  = now > graceEndsAt;
     const lateFee  = overdue ? parseFloat((cycle.amount * (cycle.lateFeeRate || 0)).toFixed(2)) : 0;
     const totalDue = parseFloat((cycle.amount + lateFee).toFixed(2));
     return {
         overdue, lateFee, totalDue,
         daysUntilDue: overdue ? null : Math.max(0, Math.ceil((cycle.dueDate - now) / dayMs)),
-        daysOverdue:  overdue ? Math.floor((now - cycle.dueDate) / dayMs) : 0
+        daysOverdue:  overdue ? Math.floor((now - graceStart) / dayMs) : 0,
+        graceEndsAt,
+        inGracePeriod: !overdue && now > cycle.dueDate,
+        graceDaysLeft: overdue ? 0 : Math.max(0, Math.ceil((graceEndsAt - now) / dayMs))
     };
 }
 
@@ -2837,9 +2864,12 @@ function computeBillCycleStatus(cycle) {
 // for that cycle — mirrors the lazy-execution-on-read pattern already used
 // for scheduled transfers, just for a read-only status instead of a payment.
 async function notifyOverdueBillsForUser(userId, cycles, messageStore = 'messages', billCycleStore = 'billCycles') {
+    // Decide from a fresh read (callers hold the lock) rather than the
+    // caller's snapshot, so concurrent GETs can't both send the message.
+    const all = await readJSON(billCycleStore);
+    cycles = all.filter(c => c.userId === userId);
     const overdueNow = cycles.filter(c => c.status !== 'paid' && !c.overdueNotified && computeBillCycleStatus(c).overdue);
     if (overdueNow.length === 0) return cycles;
-    const all = await readJSON(billCycleStore);
     overdueNow.forEach(c => {
         const idx = all.findIndex(x => x.id === c.id);
         if (idx !== -1) all[idx] = Object.assign({}, all[idx], { overdueNotified: true });
@@ -2863,7 +2893,11 @@ async function notifyOverdueBillsForUser(userId, cycles, messageStore = 'message
 // auto-pay sweep — call this directly per cycle instead of nesting it
 // inside their own withUserLock, which would deadlock against the single
 // global lock chain (see withUserLock's comment above).
-async function attemptPayBillCycle(userId, cycleId, req) {
+// opts: { viaAutopay, autopayEnabledAt } from the sweep — a cycle auto-paid
+// by a pref enabled on/before its due date (or a legacy pref with no
+// enabledAt) is settled as of the due date: no late fee, on-time bonus.
+// opts.expectedTotal (manual pay): refuse if the live total differs.
+async function attemptPayBillCycle(userId, cycleId, req, opts = {}) {
     return withUserLock(userId, async () => {
         const cycles = await readJSON(req.billCycleStore);
         const idx    = cycles.findIndex(c => c.id === cycleId && c.userId === userId);
@@ -2871,8 +2905,12 @@ async function attemptPayBillCycle(userId, cycleId, req) {
         const cycle = cycles[idx];
         if (cycle.status === 'paid') return { ok: false, reason: 'already_paid' };
 
-        const statusInfo = computeBillCycleStatus(cycle);
+        const autopayOnTime = !!opts.viaAutopay && (opts.autopayEnabledAt == null || opts.autopayEnabledAt <= cycle.dueDate);
+        const statusInfo = computeBillCycleStatus(cycle, autopayOnTime ? Math.min(Date.now(), cycle.dueDate) : Date.now());
         const totalDue    = statusInfo.totalDue;
+        if (typeof opts.expectedTotal === 'number' && Math.abs(opts.expectedTotal - totalDue) > 0.005) {
+            return { ok: false, reason: 'amount_changed', currentTotal: totalDue };
+        }
 
         const users = await readJSON(req.userStore);
         const uidx  = users.findIndex(u => u.id === userId);
@@ -2882,7 +2920,15 @@ async function attemptPayBillCycle(userId, cycleId, req) {
         let account = 'checking';
         if (totalDue > balances[account]) {
             if (totalDue <= balances.savings) account = 'savings';
-            else return { ok: false, reason: 'insufficient_funds', totalDue };
+            else {
+                // At most one auto-pay failure message per cycle per 24h.
+                const notifyFailure = !!opts.viaAutopay && !(cycle.autopayFailedNotifiedAt > Date.now() - 24 * 60 * 60 * 1000);
+                if (notifyFailure) {
+                    cycles[idx] = Object.assign({}, cycle, { autopayFailedNotifiedAt: Date.now() });
+                    await writeJSON(req.billCycleStore, cycles);
+                }
+                return { ok: false, reason: 'insufficient_funds', totalDue, notifyFailure };
+            }
         }
         const current = balances[account];
         const next    = parseFloat((current - totalDue).toFixed(2));
@@ -2890,7 +2936,7 @@ async function attemptPayBillCycle(userId, cycleId, req) {
 
         const onTime       = !statusInfo.overdue;
         const pointsEarned = 45 + (onTime ? 15 : 0);
-        const coinsEarned  = Math.floor(totalDue / 10);
+        const coinsEarned  = Math.floor(cycle.amount / 10); // base amount only, never the late fee
 
         const userData = Object.assign({}, DEFAULT_USER_DATA, users[uidx].userData || {});
         userData.points            = (userData.points || 0) + pointsEarned;
@@ -2943,7 +2989,7 @@ async function attemptPayBillCycle(userId, cycleId, req) {
         return {
             ok: true,
             cycle: Object.assign({}, cycles[idx], computeBillCycleStatus(cycles[idx])),
-            payment: paymentRecord, leveledUp, newLevel, account, balance: next, onTimeBonus: onTime, pointsEarned
+            payment: paymentRecord, leveledUp, newLevel, account, balance: next, onTimeBonus: onTime, pointsEarned, coinsEarned
         };
     });
 }
@@ -2961,12 +3007,13 @@ const AUTOPAY_ERROR_STATUS = {
 async function runDueAutopays(userId, req) {
     const prefs = (await readJSON(req.autopayStore)).filter(p => p.userId === userId && p.enabled);
     if (prefs.length === 0) return;
-    const enabledKeys = new Set(prefs.map(p => p.billDefKey));
+    const prefByKey = new Map(prefs.map(p => [p.billDefKey, p]));
     const cycles = await readJSON(req.billCycleStore);
     const due = cycles.filter(c => c.userId === userId && c.status !== 'paid' &&
-        enabledKeys.has(c.billDefKey) && Date.now() >= c.dueDate);
+        prefByKey.has(c.billDefKey) && Date.now() >= c.dueDate);
     for (const c of due) {
-        const result = await attemptPayBillCycle(userId, c.id, Object.assign({}, req, { isAutopaySweep: true }));
+        const result = await attemptPayBillCycle(userId, c.id, Object.assign({}, req, { isAutopaySweep: true }),
+            { viaAutopay: true, autopayEnabledAt: prefByKey.get(c.billDefKey).enabledAt });
         if (result.ok) {
             await pushSystemMessage(userId, {
                 subject: 'Auto-pay: ' + c.name,
@@ -2974,7 +3021,7 @@ async function runDueAutopays(userId, req) {
                       ' bill from your ' + result.account + ' account.',
                 type: 'success', category: 'utilities'
             }, req.messageStore);
-        } else if (result.reason === 'insufficient_funds') {
+        } else if (result.reason === 'insufficient_funds' && result.notifyFailure) {
             await pushSystemMessage(userId, {
                 subject: 'Auto-pay failed: ' + c.name,
                 body: 'Auto-pay could not charge your ' + c.name + ' bill of ƒ' + result.totalDue.toFixed(2) +
@@ -2995,6 +3042,10 @@ app.get('/api/me/bills', async (req, res) => {
     // Locked so two concurrent GETs can't both observe the dedup flag as
     // unset and each push a duplicate overdue message.
     cycles = await withUserLock(req.userId, () => notifyOverdueBillsForUser(req.userId, cycles, req.messageStore, req.billCycleStore));
+    // Only unpaid cycles (any month) plus the current month's paid ones;
+    // older paid history lives in /api/me/payments.
+    const month = currentCycleMonth();
+    cycles = cycles.filter(c => c.status !== 'paid' || c.cycleMonth === month);
     const enriched = cycles.map(c => Object.assign({}, c, computeBillCycleStatus(c)));
     enriched.sort((a, b) => (a.dueDate || 0) - (b.dueDate || 0));
     res.json(enriched);
@@ -3012,13 +3063,16 @@ app.post('/api/me/bills/autopay', async (req, res) => {
     const pref = await withUserLock(req.userId, async () => {
         const all = await readJSON(req.autopayStore);
         const idx = all.findIndex(p => p.userId === req.userId && p.billDefKey === billDefKey);
+        // enabledAt marks when auto-pay was (re)turned on; the sweep only
+        // counts a charge as on time for cycles due at/after it.
         if (idx === -1) {
-            const rec = { id: nextId(all), userId: req.userId, billDefKey, enabled, updatedAt: Date.now() };
+            const rec = { id: nextId(all), userId: req.userId, billDefKey, enabled, updatedAt: Date.now(), enabledAt: enabled ? Date.now() : null };
             all.push(rec);
             await writeJSON(req.autopayStore, all);
             return rec;
         }
-        all[idx] = Object.assign({}, all[idx], { enabled, updatedAt: Date.now() });
+        const turnedOn = enabled && !all[idx].enabled;
+        all[idx] = Object.assign({}, all[idx], { enabled, updatedAt: Date.now() }, turnedOn ? { enabledAt: Date.now() } : {});
         await writeJSON(req.autopayStore, all);
         return all[idx];
     });
@@ -3027,8 +3081,16 @@ app.post('/api/me/bills/autopay', async (req, res) => {
 
 app.post('/api/me/bills/:cycleId/pay', async (req, res) => {
     const cycleId = Number(req.params.cycleId);
-    const result = await attemptPayBillCycle(req.userId, cycleId, req);
+    // Optional expectedTotal: the amount the confirm modal showed. If the
+    // live total differs (e.g. a late fee kicked in), refuse without charging.
+    const rawExpected = req.body && req.body.expectedTotal;
+    const expectedTotal = rawExpected == null || rawExpected === '' ? undefined : Number(rawExpected);
+    if (expectedTotal !== undefined && !Number.isFinite(expectedTotal)) return res.status(400).json({ error: 'expectedTotal must be a number' });
+    const result = await attemptPayBillCycle(req.userId, cycleId, req, { expectedTotal });
     if (!result.ok) {
+        if (result.reason === 'amount_changed') {
+            return res.status(409).json({ error: 'The amount due has changed', currentTotal: result.currentTotal });
+        }
         if (result.reason === 'insufficient_funds') {
             return res.status(409).json({ error: 'Insufficient funds in both accounts. Need ƒ' + result.totalDue.toFixed(2) });
         }
@@ -3053,6 +3115,7 @@ app.get('/api/me/bills/custom', async (req, res) => {
 // bill, and since deleting a custom bill is instant and free, that turns
 // bill creation into an unbounded, near-zero-cost XP farm.
 const MIN_CUSTOM_BILL_AMOUNT = 5;
+const MAX_CUSTOM_BILLS = 10;
 
 app.post('/api/me/bills/custom', async (req, res) => {
     const body = req.body || {};
@@ -3092,13 +3155,18 @@ app.post('/api/me/bills/custom', async (req, res) => {
         });
     }
 
+    // Cap per user so custom bills can't be mass-created to buy flat XP.
+    // Counts inactive bills too: deactivating leaves already-generated
+    // cycles payable, so it must not free up a slot.
     record = await withUserLock(req.userId, async () => {
         const all = await readJSON(req.customBillStore);
+        if (all.filter(b => b.userId === req.userId).length >= MAX_CUSTOM_BILLS) return null;
         record.id = nextId(all);
         all.push(record);
         await writeJSON(req.customBillStore, all);
         return record;
     });
+    if (!record) return res.status(400).json({ error: 'You can have at most ' + MAX_CUSTOM_BILLS + ' custom bills. Delete one to add another.' });
     res.status(201).json(record);
 });
 
