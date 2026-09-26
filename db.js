@@ -232,7 +232,24 @@ const DigifinwizDB = (() => {
         return _api('POST', '/api/me/balances/' + account + '/set', { amount }).then(r => r.amount);
     }
 
+    // ── Transfers (atomic, server-side) ─────────────────────────────────────────
+    // payload: { recipient, account, fromAccount: 'checking'|'savings', amount, description? }
+    // Resolves { transaction, balance } — balance is fromAccount's new balance.
+    // The server debits and records in one locked request; the caller awards
+    // transaction.pointsEarned XP (0 for transfers under ƒ1).
+    function transfer(payload) {
+        return _api('POST', '/api/me/transfer', payload);
+    }
+
+    // Moves money between the caller's own checking and savings. Resolves
+    // { transaction, balances: { checking, savings } }. Earns no XP and
+    // doesn't count as a transfer for stats/challenges.
+    function moveMoney(from, to, amount) {
+        return _api('POST', '/api/me/move-money', { from, to, amount });
+    }
+
     // ── Transactions ──────────────────────────────────────────────────────────
+    // Admin-only on the server (raw record insert, used by the data import).
     function addTransaction(tx) {
         return _api('POST', '/api/me/transactions', tx);
     }
@@ -387,8 +404,10 @@ const DigifinwizDB = (() => {
         return _api('POST', '/api/admin/challenges/reseed');
     }
 
-    function checkAndCompleteChallenges(ctx) {
-        return _api('POST', '/api/me/challenges/check', ctx);
+    // The server ignores any body and computes progress from the caller's
+    // own records; ctx is accepted only for backward compatibility.
+    function checkAndCompleteChallenges(_ctx) {
+        return _api('POST', '/api/me/challenges/check', {});
     }
 
     function getLevel1Requirements() {
@@ -650,6 +669,10 @@ const DigifinwizDB = (() => {
         getAllBalances,
         adjustBalance,
         setBalance,
+
+        // Transfers
+        transfer,
+        moveMoney,
 
         // Transactions
         addTransaction,
