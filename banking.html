@@ -6,6 +6,68 @@
     <title>Digifinwiz - Banking</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="shopping-styles.css">
+    <style>
+    /* Page-local DigiBank styles (move money, inbox, recipients, guide).
+       Every rule is scoped under body.digibank-theme + a db- class so it
+       can't leak into another module. */
+    body.digibank-theme .db-move-card {
+        background: var(--color-surface); border: 1px solid var(--color-border);
+        border-left: 4px solid #b7862c; border-radius: var(--radius-xl);
+        padding: 1.25rem; margin-bottom: 1.5rem;
+    }
+    body.digibank-theme .db-move-card h2 { font-size: 1rem; font-weight: 700; margin: 0 0 0.25rem; }
+    body.digibank-theme .db-move-card .db-move-sub { font-size: 0.8rem; color: var(--color-gray-500); margin: 0 0 1rem; }
+    body.digibank-theme .db-move-row { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end; }
+    body.digibank-theme .db-move-dirs { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    body.digibank-theme .db-move-dir {
+        border: 1.5px solid var(--color-border); background: var(--color-gray-50);
+        border-radius: 10px; padding: 0.5rem 0.8rem; cursor: pointer; text-align: left;
+        font: inherit; color: var(--color-gray-700); min-width: 150px;
+    }
+    body.digibank-theme .db-move-dir strong { display: block; font-size: 0.82rem; }
+    body.digibank-theme .db-move-dir span { font-size: 0.72rem; color: var(--color-gray-500); }
+    body.digibank-theme .db-move-dir.active { border-color: var(--color-primary-600); background: var(--color-primary-50); box-shadow: 0 0 0 2px rgba(201,154,46,0.25); }
+    body.digibank-theme .db-move-dir:focus-visible { outline: 2px solid var(--color-primary-500); outline-offset: 2px; }
+
+    body.digibank-theme .db-recip-empty {
+        grid-column: 1 / -1; font-size: 0.8rem; color: var(--color-gray-500);
+        background: var(--color-gray-50); border: 1px dashed var(--color-border);
+        border-radius: 10px; padding: 0.75rem; text-align: center;
+    }
+
+    body.digibank-theme .db-inbox-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    body.digibank-theme .db-inbox-item {
+        display: flex; gap: 0.85rem; align-items: flex-start; padding: 0.85rem 1rem;
+        border: 1px solid var(--color-border); border-left: 4px solid transparent;
+        border-radius: 10px; margin-bottom: 0.6rem; cursor: pointer; background: var(--color-surface);
+        transition: box-shadow 0.15s, background 0.15s;
+    }
+    body.digibank-theme .db-inbox-item:hover { box-shadow: 0 2px 10px rgba(13,43,82,0.08); }
+    body.digibank-theme .db-inbox-item:focus-visible { outline: 2px solid var(--color-primary-500); outline-offset: 2px; }
+    body.digibank-theme .db-inbox-item.is-unread { border-left-color: #b7862c; background: #fffdf7; }
+    body.digibank-theme .db-inbox-item.is-open { background: var(--color-gray-50); }
+    body.digibank-theme .db-inbox-icon { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
+    body.digibank-theme .db-inbox-top { display: flex; justify-content: space-between; gap: 0.75rem; align-items: baseline; }
+    body.digibank-theme .db-inbox-subject { font-size: 0.9rem; font-weight: 600; color: var(--color-gray-800); min-width: 0; overflow-wrap: anywhere; }
+    body.digibank-theme .db-inbox-item.is-unread .db-inbox-subject { font-weight: 700; }
+    body.digibank-theme .db-inbox-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #b7862c; margin-right: 0.4rem; vertical-align: middle; }
+    body.digibank-theme .db-inbox-date { font-size: 0.72rem; color: var(--color-gray-400); white-space: nowrap; flex-shrink: 0; }
+    body.digibank-theme .db-inbox-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.3rem 0; }
+    body.digibank-theme .db-inbox-tag { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 1px 7px; border-radius: 99px; background: var(--color-gray-100); color: var(--color-gray-600); }
+    body.digibank-theme .db-inbox-preview { font-size: 0.8rem; color: var(--color-gray-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    body.digibank-theme .db-inbox-body { font-size: 0.86rem; color: var(--color-gray-700); line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 0.35rem; }
+    body.digibank-theme .db-inbox-empty { text-align: center; padding: 2rem 1rem; color: var(--color-gray-500); }
+    body.digibank-theme .db-inbox-empty p { font-size: 0.82rem; max-width: 460px; margin: 0.4rem auto 0; }
+
+    body.digibank-theme .db-guide dl { margin: 0; }
+    body.digibank-theme .db-guide dt { font-weight: 700; font-size: 0.86rem; color: var(--color-gray-800); margin-top: 0.75rem; }
+    body.digibank-theme .db-guide dt:first-child { margin-top: 0; }
+    body.digibank-theme .db-guide dd { margin: 0.2rem 0 0; font-size: 0.82rem; color: var(--color-gray-600); line-height: 1.55; }
+    body.digibank-theme .db-guide a { color: var(--color-primary-500); font-weight: 600; }
+    body.digibank-theme .db-guide-footer { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--color-border); }
+    body.digibank-theme .db-guide-status { font-size: 0.78rem; color: var(--color-gray-500); flex: 1; min-width: 200px; }
+    body.digibank-theme .sidebar-nav #tab-btn-messages { display: flex; align-items: center; justify-content: space-between; }
+    </style>
 </head>
 <body class="digibank-theme">
     <!-- DigiBank Header — logo, tab, game progress, account icons, and logout
@@ -121,6 +183,7 @@
                     <a href="#" class="nav-item" id="tab-btn-goals" onclick="switchPageTab('goals');return false;">Savings Goals</a>
                     <a href="#" class="nav-item" id="tab-btn-statements" onclick="switchPageTab('statements');return false;">Statements</a>
                     <a href="#" class="nav-item" id="tab-btn-alerts" onclick="switchPageTab('alerts');return false;">Alerts</a>
+                    <a href="#" class="nav-item" id="tab-btn-messages" onclick="switchPageTab('messages');return false;">Messages <span class="nav-badge" id="msgNavBadge" style="display:none">0</span></a>
                 </nav>
             </aside>
 
@@ -148,6 +211,29 @@
                             </div>
                             <div id="dashUpcomingSchedule"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">No upcoming transfers.</p></div>
                         </div>
+
+                        <div class="banking-section full-width db-guide" id="bankGuideCard" style="margin-top:1.5rem">
+                            <h2 style="margin:0 0 0.25rem">How Banking Works</h2>
+                            <p style="color:var(--color-gray-500);font-size:0.82rem;margin:0 0 1rem">A two-minute guide to the accounts and tools in DigiBank.</p>
+                            <dl>
+                                <dt>Checking vs. savings</dt>
+                                <dd>Checking is your everyday account: transfers, card and loan payments, and savings-goal contributions all come out of it. Savings is money you set aside; in a real bank it usually earns interest and may limit withdrawals. Use <a href="#" onclick="goToMoveMoney();return false;">Move Money</a> to shift funds between the two — it's free and doesn't change your total.</dd>
+                                <dt>Transfers</dt>
+                                <dd>A transfer sends money to someone else's account and can't be pulled back, so always double-check the name and account number. Scheduled transfers repeat automatically — if the account is short on funds when one is due, it's skipped and you get a message.</dd>
+                                <dt>Credit card utilization</dt>
+                                <dd>Utilization is how much of your credit limit you're using (balance ÷ limit). Keeping it under 30% helps your credit score; paying the full balance each month avoids interest entirely.</dd>
+                                <dt>Loan interest</dt>
+                                <dd>A loan's APR is the yearly cost of borrowing. Longer terms mean smaller monthly payments but more total interest — compare the "Total to Repay" figure, not just the monthly payment.</dd>
+                                <dt>Savings goals</dt>
+                                <dd>Naming a goal and a target makes saving concrete. Small regular contributions add up; watching the progress bar is a proven way to stay on track.</dd>
+                                <dt>Alerts</dt>
+                                <dd>Low-balance and large-transaction alerts arrive in your <a href="#" onclick="switchPageTab('messages');return false;">Messages</a> inbox — a simple habit that helps you catch mistakes and fraud early.</dd>
+                            </dl>
+                            <div class="db-guide-footer">
+                                <span class="db-guide-status" id="bankGuideStatus"></span>
+                                <button type="button" class="btn btn-primary" id="bankGuideReadBtn" style="display:none" onclick="markBankingGuideRead()">Mark as read</button>
+                            </div>
+                        </div>
                     </div>
 
                     <div>
@@ -163,6 +249,7 @@
                             <h2 style="margin:0 0 0.75rem">Quick Actions</h2>
                             <div style="display:flex;flex-direction:column;gap:0.5rem">
                                 <a href="#" onclick="switchPageTab('banking');return false;" class="btn btn-block" style="text-align:left">Send Money</a>
+                                <a href="#" onclick="goToMoveMoney();return false;" class="btn btn-block" style="text-align:left">Move Money Between Accounts</a>
                                 <a href="#" onclick="switchPageTab('scheduled');return false;" class="btn btn-block" style="text-align:left">Schedule a Transfer</a>
                                 <a href="#" onclick="switchPageTab('statements');return false;" class="btn btn-block" style="text-align:left">View Statements</a>
                             </div>
@@ -251,6 +338,30 @@
                     </div>
                 </div>
 
+                <!-- Move money between the user's own accounts -->
+                <div class="db-move-card" id="moveMoneyCard">
+                    <h2>Move Money Between Your Accounts</h2>
+                    <p class="db-move-sub">Shift funds between checking and savings instantly. Free, no XP, and it isn't counted as a transfer.</p>
+                    <form id="moveMoneyForm" class="db-move-row" novalidate>
+                        <input type="hidden" id="moveFrom" value="checking">
+                        <div class="db-move-dirs" role="radiogroup" aria-label="Direction">
+                            <button type="button" class="db-move-dir active" id="moveDir-checking" role="radio" onclick="setMoveDirection('checking')">
+                                <strong>Checking → Savings</strong>
+                                <span>Checking: <span id="moveBal-checking">ƒ—</span></span>
+                            </button>
+                            <button type="button" class="db-move-dir" id="moveDir-savings" role="radio" onclick="setMoveDirection('savings')">
+                                <strong>Savings → Checking</strong>
+                                <span>Savings: <span id="moveBal-savings">ƒ—</span></span>
+                            </button>
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;flex:1;min-width:140px">
+                            <label for="moveAmount">Amount (ƒ) <span style="color:var(--color-gray-400);font-weight:400" id="moveDirectionLabel">Checking → Savings</span></label>
+                            <input type="number" class="form-input" id="moveAmount" placeholder="0.00" min="0.01" step="0.01">
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="moveMoneyBtn">Move Money</button>
+                    </form>
+                </div>
+
                 <!-- Transfer Form + Transactions -->
                 <div class="banking-grid">
                     <div class="banking-section">
@@ -311,24 +422,10 @@
                         </form>
                         <!-- Saved Recipients -->
                         <div style="margin-top:1.5rem">
-                            <div class="section-label">Quick Select Recipient</div>
-                            <div class="recipients-grid">
-                                <div class="recipient-card" onclick="selectRecipient('Bruce Lee','1234567890')">
-                                    <div class="recipient-avatar" style="background:linear-gradient(135deg,#667eea,#764ba2)">BL</div>
-                                    <div class="recipient-info"><strong>Bruce Lee</strong><span>****7890</span></div>
-                                </div>
-                                <div class="recipient-card" onclick="selectRecipient('Alice Johnson','9876543210')">
-                                    <div class="recipient-avatar" style="background:linear-gradient(135deg,#f093fb,#f5576c)">AJ</div>
-                                    <div class="recipient-info"><strong>Alice Johnson</strong><span>****3210</span></div>
-                                </div>
-                                <div class="recipient-card" onclick="selectRecipient('Mike Smith','5555555555')">
-                                    <div class="recipient-avatar" style="background:linear-gradient(135deg,#4facfe,#00f2fe)">MS</div>
-                                    <div class="recipient-info"><strong>Mike Smith</strong><span>****5555</span></div>
-                                </div>
-                                <div class="recipient-card" onclick="selectRecipient('Sarah Williams','1111222233')">
-                                    <div class="recipient-avatar" style="background:linear-gradient(135deg,#fa709a,#fee140)">SW</div>
-                                    <div class="recipient-info"><strong>Sarah Williams</strong><span>****2233</span></div>
-                                </div>
+                            <div class="section-label">Recent Recipients</div>
+                            <!-- Filled from the user's own transfer history (renderRecentRecipients) -->
+                            <div class="recipients-grid" id="recentRecipientsGrid">
+                                <div class="db-recip-empty">Loading recent recipients…</div>
                             </div>
 
                             <!-- Saved custom recipients (from localStorage) -->
@@ -613,7 +710,7 @@
             <div class="page-tab-panel" id="panel-alerts">
                 <div class="banking-section full-width">
                     <h2>Alert Preferences</h2>
-                    <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1.25rem">Alerts are delivered to your Messages inbox.</p>
+                    <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1.25rem">Alerts are delivered to your <a href="#" onclick="switchPageTab('messages');return false;" style="color:var(--color-primary-500);font-weight:600">Messages inbox</a>.</p>
                     <form id="alertPrefsForm">
                         <div class="alert-pref-row">
                             <label class="autopay-switch"><input type="checkbox" id="alertLowBalEnabled"><span class="autopay-slider"></span></label>
@@ -629,6 +726,30 @@
                     </form>
                 </div>
             </div><!-- /panel-alerts -->
+
+            <!-- ═══════════════════════════════════════════════════════
+                 MESSAGES TAB (banking inbox — alerts, scheduled-transfer
+                 results, milestones, security notices)
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel" id="panel-messages">
+                <div class="banking-section full-width">
+                    <div class="db-inbox-toolbar">
+                        <div>
+                            <h2 style="margin:0">Messages</h2>
+                            <div style="font-size:0.8rem;color:var(--color-gray-500);margin-top:0.15rem" id="inboxUnreadCount"></div>
+                        </div>
+                        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+                            <div class="tx-filter-tabs" style="margin:0">
+                                <button type="button" class="tx-filter-btn active" id="inboxFilter-all" onclick="setInboxFilter('all')">All</button>
+                                <button type="button" class="tx-filter-btn" id="inboxFilter-unread" onclick="setInboxFilter('unread')">Unread</button>
+                            </div>
+                            <button type="button" class="btn" id="inboxMarkAllBtn" style="padding:0.4rem 0.8rem;font-size:0.8rem" onclick="markAllMessagesRead()">Mark all read</button>
+                        </div>
+                    </div>
+                    <div id="inboxList"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">Loading messages…</p></div>
+                    <p style="font-size:0.75rem;color:var(--color-gray-400);margin:0.75rem 0 0">Choose which alerts you get on the <a href="#" onclick="switchPageTab('alerts');return false;" style="color:var(--color-primary-500);font-weight:600">Alerts</a> tab.</p>
+                </div>
+            </div><!-- /panel-messages -->
             </div><!-- /module-content -->
             </div><!-- /module-layout -->
 
@@ -655,11 +776,12 @@
         loans:      'loadLoansTab',
         goals:      'loadGoalsTab',
         statements: 'loadStatementsTab',
-        alerts:     'loadAlertsTab'
+        alerts:     'loadAlertsTab',
+        messages:   'loadMessagesTab'
     };
 
     function switchPageTab(name) {
-        ['dashboard', 'profile', 'banking', 'scheduled', 'creditcard', 'loans', 'goals', 'statements', 'alerts'].forEach(function(t) {
+        ['dashboard', 'profile', 'banking', 'scheduled', 'creditcard', 'loans', 'goals', 'statements', 'alerts', 'messages'].forEach(function(t) {
             var panel = document.getElementById('panel-' + t);
             var btn   = document.getElementById('tab-btn-' + t);
             if (!panel || !btn) return;
@@ -670,6 +792,39 @@
         sessionStorage.setItem('banking_tab', name);
         var loaderName = PAGE_TAB_LOADERS[name];
         if (loaderName && typeof window[loaderName] === 'function') window[loaderName]();
+    }
+
+    function goToMoveMoney() {
+        switchPageTab('banking');
+        setTimeout(function() {
+            var card = document.getElementById('moveMoneyCard');
+            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            var inp = document.getElementById('moveAmount');
+            if (inp) inp.focus({ preventScroll: true });
+        }, 50);
+    }
+
+    /* ── Header level / XP bar ──────────────────────────────────────── */
+    // Called on load and after anything that awards XP (awardXP, challenge
+    // checks). Pass userData to skip the fetch when the caller has it.
+    function refreshHeaderProgress(userData) {
+        var p = userData ? Promise.resolve(userData) : DigifinwizDB.getUserData();
+        return p.then(function(ud) {
+            if (!ud) return;
+            var level   = ud.level || 1;
+            var points  = ud.points || 0;
+            var pToNext = ud.pointsToNextLevel != null ? ud.pointsToNextLevel : 1000;
+            var coins   = ud.coins || 0;
+            var earned  = Math.max(0, 1000 - pToNext);
+            var pct     = Math.min(100, Math.round((earned / 1000) * 100));
+            var set = function(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
+            set('bankProgressLevel', level + '/50');
+            set('bankProgressText',  pct + '% completed');
+            set('bankProgressXP',    points.toLocaleString() + ' XP');
+            set('bankProgressCoins', coins.toLocaleString());
+            var fillEl = document.getElementById('bankProgressFill');
+            if (fillEl) fillEl.style.width = pct + '%';
+        }).catch(function(){});
     }
 
     /* ── HTML escape ────────────────────────────────────────────────── */
@@ -745,13 +900,38 @@
         if (form) form.classList.toggle('open');
     }
 
+    // Saved recipients are per banking account: the key includes the
+    // logged-in user's id, so two people sharing a browser never see each
+    // other's saved payees. (The old unscoped key can't be attributed to
+    // any one account, so it is deliberately not migrated.)
+    function customRecipientsKey() {
+        var s = (typeof DigifinwizModuleAuth !== 'undefined' && DigifinwizModuleAuth.getSession) ? DigifinwizModuleAuth.getSession() : null;
+        return s && s.userId != null ? 'digifinwiz_custom_recipients_banking_' + s.userId : null;
+    }
+    function loadCustomRecipients() {
+        var key = customRecipientsKey();
+        if (!key) return [];
+        try {
+            var v = JSON.parse(localStorage.getItem(key) || '[]');
+            return Array.isArray(v) ? v.filter(function(r) { return r && r.name && r.account; }) : [];
+        } catch (e) { return []; }
+    }
+    function storeCustomRecipients(list) {
+        var key = customRecipientsKey();
+        if (!key) return false;
+        try { localStorage.setItem(key, JSON.stringify(list)); return true; } catch (e) { return false; }
+    }
+
     function saveCustomRecipient() {
         var name = ((document.getElementById('newRecipName') || {}).value || '').trim();
         var acct = ((document.getElementById('newRecipAcct') || {}).value || '').trim();
         if (!name || !acct) { showNotification('Please enter both name and account number.', 'error'); return; }
-        var saved = JSON.parse(localStorage.getItem('digifinwiz_custom_recipients') || '[]');
+        var saved = loadCustomRecipients();
+        if (saved.some(function(r) { return r.name === name && String(r.account) === acct; })) {
+            showNotification(name + ' is already saved.', 'info'); return;
+        }
         saved.push({ name: name, account: acct });
-        localStorage.setItem('digifinwiz_custom_recipients', JSON.stringify(saved));
+        if (!storeCustomRecipients(saved)) { showNotification('Could not save recipient.', 'error'); return; }
         document.getElementById('newRecipName').value = '';
         document.getElementById('newRecipAcct').value = '';
         document.getElementById('customRecipForm').classList.remove('open');
@@ -769,15 +949,15 @@
     ];
 
     function renderCustomRecipients() {
-        var saved = JSON.parse(localStorage.getItem('digifinwiz_custom_recipients') || '[]');
+        var saved = loadCustomRecipients();
         var wrap  = document.getElementById('customRecipientsWrap');
         if (!wrap) return;
         if (saved.length === 0) { wrap.innerHTML = ''; return; }
         wrap.innerHTML = '<div class="section-label" style="margin-top:0.75rem;margin-bottom:0.4rem">Saved Recipients</div>' +
             saved.map(function(r, i) {
-                var initials = r.name.trim().split(/\s+/).slice(0,2).map(function(w){ return (w[0]||'').toUpperCase(); }).join('') || '?';
+                var initials = escHB(String(r.name).trim().split(/\s+/).slice(0,2).map(function(w){ return (w[0]||'').toUpperCase(); }).join('') || '?');
                 var grad     = CUST_RECIP_GRADS[i % CUST_RECIP_GRADS.length];
-                var masked   = '****' + String(r.account).slice(-4);
+                var masked   = '****' + escHB(String(r.account).slice(-4));
                 return "<div class=\"saved-recip-card\" onclick='selectRecipient(" + jsAttrB(r.name) + ',' + jsAttrB(r.account) + ")'>" +
                     '<div style="width:30px;height:30px;border-radius:50%;background:' + grad + ';display:flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:700;color:#fff;flex-shrink:0">' + initials + '</div>' +
                     '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.82rem">' + escHB(r.name) + '</div>' +
@@ -788,11 +968,40 @@
     }
 
     function removeCustomRecipient(index) {
-        var saved = JSON.parse(localStorage.getItem('digifinwiz_custom_recipients') || '[]');
+        var saved = loadCustomRecipients();
         saved.splice(index, 1);
-        localStorage.setItem('digifinwiz_custom_recipients', JSON.stringify(saved));
+        storeCustomRecipients(saved);
         renderCustomRecipients();
         showNotification('Recipient removed.', 'info');
+    }
+
+    /* ── Recent recipients (from the user's real transfer history) ─── */
+    // Most-recent distinct (name, account) pairs the user has actually sent
+    // money to. Own-account moves are not recipients.
+    function renderRecentRecipients(txs) {
+        var grid = document.getElementById('recentRecipientsGrid');
+        if (!grid) return;
+        var seen = {};
+        var recent = [];
+        (txs || []).forEach(function(t) {
+            if (recent.length >= 4 || !isExternalTransfer(t) || !t.recipient) return;
+            var key = String(t.recipient).trim().toLowerCase() + '|' + String(t.account || '').trim();
+            if (seen[key]) return;
+            seen[key] = true;
+            recent.push(t);
+        });
+        if (recent.length === 0) {
+            grid.innerHTML = '<div class="db-recip-empty">No recent recipients yet — people you send money to will show up here for one-click reuse.</div>';
+            return;
+        }
+        grid.innerHTML = recent.map(function(t) {
+            var name = String(t.recipient);
+            var acct = String(t.account || '');
+            return "<div class=\"recipient-card\" role=\"button\" tabindex=\"0\" title=\"Last sent " + escHB(t.date || '') + "\" onclick='selectRecipient(" + jsAttrB(name) + ',' + jsAttrB(acct) + ")'>" +
+                '<div class="recipient-avatar" style="background:' + avatarGradientFor(name) + '">' + escHB(initialsFor(name)) + '</div>' +
+                '<div class="recipient-info"><strong>' + escHB(name) + '</strong><span>****' + escHB(acct.slice(-4)) + '</span></div>' +
+                '</div>';
+        }).join('');
     }
 
     /* ── Amount range slider sync ───────────────────────────────────── */
@@ -903,7 +1112,8 @@
         if (typeof DigifinwizDB === 'undefined') return;
         Promise.all([DigifinwizDB.getChallenges(), DigifinwizDB.getTransactions(1000)]).then(function(res) {
             var challenges = res[0];
-            var txs = res[1];
+            // Own-account moves never count toward transfer challenges.
+            var txs = (res[1] || []).filter(isExternalTransfer);
             var banking = challenges.filter(function(c){ return c.active && c.category === 'banking'; });
             var container = document.getElementById('bankingChallengesList');
             if (!container) return;
@@ -929,7 +1139,11 @@
                 else if (c.condition==='transfer_amount') { pct=Math.min(100,Math.round((maxAmt/(c.conditionValue||1))*100)); progressLabel='Best: ƒ'+maxAmt.toLocaleString('en-US',{minimumFractionDigits:2})+' / ƒ'+Number(c.conditionValue).toLocaleString(); }
                 else if (c.condition==='total_transferred') { pct=Math.min(100,Math.round((totTx/(c.conditionValue||1))*100)); progressLabel='ƒ'+totTx.toLocaleString('en-US',{maximumFractionDigits:0})+' / ƒ'+Number(c.conditionValue).toLocaleString(); }
                 else if (c.condition==='transaction_count') { pct=Math.min(100,Math.round((txs.length/(c.conditionValue||1))*100)); progressLabel=txs.length+' / '+c.conditionValue+' transfers'; }
+                else if (c.condition==='manual' && c.title==='Bank Explorer') { progressLabel='Read "How Banking Works" on the Dashboard'; }
                 else progressLabel=pct+'% complete';
+                var guideLink = (!c.completed && c.condition==='manual' && c.title==='Bank Explorer')
+                    ? '<a href="#" onclick="switchPageTab(\'dashboard\');setTimeout(function(){var g=document.getElementById(\'bankGuideCard\');if(g)g.scrollIntoView({behavior:\'smooth\'});},60);return false;" style="font-size:0.72rem;font-weight:700;color:var(--color-primary-500);text-decoration:none">Open the guide →</a>'
+                    : '';
                 var isDone    = c.completed;
                 var barColor  = isDone?'#10b981':(pct>=75?'#f59e0b':pct>=40?'#6366f1':'#94a3b8');
                 var completedOn = isDone&&c.completedAt?' · '+new Date(c.completedAt).toLocaleDateString():'';
@@ -942,14 +1156,21 @@
                     '<div style="background:#e2e8f0;border-radius:4px;height:7px;overflow:hidden;margin-bottom:0.3rem">'+
                     '<div style="background:'+barColor+';width:'+pct+'%;height:100%;transition:width 0.7s ease;border-radius:4px"></div></div>'+
                     '<div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#94a3b8">'+
-                    '<span>'+escHB(progressLabel)+escHB(completedOn)+'</span><span>'+pct+'%</span></div></div>';
+                    '<span>'+escHB(progressLabel)+escHB(completedOn)+'</span><span>'+pct+'%</span></div>'+
+                    (guideLink ? '<div style="margin-top:0.35rem">'+guideLink+'</div>' : '')+'</div>';
             }).join('');
         }).catch(function(){});
     }
 
     /* ── Transfer stats ─────────────────────────────────────────────── */
     function loadTransferStats() {
-        DigifinwizDB.getTransactions(1000).then(function(txs) {
+        return DigifinwizDB.getTransactions(1000).then(function(allTxs) {
+            // Every count/total/recipient below is about transfers to other
+            // people — own-account moves (type 'internal') are excluded.
+            // Filter-tab counts use the full list, since the list itself
+            // shows moves too.
+            var txs = allTxs.filter(isExternalTransfer);
+            renderRecentRecipients(txs);
             loadTodayStats(txs);
             renderSevenDayChart(txs);
             var total   = txs.reduce(function(s,t){ return s+(t.amount||0); }, 0);
@@ -963,9 +1184,14 @@
                 var el = document.getElementById(id);
                 if (el) el.textContent = count > 0 ? label + ' (' + count + ')' : label;
             };
-            updateTabLabel('txFilter-all',      'All',      txs.length);
-            updateTabLabel('txFilter-checking', 'Checking', fromChk);
-            updateTabLabel('txFilter-savings',  'Savings',  fromSav);
+            var listCount = function(acct) {
+                return allTxs.filter(function(t) {
+                    return t.fromAccount === acct || (isInternalMove(t) && t.toAccount === acct);
+                }).length;
+            };
+            updateTabLabel('txFilter-all',      'All',      allTxs.length);
+            updateTabLabel('txFilter-checking', 'Checking', listCount('checking'));
+            updateTabLabel('txFilter-savings',  'Savings',  listCount('savings'));
             var fmt      = function(n){ return 'ƒ'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
             var fmtShort = function(n){ return 'ƒ'+n.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}); };
             var set = function(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; };
@@ -994,6 +1220,11 @@
                 set('statLastXp','+'+(latest.pointsEarned||0)+' XP earned');
                 var avatarEl=document.getElementById('statLastAvatar');
                 if(avatarEl) avatarEl.textContent=initials;
+            } else {
+                set('statLastRecipient','No transfers yet');
+                set('statLastDate',''); set('statLastAmount',''); set('statLastXp','');
+                var av=document.getElementById('statLastAvatar');
+                if(av) av.textContent='?';
             }
         }).catch(function(){});
     }
@@ -1035,32 +1266,17 @@
         loadTransferStats();
         loadBalanceCards();
         updateTransactionsList(currentTxFilter);
+        if (typeof refreshMessageBadge === 'function') refreshMessageBadge();
+        refreshHeaderProgress();
     }
 
     document.addEventListener('DOMContentLoaded', function() {
         // Restore last active tab
         switchPageTab(sessionStorage.getItem('banking_tab') || 'dashboard');
         DigifinwizDB.init().then(function() { refreshBankingPage(); });
-        // Populate DigiBank game progress bar
-        DigifinwizDB.getUserData().then(function(userData) {
-            if (!userData) return;
-            var level  = userData.level || 1;
-            var points = userData.points || 0;
-            var pToNext = userData.pointsToNextLevel != null ? userData.pointsToNextLevel : 1000;
-            var coins  = userData.coins || 0;
-            var earned = Math.max(0, 1000 - pToNext);
-            var pct    = Math.min(100, Math.round((earned / 1000) * 100));
-            var set = function(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
-            set('bankProgressLevel', level + '/50');
-            set('bankProgressText',  pct + '% completed');
-            set('bankProgressXP',    points.toLocaleString() + ' XP');
-            set('bankProgressCoins', coins.toLocaleString());
-            var fillEl = document.getElementById('bankProgressFill');
-            if (fillEl) fillEl.style.width = pct + '%';
-        }).catch(function(){});
-        document.getElementById('transferForm').addEventListener('submit', function() {
-            setTimeout(refreshBankingPage, 1400);
-        }, true);
+        // Populate DigiBank game progress bar (refreshed again after any
+        // XP award — see awardXP in banking-accounts.js).
+        refreshHeaderProgress();
         // Load saved custom recipients
         renderCustomRecipients();
         // MutationObserver: reapply search filter when transaction list refreshes
