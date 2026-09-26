@@ -29,12 +29,24 @@ function withBankingActionLock(fn) {
 // add points, level up once XP crosses 1000, with the level-1→2 transition
 // gated behind the three core banking/ecommerce/utilities activities.
 // Centralized here since several new account-type actions each award XP.
-function awardXP(points) {
+// `increments` (optional) adds to other counters in the same write, e.g.
+// { coins: 500, challenges: 1, completedTasks: 1 }. Always refreshes the
+// header level/XP bar afterwards.
+function awardXP(points, increments) {
+    points = Number(points) || 0;
     return DigifinwizDB.getUserData().then(function(userData) {
         if (!userData) return null;
+        Object.keys(increments || {}).forEach(function(k) {
+            userData[k] = (Number(userData[k]) || 0) + (Number(increments[k]) || 0);
+        });
         userData.points            = (userData.points || 0) + points;
         userData.pointsToNextLevel = (userData.pointsToNextLevel != null ? userData.pointsToNextLevel : 1000) - points;
-        var save = function() { return DigifinwizDB.setUserData(userData).then(function() { return userData; }); };
+        var save = function() {
+            return DigifinwizDB.setUserData(userData).then(function() {
+                if (typeof refreshHeaderProgress === 'function') refreshHeaderProgress(userData);
+                return userData;
+            });
+        };
         if (userData.pointsToNextLevel <= 0) {
             if (userData.level === 1) {
                 return DigifinwizDB.getLevel1Requirements().then(function(req) {
@@ -54,6 +66,17 @@ function awardXP(points) {
         }
         return save();
     }).catch(function(err) { console.error('awardXP error:', err); return null; });
+}
+
+// Flat per-action rewards below only apply to amounts of at least ƒ1, so a
+// loop of ƒ0.01 actions can't farm XP (same threshold the server applies
+// to transfers).
+var XP_MIN_AMOUNT = 1;
+function xpFor(amount, points) {
+    return (Number(amount) || 0) >= XP_MIN_AMOUNT ? points : 0;
+}
+function xpSuffix(points) {
+    return points > 0 ? ' +' + points + ' XP' : '';
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -170,12 +193,14 @@ document.addEventListener('DOMContentLoaded', function() {
         var desc = document.getElementById('ccPurchaseDesc').value.trim();
         if (!amt || amt <= 0) { showNotification('Enter a valid amount.', 'error'); return; }
         withBankingActionLock(function() {
+            var pts = xpFor(amt, 10);
             return DigifinwizDB.creditCardPurchase(amt, desc).then(function() {
-                return awardXP(10);
+                return pts > 0 ? awardXP(pts) : null;
             }).then(function() {
-                showNotification('Charged ' + fmtBA(amt) + ' to your card. +10 XP', 'success');
+                showNotification('Charged ' + fmtBA(amt) + ' to your card.' + xpSuffix(pts), 'success');
                 ccPurchaseForm.reset();
                 loadCreditCardTab();
+                if (typeof refreshMessageBadge === 'function') refreshMessageBadge();
             }).catch(function(err) {
                 showNotification(err && err.message ? err.message : 'Purchase failed.', 'error');
             });
@@ -193,9 +218,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 // balance, so the amount actually applied can be less than
                 // what was typed — show the real figure, not the request.
                 var applied = (result && result.activity && result.activity.amount != null) ? result.activity.amount : amt;
-                return awardXP(25).then(function() { return applied; });
-            }).then(function(applied) {
-                showNotification('Payment of ' + fmtBA(applied) + ' applied. +25 XP', 'success');
+                var pts = xpFor(applied, 25);
+                return (pts > 0 ? awardXP(pts) : Promise.resolve()).then(function() { return { applied: applied, pts: pts }; });
+            }).then(function(r) {
+                var applied = r.applied;
+                showNotification('Payment of ' + fmtBA(applied) + ' applied.' + xpSuffix(r.pts), 'success');
+                if (typeof refreshMessageBadge === 'function') refreshMessageBadge();
                 ccPaymentForm.reset();
                 loadCreditCardTab();
                 if (typeof loadBalanceCards === 'function') loadBalanceCards();
@@ -350,12 +378,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!amt || amt <= 0) { showNotification('Enter a valid amount.', 'error'); return; }
         withBankingActionLock(function() {
             return DigifinwizDB.makeLoanPayment(amt).then(function(result) {
-                return awardXP(25).then(function() { return result; });
-            }).then(function(result) {
                 // Server caps the payment at the remaining loan balance —
-                // show what was actually applied, not the typed amount.
+                // reward/show what was actually applied, not the typed amount.
                 var applied = (result && result.payment && result.payment.amount != null) ? result.payment.amount : amt;
-                var msg = 'Payment of ' + fmtBA(applied) + ' applied. +25 XP';
+                var pts = xpFor(applied, 25);
+                return (pts > 0 ? awardXP(pts) : Promise.resolve()).then(function() {
+                    return { result: result, applied: applied, pts: pts };
+                });
+            }).then(function(r) {
+                var result  = r.result;
+                var applied = r.applied;
+                var msg = 'Payment of ' + fmtBA(applied) + ' applied.' + xpSuffix(r.pts);
+                if (typeof refreshMessageBadge === 'function') refreshMessageBadge();
                 if (result && result.loan && result.loan.paidOff) msg = '🎉 Loan paid off! ' + msg;
                 showNotification(msg, 'success');
                 loanPaymentForm.reset();
@@ -410,15 +444,21 @@ function contributeGoal(id) {
     if (!amt || amt <= 0) { showNotification('Enter a valid amount.', 'error'); return; }
     withBankingActionLock(function() {
         return DigifinwizDB.contributeSavingsGoal(id, amt).then(function(result) {
-            if (result && result.justCompleted) {
-                return awardXP(20).then(function() { return awardXP(75); }).then(function() {
-                    showNotification('🏆 Goal reached! ' + fmtBA(amt) + ' added. +20 XP, +75 bonus XP!', 'success');
-                });
-            }
-            return awardXP(20).then(function() {
-                showNotification(fmtBA(amt) + ' added to your goal. +20 XP', 'success');
+            var pts = xpFor(amt, 20);
+            // The server reports justCompleted only the FIRST time a goal
+            // reaches its target, so the bonus can't be re-earned by
+            // withdrawing and contributing again.
+            var bonus = (result && result.justCompleted === true) ? 75 : 0;
+            var total = pts + bonus;
+            return (total > 0 ? awardXP(total) : Promise.resolve()).then(function() {
+                if (bonus) {
+                    showNotification('🏆 Goal reached! ' + fmtBA(amt) + ' added.' + xpSuffix(pts) + ' +75 bonus XP!', 'success');
+                } else {
+                    showNotification(fmtBA(amt) + ' added to your goal.' + xpSuffix(pts), 'success');
+                }
             });
         }).then(function() {
+            if (typeof refreshMessageBadge === 'function') refreshMessageBadge();
             loadGoalsTab();
             if (typeof loadBalanceCards === 'function') loadBalanceCards();
         }).catch(function(err) {
@@ -436,7 +476,9 @@ function withdrawGoal(id) {
             // Server caps the withdrawal at the goal's saved balance — show
             // what actually moved, not the typed amount.
             var applied = (result && result.withdrawn != null) ? result.withdrawn : amt;
+            // Withdrawing earns no XP (contribute/withdraw loops would farm it).
             showNotification(fmtBA(applied) + ' moved back to checking.', 'info');
+            if (typeof refreshMessageBadge === 'function') refreshMessageBadge();
             loadGoalsTab();
             if (typeof loadBalanceCards === 'function') loadBalanceCards();
         }).catch(function(err) {
@@ -730,6 +772,7 @@ function loadDashboardTab() {
         renderDashGoalsSummary(results[3]);
         renderDashBranchLocator();
     }).catch(function(err) { console.error('loadDashboardTab:', err); });
+    if (typeof renderBankingGuideStatus === 'function') renderBankingGuideStatus();
 }
 
 function renderDashAccountsSummary(balances, session) {
@@ -768,17 +811,25 @@ function renderDashActivity(events, transactions) {
     (transactions || []).forEach(function(t) { txByTimestamp[t.timestamp] = t; });
 
     list.innerHTML = events.map(function(e) {
-        var tx = (e.type === 'transfer') ? txByTimestamp[e.timestamp] : null;
+        var tx = (e.type === 'transfer' || e.type === 'internal') ? txByTimestamp[e.timestamp] : null;
+        // Own-account moves (checking <-> savings) render as a move, not a
+        // transfer — also when an older feed labels them as a transfer.
+        var isMove = e.type === 'internal' || (tx && tx.type === 'internal');
+        var icon   = isMove ? '🔄' : e.icon;
+        var label  = isMove
+            ? (tx ? internalMoveLabel(tx) : e.label)
+            : e.label;
+        var sub    = isMove ? 'Between your accounts · ' + escBA(e.date) : escBA(e.date);
         var clickAttrs = tx
             ? ' style="cursor:pointer" onclick=\'showTransactionDetailModal(' + jsAttrB(tx) + ')\''
             : '';
         return '<div class="transaction-item"' + clickAttrs + '>' +
-            '<div style="width:40px;height:40px;border-radius:50%;background:var(--color-gray-100);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">' + e.icon + '</div>' +
+            '<div style="width:40px;height:40px;border-radius:50%;background:' + (isMove ? '#e0e7ef;border:1px dashed #94a3b8' : 'var(--color-gray-100)') + ';display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">' + icon + '</div>' +
             '<div class="transaction-details" style="flex:1;min-width:0">' +
-                '<div style="font-weight:600;font-size:0.875rem">' + escBA(e.label) + '</div>' +
-                '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">' + escBA(e.date) + '</div>' +
+                '<div style="font-weight:600;font-size:0.875rem">' + escBA(label) + '</div>' +
+                '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">' + sub + '</div>' +
             '</div>' +
-            '<div class="transaction-amount">' + escBA(e.detail) + '</div>' +
+            '<div class="transaction-amount"' + (isMove ? ' style="color:#475569"' : '') + '>' + (isMove ? '⇄ ' : '') + escBA(e.detail) + '</div>' +
             '</div>';
     }).join('');
 }
@@ -786,7 +837,7 @@ function renderDashActivity(events, transactions) {
 function renderDashUpcomingSchedule(schedules) {
     var el = document.getElementById('dashUpcomingSchedule');
     if (!el) return;
-    var upcoming = (schedules || []).filter(function(s) { return s.active; }).slice(0, 4);
+    var upcoming = (schedules || []).filter(function(s) { return s.active && !isScheduleCompletedBA(s); }).slice(0, 4);
     if (upcoming.length === 0) {
         el.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem;text-align:center">No upcoming transfers.</p>';
         return;
@@ -839,18 +890,49 @@ function renderDashBranchLocator() {
 function loadScheduledTab() {
     if (typeof DigifinwizDB === 'undefined') return;
     var startEl = document.getElementById('schedStartDate');
-    if (startEl && !startEl.value) {
-        var now = new Date();
-        startEl.value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
-        startEl.min   = startEl.value;
+    if (startEl) {
+        var now   = new Date();
+        var today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+        // The server rejects start dates in the past — keep the picker's
+        // floor at today (refreshed on every visit, so it rolls over).
+        startEl.min = today;
+        if (!startEl.value || startEl.value < today) startEl.value = today;
     }
-    DigifinwizDB.getScheduledTransfers().then(function(schedules) {
+    return DigifinwizDB.getScheduledTransfers().then(function(schedules) {
         renderSchedList(schedules);
         if (typeof loadBalanceCards === 'function') loadBalanceCards();
+        // Loading the list can execute due transfers server-side, which
+        // writes completed/skipped notices to the inbox.
+        if (typeof refreshMessageBadge === 'function') refreshMessageBadge();
     }).catch(function(err) { console.error('loadScheduledTab:', err); });
 }
 
 var FREQUENCY_LABELS = { once: 'One time', weekly: 'Weekly', biweekly: 'Every 2 weeks', monthly: 'Monthly' };
+
+// A one-time schedule that already ran successfully (legacy records without
+// the `completed` flag are recognized by their last run status).
+function isScheduleCompletedBA(s) {
+    return !!s.completed || (s.frequency === 'once' && s.lastRunStatus === 'completed');
+}
+
+// Plain-language last-run status. 'skipped' is the server's status for an
+// occurrence that couldn't run because the account lacked funds.
+function describeLastRun(s) {
+    if (!s.lastRunAt && !s.lastRunStatus) return '';
+    var when = s.lastRunAt ? new Date(s.lastRunAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+    var status = s.lastRunStatus === 'completed' ? 'Sent'
+        : s.lastRunStatus === 'skipped' ? 'Skipped — insufficient funds in ' + (s.fromAccount || 'account')
+        : String(s.lastRunStatus || 'Unknown');
+    var color = s.lastRunStatus === 'completed' ? '#059669' : s.lastRunStatus === 'skipped' ? '#b45309' : '#64748b';
+    return '<div style="font-size:0.72rem;margin-top:0.15rem;color:' + color + '">Last run: ' + escBA(when) + ' — ' + escBA(status) + '</div>';
+}
+
+var SCHED_BADGE = {
+    active:    ['Active',    '#059669', '#dcfce7'],
+    paused:    ['Paused',    '#64748b', '#f1f5f9'],
+    completed: ['Completed', '#1e3a8a', '#dbeafe'],
+    notsent:   ['Not sent',  '#b45309', '#fef3c7']
+};
 
 function renderSchedList(schedules) {
     var list = document.getElementById('schedList');
@@ -861,21 +943,40 @@ function renderSchedList(schedules) {
     }
     list.innerHTML = schedules.map(function(s) {
         var freqLabel = FREQUENCY_LABELS[s.frequency] || s.frequency;
-        var statusBadge = s.active
-            ? '<span style="font-size:0.7rem;color:#059669;background:#dcfce7;padding:0.15rem 0.5rem;border-radius:99px">Active</span>'
-            : '<span style="font-size:0.7rem;color:#64748b;background:#f1f5f9;padding:0.15rem 0.5rem;border-radius:99px">Paused</span>';
-        return '<div class="transaction-item">' +
-            '<div style="width:40px;height:40px;border-radius:50%;background:var(--color-gray-100);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">🔁</div>' +
+        var completed = isScheduleCompletedBA(s);
+        // A one-time transfer that was skipped for insufficient funds is
+        // deactivated by the server; it can be retried (resumed), but it
+        // isn't a user "pause".
+        var state = completed ? 'completed'
+            : s.active ? 'active'
+            : (s.frequency === 'once' && s.lastRunStatus === 'skipped') ? 'notsent'
+            : 'paused';
+        var b = SCHED_BADGE[state];
+        var statusBadge = '<span class="db-sched-badge" data-state="' + state + '" style="font-size:0.7rem;color:' + b[1] + ';background:' + b[2] + ';padding:0.15rem 0.5rem;border-radius:99px;font-weight:600">' + b[0] + '</span>';
+
+        var when = '';
+        if (state === 'active') when = ' · next ' + escBA(new Date(s.nextRunDate).toLocaleDateString());
+        else if (state === 'completed') when = ' · for ' + escBA(new Date(s.nextRunDate).toLocaleDateString());
+
+        var buttons = '';
+        if (state === 'active') {
+            buttons += '<button type="button" class="btn" style="padding:0.35rem 0.6rem;font-size:0.75rem" onclick="toggleSchedule(' + s.id + ',false)">Pause</button>';
+        } else if (state === 'paused') {
+            buttons += '<button type="button" class="btn" style="padding:0.35rem 0.6rem;font-size:0.75rem" onclick="toggleSchedule(' + s.id + ',true)">Resume</button>';
+        } else if (state === 'notsent') {
+            buttons += '<button type="button" class="btn" style="padding:0.35rem 0.6rem;font-size:0.75rem" onclick="toggleSchedule(' + s.id + ',true)" title="Try sending it again now">Retry</button>';
+        }
+        buttons += '<button type="button" class="btn-remove" onclick="cancelSchedule(' + s.id + ',' + (state === 'completed') + ')" title="' + (state === 'completed' ? 'Remove from list' : 'Cancel') + '">×</button>';
+
+        return '<div class="transaction-item db-sched-item" data-sched-id="' + s.id + '">' +
+            '<div style="width:40px;height:40px;border-radius:50%;background:var(--color-gray-100);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">' + (state === 'completed' ? '✅' : s.frequency === 'once' ? '📅' : '🔁') + '</div>' +
             '<div class="transaction-details" style="flex:1;min-width:0">' +
                 '<div style="font-weight:600;font-size:0.875rem">' + escBA(s.recipient) + ' ' + statusBadge + '</div>' +
-                '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">' + freqLabel + ' from ' + escBA(s.fromAccount) +
-                    (s.active ? ' · next ' + escBA(new Date(s.nextRunDate).toLocaleDateString()) : '') + '</div>' +
+                '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">' + escBA(freqLabel) + ' from ' + escBA(s.fromAccount) + when + '</div>' +
+                describeLastRun(s) +
             '</div>' +
             '<div class="transaction-amount" style="margin-right:0.75rem">' + fmtBA(s.amount) + '</div>' +
-            '<div style="display:flex;gap:0.4rem;flex-shrink:0">' +
-                '<button type="button" class="btn" style="padding:0.35rem 0.6rem;font-size:0.75rem" onclick="toggleSchedule(' + s.id + ',' + !s.active + ')">' + (s.active ? 'Pause' : 'Resume') + '</button>' +
-                '<button type="button" class="btn-remove" onclick="cancelSchedule(' + s.id + ')" title="Cancel">×</button>' +
-            '</div>' +
+            '<div style="display:flex;gap:0.4rem;flex-shrink:0">' + buttons + '</div>' +
             '</div>';
     }).join('');
 }
@@ -885,14 +986,21 @@ function toggleSchedule(id, active) {
         showNotification(active ? 'Transfer resumed.' : 'Transfer paused.', 'info');
         loadScheduledTab();
     }).catch(function(err) {
-        showNotification(err && err.message ? err.message : 'Could not update transfer.', 'error');
+        if (err && err.status === 409) {
+            // e.g. a one-time transfer that already completed (maybe in
+            // another tab) — it can't be sent a second time.
+            showNotification(err.message || 'This transfer has already been completed.', 'info');
+        } else {
+            showNotification(err && err.message ? err.message : 'Could not update transfer.', 'error');
+        }
+        loadScheduledTab();
     });
 }
 
-function cancelSchedule(id) {
-    if (!confirm('Cancel this scheduled transfer?')) return;
+function cancelSchedule(id, isCompleted) {
+    if (!confirm(isCompleted ? 'Remove this completed transfer from the list? (The transfer itself stays in your history.)' : 'Cancel this scheduled transfer?')) return;
     DigifinwizDB.cancelScheduledTransfer(id).then(function() {
-        showNotification('Scheduled transfer cancelled.', 'info');
+        showNotification(isCompleted ? 'Removed from the list.' : 'Scheduled transfer cancelled.', 'info');
         loadScheduledTab();
     }).catch(function(err) {
         showNotification(err && err.message ? err.message : 'Could not cancel transfer.', 'error');
@@ -922,15 +1030,262 @@ document.addEventListener('DOMContentLoaded', function() {
         // create (server.js), so a double-submit here doesn't just create
         // a duplicate schedule — it can send the money twice.
         withBankingActionLock(function() {
-            return DigifinwizDB.createScheduledTransfer(data).then(function() {
-                return awardXP(15);
-            }).then(function() {
-                showNotification('Transfer scheduled! +15 XP', 'success');
+            // No XP for creating a schedule: create-then-cancel moved no
+            // money and was a free XP loop.
+            return DigifinwizDB.createScheduledTransfer(data).then(function(rec) {
+                rec = rec || {};
+                if (rec.lastRunStatus === 'completed') {
+                    showNotification('Transfer scheduled for today and sent: ' + fmtBA(rec.amount) + ' to ' + rec.recipient + '.', 'success');
+                } else if (rec.lastRunStatus === 'skipped') {
+                    showNotification('Scheduled, but today\'s transfer was skipped — insufficient funds in ' + rec.fromAccount + '.', 'error');
+                } else {
+                    showNotification('Transfer scheduled!', 'success');
+                }
                 schedForm.reset();
                 loadScheduledTab();
+                if (typeof refreshBankingPage === 'function') refreshBankingPage();
             }).catch(function(err) {
                 showNotification(err && err.message ? err.message : 'Could not schedule transfer.', 'error');
             });
         });
     });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MESSAGES INBOX
+   The server writes banking alerts (low balance, large transaction),
+   scheduled-transfer completed/skipped notices, goal-reached, loan-paid-off,
+   card-utilization and security notices here. db.js sends X-App, so this
+   list is scoped to the Banking module's own inbox. A message is read when
+   its readBy array contains the current user's id.
+   ══════════════════════════════════════════════════════════════════════════ */
+var MSG_TYPE_META = {
+    warning: { icon: '⚠️', label: 'Alert',   color: '#b45309', bg: '#fef3c7' },
+    success: { icon: '✅', label: 'Update',  color: '#047857', bg: '#d1fae5' },
+    info:    { icon: 'ℹ️', label: 'Notice',  color: '#1e40af', bg: '#dbeafe' },
+    error:   { icon: '⛔', label: 'Problem', color: '#b91c1c', bg: '#fee2e2' }
+};
+var MSG_CATEGORY_LABELS = { banking: 'Banking', system: 'Security', ecommerce: 'Shopping', utilities: 'Utilities', general: 'General' };
+
+var inboxMessages = [];
+var inboxFilter   = 'all';
+var inboxOpenId   = null;
+
+function currentBankUserId() {
+    var s = (typeof DigifinwizModuleAuth !== 'undefined' && DigifinwizModuleAuth.getSession) ? DigifinwizModuleAuth.getSession() : null;
+    return s ? s.userId : null;
+}
+
+function isMessageUnread(m) {
+    var uid = currentBankUserId();
+    return !(m.readBy || []).some(function(id) { return String(id) === String(uid); });
+}
+
+function sortMessagesNewestFirst(msgs) {
+    return (msgs || []).slice().sort(function(a, b) {
+        return (b.sentAt || 0) - (a.sentAt || 0) || (b.id || 0) - (a.id || 0);
+    });
+}
+
+function updateMessageBadge(msgs) {
+    var unread = (msgs || []).filter(isMessageUnread).length;
+    var badge  = document.getElementById('msgNavBadge');
+    if (badge) {
+        badge.textContent   = unread > 99 ? '99+' : String(unread);
+        badge.style.display = unread > 0 ? '' : 'none';
+        badge.setAttribute('aria-label', unread + ' unread message' + (unread === 1 ? '' : 's'));
+    }
+    var countEl = document.getElementById('inboxUnreadCount');
+    if (countEl) countEl.textContent = unread > 0 ? unread + ' unread' : 'All caught up';
+    var markAll = document.getElementById('inboxMarkAllBtn');
+    if (markAll) markAll.disabled = unread === 0;
+    return unread;
+}
+
+function refreshMessageBadge() {
+    if (typeof DigifinwizDB === 'undefined') return Promise.resolve();
+    return DigifinwizDB.getMessagesForUser().then(function(msgs) {
+        inboxMessages = sortMessagesNewestFirst(msgs);
+        updateMessageBadge(inboxMessages);
+        var panel = document.getElementById('panel-messages');
+        if (panel && panel.classList.contains('active')) renderInbox();
+    }).catch(function(err) { console.error('refreshMessageBadge:', err); });
+}
+
+function loadMessagesTab() {
+    var list = document.getElementById('inboxList');
+    if (list && !inboxMessages.length) list.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem;text-align:center">Loading messages…</p>';
+    return DigifinwizDB.getMessagesForUser().then(function(msgs) {
+        inboxMessages = sortMessagesNewestFirst(msgs);
+        updateMessageBadge(inboxMessages);
+        renderInbox();
+    }).catch(function(err) {
+        console.error('loadMessagesTab:', err);
+        if (list) list.innerHTML = '<p style="color:#dc2626;padding:1rem;text-align:center">Could not load messages.</p>';
+    });
+}
+
+function setInboxFilter(f) {
+    inboxFilter = f;
+    ['all', 'unread'].forEach(function(x) {
+        var b = document.getElementById('inboxFilter-' + x);
+        if (b) b.classList.toggle('active', x === f);
+    });
+    renderInbox();
+}
+
+function renderInbox() {
+    var list = document.getElementById('inboxList');
+    if (!list) return;
+    var shown = inboxFilter === 'unread' ? inboxMessages.filter(isMessageUnread) : inboxMessages;
+    if (shown.length === 0) {
+        list.innerHTML =
+            '<div class="db-inbox-empty">' +
+                '<div style="font-size:2rem;margin-bottom:0.4rem">📭</div>' +
+                '<strong>' + (inboxFilter === 'unread' && inboxMessages.length ? 'No unread messages' : 'Your inbox is empty') + '</strong>' +
+                '<p>Balance alerts, scheduled-transfer results, goal and loan milestones, and security notices will appear here. ' +
+                'You can tune alert thresholds on the <a href="#" onclick="switchPageTab(\'alerts\');return false;">Alerts</a> tab.</p>' +
+            '</div>';
+        return;
+    }
+    list.innerHTML = shown.map(function(m) {
+        var meta    = MSG_TYPE_META[m.type] || MSG_TYPE_META.info;
+        var unread  = isMessageUnread(m);
+        var open    = inboxOpenId === m.id;
+        var cat     = MSG_CATEGORY_LABELS[m.category] || (m.category ? String(m.category) : 'General');
+        var sent    = m.sentAt ? new Date(m.sentAt) : null;
+        var dateStr = sent ? sent.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
+        var preview = String(m.body || '');
+        if (preview.length > 110) preview = preview.slice(0, 110) + '…';
+        var idNum   = Number(m.id);
+        return '<div class="db-inbox-item' + (unread ? ' is-unread' : '') + (open ? ' is-open' : '') + '" data-msg-id="' + idNum + '" role="button" tabindex="0" aria-expanded="' + open + '" ' +
+                'onclick="openInboxMessage(' + idNum + ')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openInboxMessage(' + idNum + ')}">' +
+            '<div class="db-inbox-icon" style="background:' + meta.bg + '">' + meta.icon + '</div>' +
+            '<div style="flex:1;min-width:0">' +
+                '<div class="db-inbox-top">' +
+                    '<span class="db-inbox-subject">' + (unread ? '<span class="db-inbox-dot" aria-label="Unread"></span>' : '') + escBA(m.subject || '(no subject)') + '</span>' +
+                    '<span class="db-inbox-date">' + escBA(dateStr) + '</span>' +
+                '</div>' +
+                '<div class="db-inbox-tags">' +
+                    '<span class="db-inbox-tag" style="color:' + meta.color + ';background:' + meta.bg + '">' + meta.label + '</span>' +
+                    '<span class="db-inbox-tag">' + escBA(cat) + '</span>' +
+                    (m.senderName && m.senderName !== 'System' ? '<span class="db-inbox-tag">From ' + escBA(m.senderName) + '</span>' : '') +
+                '</div>' +
+                (open
+                    ? '<div class="db-inbox-body">' + escBA(m.body || '') + '</div>'
+                    : '<div class="db-inbox-preview">' + escBA(preview) + '</div>') +
+            '</div>' +
+            '</div>';
+    }).join('');
+}
+
+function openInboxMessage(id) {
+    inboxOpenId = (inboxOpenId === id) ? null : id;
+    var msg = inboxMessages.filter(function(m) { return Number(m.id) === id; })[0];
+    if (msg && isMessageUnread(msg)) {
+        // Optimistically mark read so the badge drops immediately.
+        var uid = currentBankUserId();
+        msg.readBy = (msg.readBy || []).concat([uid]);
+        updateMessageBadge(inboxMessages);
+        DigifinwizDB.markMessageRead(id).catch(function(err) {
+            console.error('markMessageRead:', err);
+            msg.readBy = (msg.readBy || []).filter(function(x) { return String(x) !== String(uid); });
+            updateMessageBadge(inboxMessages);
+            renderInbox();
+        });
+    }
+    renderInbox();
+}
+
+function markAllMessagesRead() {
+    var unread = inboxMessages.filter(isMessageUnread);
+    if (!unread.length) return;
+    var uid = currentBankUserId();
+    // Sequential: the server's message PATCH rewrites the whole store, so
+    // parallel requests could lose each other's writes.
+    unread.reduce(function(p, m) {
+        return p.then(function() {
+            return DigifinwizDB.markMessageRead(m.id).then(function() {
+                m.readBy = (m.readBy || []).concat([uid]);
+            });
+        });
+    }, Promise.resolve()).then(function() {
+        showNotification('All messages marked as read.', 'info');
+    }).catch(function(err) {
+        showNotification(err && err.message ? err.message : 'Could not mark every message read.', 'error');
+    }).then(function() {
+        updateMessageBadge(inboxMessages);
+        renderInbox();
+    });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HOW BANKING WORKS (completes the manual "Bank Explorer" challenge)
+   ══════════════════════════════════════════════════════════════════════════ */
+var BANK_EXPLORER_TITLE = 'Bank Explorer';
+var bankExplorerBusy = false;
+
+function findBankExplorer(challenges) {
+    return (challenges || []).filter(function(c) { return c.title === BANK_EXPLORER_TITLE && c.condition === 'manual'; })[0] || null;
+}
+
+function renderBankingGuideStatus() {
+    var btn    = document.getElementById('bankGuideReadBtn');
+    var status = document.getElementById('bankGuideStatus');
+    if (!btn || !status || typeof DigifinwizDB === 'undefined') return Promise.resolve();
+    return DigifinwizDB.getChallenges().then(function(challenges) {
+        var c = findBankExplorer(challenges);
+        if (!c) {
+            btn.style.display = 'none';
+            status.textContent = '';
+            return;
+        }
+        if (c.completed) {
+            btn.style.display = 'none';
+            status.textContent = '✅ Read — "Bank Explorer" challenge complete' + (c.completedAt ? ' (' + new Date(c.completedAt).toLocaleDateString() + ')' : '') + '.';
+        } else {
+            btn.style.display = '';
+            btn.textContent = 'Mark as read · +' + (c.points || 0) + ' XP';
+            status.textContent = 'Read the topics above, then mark this guide as read to complete the "Bank Explorer" challenge.';
+        }
+    }).catch(function(err) { console.error('renderBankingGuideStatus:', err); });
+}
+
+function markBankingGuideRead() {
+    if (bankExplorerBusy) return;
+    bankExplorerBusy = true;
+    var btn = document.getElementById('bankGuideReadBtn');
+    if (btn) btn.disabled = true;
+    DigifinwizDB.getChallenges().then(function(challenges) {
+        var c = findBankExplorer(challenges);
+        if (!c) throw new Error('The Bank Explorer challenge isn\'t available on this account.');
+        if (c.completed) return { already: true };
+        return DigifinwizDB.updateChallenge(c.id, { completed: true }).then(function() {
+            // Same reward the app gives for any manual challenge
+            // (challenges.html markChallengeComplete): points, florins, and
+            // the completed-challenge counter. Only reached when the server
+            // accepted the completion (a repeat gets 409 and awards nothing).
+            return awardXP(c.points || 0, { coins: c.florins || 0, challenges: 1 });
+        }).then(function() { return { challenge: c }; });
+    }).then(function(r) {
+        if (r.already) {
+            showNotification('You\'ve already completed Bank Explorer.', 'info');
+        } else {
+            var c = r.challenge;
+            showNotification('🏦 Challenge complete: "Bank Explorer" +' + (c.points || 0) + ' XP' + (c.florins ? ' and +' + c.florins + ' florins' : '') + '!', 'success');
+        }
+    }).catch(function(err) {
+        if (err && err.status === 409) showNotification('You\'ve already completed Bank Explorer.', 'info');
+        else showNotification(err && err.message ? err.message : 'Could not complete the challenge. Try again.', 'error');
+    }).then(function() {
+        bankExplorerBusy = false;
+        if (btn) btn.disabled = false;
+        renderBankingGuideStatus();
+        if (typeof loadBankingChallenges === 'function') loadBankingChallenges();
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    refreshMessageBadge();
+    renderBankingGuideStatus();
 });
