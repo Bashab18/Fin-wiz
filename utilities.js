@@ -316,15 +316,23 @@ function utilBillIcon(type) {
 
 // Payment records as the server writes them (attemptPayBillCycle):
 // { id, type, amount, accountNumber, fromAccount, date, timestamp,
-//   pointsEarned, lateFee, usage, unit, autoPaid }. The on-time bonus is
-// the +15 on top of the base 45 XP, so pointsEarned >= 60 means on time.
+//   pointsEarned, lateFee, usage, unit, autoPaid, cycleId, cycleMonth,
+//   billAmount, onTimeBonus, coinsEarned }. Newer records store onTimeBonus
+// directly; older ones predate it, so fall back to the XP heuristic (the
+// on-time bonus is +15 on top of the base 45 XP).
 function utilPaymentWasOnTime(p) {
+    if (typeof p.onTimeBonus === 'boolean') return p.onTimeBonus;
     if (p.lateFee > 0) return false;
     return (p.pointsEarned || 0) >= 60;
 }
 
 function utilPaymentChips(p) {
     var chips = [];
+    // Which month's bill this settled (newer records only) — worth calling
+    // out mainly when it was a past-month bill paid later.
+    if (p.cycleMonth && p.cycleMonth < utilCurrentCycleMonth()) {
+        chips.push('<span class="util-chip" style="background:#f1f5f9;color:#475569">' + escHtml(utilCycleMonthLabel(p.cycleMonth)) + ' bill</span>');
+    }
     if (p.autoPaid) chips.push('<span class="util-chip util-chip-auto">Auto-pay</span>');
     if (p.lateFee > 0) chips.push('<span class="util-chip util-chip-late">Late fee ' + fmtFlorin(p.lateFee) + '</span>');
     else if (utilPaymentWasOnTime(p)) chips.push('<span class="util-chip util-chip-ontime">On time</span>');
