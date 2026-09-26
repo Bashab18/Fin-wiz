@@ -3531,7 +3531,11 @@ async function attemptPayBillCycle(userId, cycleId, req, opts = {}) {
             id: nextId(payments), userId,
             type: cycle.name, amount: totalDue, accountNumber: cycle.accountNumber,
             fromAccount: account, date: new Date().toLocaleDateString(), timestamp: Date.now(),
-            pointsEarned, lateFee: statusInfo.lateFee, usage: cycle.usage, unit: cycle.unit, autoPaid: !!req.isAutopaySweep
+            pointsEarned, lateFee: statusInfo.lateFee, usage: cycle.usage, unit: cycle.unit, autoPaid: !!req.isAutopaySweep,
+            // Which bill this settled, and the reward breakdown, so history
+            // can say "August 2026 bill · on time · +8 coins" without guessing.
+            cycleId: cycle.id, cycleMonth: cycle.cycleMonth, billAmount: cycle.amount,
+            onTimeBonus: onTime, coinsEarned
         };
         payments.push(paymentRecord);
         await writeJSON(req.paymentStore, payments);
@@ -3671,6 +3675,7 @@ app.post('/api/me/bills/custom', async (req, res) => {
     const body = req.body || {};
     const name = String(body.name || '').trim();
     if (!name) return res.status(400).json({ error: 'Bill name required' });
+    if (name.length > 60) return res.status(400).json({ error: 'Bill name must be 60 characters or fewer' });
     const category    = CUSTOM_BILL_CATEGORIES.has(body.category) ? body.category : 'other';
     const billingType = body.billingType === 'usage' ? 'usage' : 'flat';
     const dueDateDay  = Math.min(28, Math.max(1, parseInt(body.dueDateDay, 10) || 25));
@@ -3729,7 +3734,11 @@ app.put('/api/me/bills/custom/:id', async (req, res) => {
             if (idx === -1) { const e = new Error('Custom bill not found'); e.status = 404; throw e; }
             const body  = req.body || {};
             const patch = {};
-            if (body.name !== undefined)          patch.name          = String(body.name).trim();
+            if (body.name !== undefined) {
+                patch.name = String(body.name).trim();
+                if (!patch.name) throw httpError(400, 'Bill name is required');
+                if (patch.name.length > 60) throw httpError(400, 'Bill name must be 60 characters or fewer');
+            }
             if (body.accountNumber !== undefined) patch.accountNumber = String(body.accountNumber).trim();
             if (body.active !== undefined)        patch.active        = !!body.active;
             if (all[idx].billingType === 'flat' && body.amount !== undefined) {
