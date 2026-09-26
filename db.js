@@ -46,11 +46,17 @@ const DigifinwizDB = (() => {
         const res = await fetch((window.API_BASE_URL || '') + url, opts);
         if (!res.ok) {
             let msg = res.statusText;
+            let errJson = null;
             try {
-                const errJson = await res.json();
+                errJson = await res.json();
                 msg = errJson.error || errJson.reason || msg;
             } catch (_) { /* ignore */ }
-            throw new Error(msg);
+            // status + the full error body (e.g. a bill-pay 409's currentTotal)
+            // ride along on the Error so callers can react to specifics.
+            const err = new Error(msg);
+            err.status = res.status;
+            err.data   = errJson;
+            throw err;
         }
         // 204 No Content — return null
         if (res.status === 204) return null;
@@ -282,8 +288,12 @@ const DigifinwizDB = (() => {
         return _api('GET', '/api/me/bills');
     }
 
-    function payBillCycle(cycleId) {
-        return _api('POST', '/api/me/bills/' + cycleId + '/pay');
+    // expectedTotal (optional): the amount the confirm modal showed. If the
+    // server's live total differs (e.g. a late fee kicked in since the page
+    // loaded) it refuses with 409 { error, currentTotal } and charges nothing.
+    function payBillCycle(cycleId, expectedTotal) {
+        const body = (typeof expectedTotal === 'number') ? { expectedTotal } : {};
+        return _api('POST', '/api/me/bills/' + cycleId + '/pay', body);
     }
 
     function getCustomBills() {
