@@ -517,7 +517,7 @@ const ALL_DEFAULT_CHALLENGES = [
     { title: 'Transfer Veteran',    description: 'Complete 10 bank transfers total.',                                 category: 'banking',   points: 120, florins: 0,    condition: 'transaction_count', conditionValue: 10,    active: true },
     { title: 'Money Mover',         description: 'Transfer a cumulative total of \u01921,000 or more.',               category: 'banking',   points: 90,  florins: 0,    condition: 'total_transferred', conditionValue: 1000,  active: true },
     { title: 'Generous Sender',     description: 'Transfer a single amount of \u01921,000 or more.',                  category: 'banking',   points: 150, florins: 1000, condition: 'transfer_amount',   conditionValue: 1000,  active: true },
-    { title: 'Bank Explorer',       description: 'Learn how banking works by reading the Information tab on your Profile page.',  category: 'banking',   points: 20,  florins: 0,    condition: 'manual',            conditionValue: 0,     active: true },
+    { title: 'Bank Explorer',       description: 'Learn how banking works by reading the "How Banking Works" guide on the Dashboard.',  category: 'banking',   points: 20,  florins: 0,    condition: 'manual',            conditionValue: 0,     active: true },
     { title: 'Shop Till You Drop',  description: 'Complete your first purchase in the ecommerce store.',              category: 'ecommerce', points: 50,  florins: 0,    condition: 'first_purchase',    conditionValue: 1,     active: true },
     { title: 'Savvy Shopper',       description: 'Buy 3 or more items in a single checkout.',                         category: 'ecommerce', points: 75,  florins: 0,    condition: 'purchase_items',    conditionValue: 3,     active: true },
     { title: 'Shopping Spree',      description: 'Buy 5 or more items in a single checkout.',                         category: 'ecommerce', points: 110, florins: 0,    condition: 'purchase_items',    conditionValue: 5,     active: true },
@@ -2324,6 +2324,9 @@ app.post('/api/me/credit-card/purchase', async (req, res) => {
 app.post('/api/me/credit-card/payment', async (req, res) => {
     const amt = Number(req.body && req.body.amount);
     if (!amt || amt <= 0) return res.status(400).json({ error: 'Valid amount required' });
+    // Optional — defaults to checking so existing callers (and the loan
+    // payment route, which has no account choice) are unaffected.
+    const fromAccount = (req.body && req.body.fromAccount === 'savings') ? 'savings' : 'checking';
     try {
         const result = await withUserLock(req.userId, async () => {
             const cards = await readJSON(req.creditCardStore);
@@ -2337,14 +2340,14 @@ app.post('/api/me/credit-card/payment', async (req, res) => {
             const uidx  = users.findIndex(u => u.id === req.userId);
             if (uidx === -1) { const e = new Error('User not found'); e.status = 404; throw e; }
             const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
-            const current  = balances.checking;
+            const current  = balances[fromAccount];
             const next     = parseFloat((current - payAmt).toFixed(2));
-            if (next < 0) { const e = new Error('Insufficient funds'); e.status = 409; throw e; }
-            balances.checking = next;
+            if (next < 0) { const e = new Error('Insufficient funds in ' + fromAccount); e.status = 409; throw e; }
+            balances[fromAccount] = next;
             const updatedUser = Object.assign({}, users[uidx], { balances });
             users[uidx] = updatedUser;
             await writeJSON(req.userStore, users);
-            await maybeFireBalanceAlerts(updatedUser, 'checking', current, next, -payAmt, 'banking', req.messageStore);
+            await maybeFireBalanceAlerts(updatedUser, fromAccount, current, next, -payAmt, 'banking', req.messageStore);
 
             cards[idx] = Object.assign({}, card, { balance: parseFloat((card.balance - payAmt).toFixed(2)) });
             await writeJSON(req.creditCardStore, cards);
@@ -2356,7 +2359,11 @@ app.post('/api/me/credit-card/payment', async (req, res) => {
             };
             activity.push(record);
             await writeJSON(req.creditActivityStore, activity);
-            return { card: cards[idx], checking: next, activity: record };
+            // `checking` is kept for any existing caller that only ever read
+            // that field (balances is already fully up to date either way);
+            // `account`/`balance` are the actual account paid from and its
+            // new balance, for a caller that lets the user choose savings.
+            return { card: cards[idx], checking: balances.checking, account: fromAccount, balance: next, activity: record };
         });
         res.status(201).json(result);
     } catch (err) {
@@ -2378,6 +2385,17 @@ const LOAN_TERMS = {
     36: { apr: 10.99 },
     60: { apr: 12.99 }
 };
+
+// Standard fixed-payment amortization formula — the same one real
+// installment loans (auto, personal, mortgage) use. Kept in sync with the
+// identical formula in banking-accounts.js's computeLoanPreview() so the
+// live preview always matches what applying actually charges.
+function computeAmortizedMonthlyPayment(principal, aprPercent, termMonths) {
+    const monthlyRate = (aprPercent / 100) / 12;
+    if (monthlyRate === 0) return parseFloat((principal / termMonths).toFixed(2));
+    const factor = Math.pow(1 + monthlyRate, termMonths);
+    return parseFloat((principal * monthlyRate * factor / (factor - 1)).toFixed(2));
+}
 
 app.get('/api/me/loan', async (req, res) => {
     const loans = await readJSON(req.loanStore);
@@ -2401,13 +2419,19 @@ app.post('/api/me/loan/apply', async (req, res) => {
             if (loans.some(l => l.userId === req.userId && l.active)) {
                 const e = new Error('You already have an active loan'); e.status = 409; throw e;
             }
-            // Simple (non-amortizing) interest — total interest = principal ×
-            // rate × (term in years). Easier to reason about than a real
-            // amortization schedule and still teaches the core idea that a
-            // longer term costs more in total interest.
-            const totalInterest  = parseFloat((amt * (termInfo.apr / 100) * (term / 12)).toFixed(2));
-            const totalOwed      = parseFloat((amt + totalInterest).toFixed(2));
-            const monthlyPayment = parseFloat((totalOwed / term).toFixed(2));
+            // Standard amortization formula (the one real installment loans
+            // use): a fixed monthly payment computed from principal, monthly
+            // rate and term, so the total interest matches what a bank would
+            // actually charge — simple-interest math overstated it by
+            // roughly 2x on longer terms (see the loan module's UI/UX review).
+            // The loan is still stored and paid down as one fixed lump sum
+            // rather than a real principal/interest amortization schedule, so
+            // paying more than the monthly payment reduces the balance faster
+            // but doesn't reduce total interest owed (same simplification the
+            // previous simple-interest model had).
+            const monthlyPayment = computeAmortizedMonthlyPayment(amt, termInfo.apr, term);
+            const totalOwed      = parseFloat((monthlyPayment * term).toFixed(2));
+            const totalInterest  = parseFloat((totalOwed - amt).toFixed(2));
             const loan = {
                 id: nextId(loans), userId: req.userId, principal: amt, apr: termInfo.apr,
                 termMonths: term, totalInterest, balance: totalOwed, monthlyPayment,
@@ -2512,10 +2536,20 @@ app.post('/api/me/savings-goals', async (req, res) => {
     const target = Number(req.body && req.body.target);
     if (!name) return res.status(400).json({ error: 'Goal name required' });
     if (!target || target < 10 || target > 1000000) return res.status(400).json({ error: 'Target must be between ƒ10 and ƒ1,000,000' });
+    // Optional — lets the UI show a "save ƒX/month to get there" figure.
+    // Rejected outright if it's already in the past, same as scheduled
+    // transfers reject a backdated start date.
+    let targetDate = null;
+    if (req.body && req.body.targetDate) {
+        const t = Number(new Date(req.body.targetDate));
+        if (!Number.isFinite(t)) return res.status(400).json({ error: 'Invalid target date' });
+        if (t < Date.now()) return res.status(400).json({ error: 'Target date must be in the future' });
+        targetDate = t;
+    }
     const goal = await withUserLock(req.userId, async () => {
         const goals = await readJSON(req.savingsGoalStore);
         const rec = {
-            id: nextId(goals), userId: req.userId, name, target,
+            id: nextId(goals), userId: req.userId, name, target, targetDate,
             current: 0, createdAt: Date.now(), completedAt: null
         };
         goals.push(rec);

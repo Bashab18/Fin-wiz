@@ -83,7 +83,9 @@ function xpSuffix(points) {
    CREDIT CARD
    ══════════════════════════════════════════════════════════════════════════ */
 var CC_TIERS = [
-    { key: 'starter',  name: 'Starter',  limit: 1000, apr: 24.99, color: 'linear-gradient(135deg,#94a3b8,#64748b)' },
+    // Starter used to be a grey gradient that read as a disabled card — navy
+    // fits the DigiBank theme and doesn't look like a greyed-out option.
+    { key: 'starter',  name: 'Starter',  limit: 1000, apr: 24.99, color: 'linear-gradient(135deg,#1c56a8,#123a6c)' },
     { key: 'standard', name: 'Standard', limit: 2500, apr: 21.99, color: 'linear-gradient(135deg,#6366f1,#4f46e5)' },
     { key: 'premium',  name: 'Premium',  limit: 5000, apr: 18.99, color: 'linear-gradient(135deg,#f59e0b,#b45309)' }
 ];
@@ -145,20 +147,38 @@ function renderCCVisual(card) {
     var barColor = pct < 30 ? '#10b981' : pct < 70 ? '#f59e0b' : '#ef4444';
     el.innerHTML =
         '<div class="cc-visual-card" style="background:' + tier.color + '">' +
-            '<div class="cc-visual-top"><span>DigiFinWiz</span><span>' + escBA(tier.name) + '</span></div>' +
+            '<div class="cc-visual-top"><span>DigiBank</span><span>' + escBA(tier.name) + '</span></div>' +
             '<div class="cc-visual-number">•••• •••• •••• ' + String(1000 + card.id).slice(-4) + '</div>' +
             '<div class="cc-visual-bottom">' +
                 '<div><div class="cc-visual-label">Balance Owed</div><div class="cc-visual-value">' + fmtBA(card.balance) + '</div></div>' +
                 '<div style="text-align:right"><div class="cc-visual-label">Available Credit</div><div class="cc-visual-value">' + fmtBA(card.limit - card.balance) + '</div></div>' +
             '</div>' +
         '</div>' +
-        '<div style="margin-top:0.75rem">' +
+        // APR as its own stat with a concrete cost example (matching how the
+        // Loans tab shows Total Interest/Monthly Payment) — it used to only
+        // appear as small grey text at the end of the utilization line,
+        // easy to miss despite being nearly 4x the 12-month loan rate.
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:0.85rem">' +
+            '<div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.7rem;border:1px solid var(--color-border)">' +
+                '<div style="font-size:1.15rem;font-weight:700;color:#dc2626">' + card.apr + '%</div>' +
+                '<div style="font-size:0.7rem;color:var(--color-gray-500)">APR</div>' +
+            '</div>' +
+            '<div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.7rem;border:1px solid var(--color-border)">' +
+                '<div style="font-size:0.82rem;font-weight:600;color:var(--color-gray-800)">' + fmtBA(card.balance * card.apr / 100 / 12) + '</div>' +
+                '<div style="font-size:0.7rem;color:var(--color-gray-500)">Owe ' + fmtBA(card.balance) + ' for a month, pay about this in interest</div>' +
+            '</div>' +
+        '</div>' +
+        '<div style="margin-top:0.85rem">' +
             '<div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--color-gray-500);margin-bottom:0.3rem">' +
-                '<span>Credit Utilization</span><span>' + pct + '% of ' + fmtBA(card.limit) + ' · ' + card.apr + '% APR</span>' +
+                '<span>Credit Utilization</span><span>' + pct + '% of ' + fmtBA(card.limit) + '</span>' +
             '</div>' +
-            '<div style="height:8px;background:#e2e8f0;border-radius:99px;overflow:hidden">' +
-                '<div style="height:100%;width:' + pct + '%;background:' + barColor + ';transition:width 0.5s"></div>' +
+            '<div style="position:relative;height:8px;background:#e2e8f0;border-radius:99px;overflow:visible">' +
+                '<div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:99px;transition:width 0.5s"></div>' +
+                // 30% marker — utilization has no other explanation of what
+                // "0% of ƒ1,000" is supposed to mean or aim for.
+                '<div style="position:absolute;top:-3px;left:30%;width:2px;height:14px;background:#475569" title="30% — try to stay below this"></div>' +
             '</div>' +
+            '<div style="font-size:0.7rem;color:var(--color-gray-400);margin-top:0.3rem">| marks 30% — try to stay below this to help your credit score.</div>' +
             (pct >= 70 ? '<div style="font-size:0.75rem;color:#dc2626;margin-top:0.4rem">⚠ High utilization can hurt your credit score — try to keep it under 30%.</div>' : '') +
         '</div>';
 }
@@ -211,9 +231,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (ccPaymentForm) ccPaymentForm.addEventListener('submit', function(e) {
         e.preventDefault();
         var amt = parseFloat(document.getElementById('ccPaymentAmount').value);
+        var fromAccountEl = document.getElementById('ccPaymentFromAccount');
+        var fromAccount = fromAccountEl ? fromAccountEl.value : 'checking';
         if (!amt || amt <= 0) { showNotification('Enter a valid amount.', 'error'); return; }
         withBankingActionLock(function() {
-            return DigifinwizDB.creditCardPayment(amt).then(function(result) {
+            return DigifinwizDB.creditCardPayment(amt, fromAccount).then(function(result) {
                 // The server caps the payment at the card's outstanding
                 // balance, so the amount actually applied can be less than
                 // what was typed — show the real figure, not the request.
@@ -222,7 +244,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return (pts > 0 ? awardXP(pts) : Promise.resolve()).then(function() { return { applied: applied, pts: pts }; });
             }).then(function(r) {
                 var applied = r.applied;
-                showNotification('Payment of ' + fmtBA(applied) + ' applied.' + xpSuffix(r.pts), 'success');
+                showNotification('Payment of ' + fmtBA(applied) + ' applied from ' + acctLabelB(fromAccount) + '.' + xpSuffix(r.pts), 'success');
                 if (typeof refreshMessageBadge === 'function') refreshMessageBadge();
                 ccPaymentForm.reset();
                 loadCreditCardTab();
@@ -245,12 +267,25 @@ var LOAN_TERMS_CLIENT = {
     60: { apr: 12.99 }
 };
 
+// Standard fixed-payment amortization formula — identical to
+// computeAmortizedMonthlyPayment() in server.js, so this preview always
+// matches what applying for the loan actually charges. The loan itself is
+// still stored and paid down as one fixed lump sum (not a real per-payment
+// principal/interest schedule), so paying extra reduces the balance faster
+// but doesn't reduce total interest owed.
 function computeLoanPreview(amount, term) {
     var info = LOAN_TERMS_CLIENT[term];
     if (!info || !amount || amount <= 0) return null;
-    var totalInterest  = Math.round(amount * (info.apr / 100) * (term / 12) * 100) / 100;
-    var totalOwed      = Math.round((amount + totalInterest) * 100) / 100;
-    var monthlyPayment = Math.round((totalOwed / term) * 100) / 100;
+    var monthlyRate = (info.apr / 100) / 12;
+    var monthlyPayment;
+    if (monthlyRate === 0) {
+        monthlyPayment = Math.round((amount / term) * 100) / 100;
+    } else {
+        var factor = Math.pow(1 + monthlyRate, term);
+        monthlyPayment = Math.round((amount * monthlyRate * factor / (factor - 1)) * 100) / 100;
+    }
+    var totalOwed     = Math.round((monthlyPayment * term) * 100) / 100;
+    var totalInterest = Math.round((totalOwed - amount) * 100) / 100;
     return { apr: info.apr, totalInterest: totalInterest, totalOwed: totalOwed, monthlyPayment: monthlyPayment };
 }
 
@@ -262,12 +297,58 @@ function updateLoanPreview() {
     var amt  = parseFloat(amtEl.value);
     var term = parseInt(termEl.value, 10);
     var preview = computeLoanPreview(amt, term);
-    if (!preview) { out.innerHTML = ''; return; }
+    if (!preview) { out.innerHTML = ''; document.getElementById('loanTermCompare').innerHTML = ''; return; }
     out.innerHTML =
         '<div style="display:flex;justify-content:space-between;margin-bottom:0.3rem"><span>APR</span><strong>' + preview.apr + '%</strong></div>' +
         '<div style="display:flex;justify-content:space-between;margin-bottom:0.3rem"><span>Total Interest</span><strong>' + fmtBA(preview.totalInterest) + '</strong></div>' +
         '<div style="display:flex;justify-content:space-between;margin-bottom:0.3rem"><span>Total to Repay</span><strong>' + fmtBA(preview.totalOwed) + '</strong></div>' +
         '<div style="display:flex;justify-content:space-between;border-top:1px solid var(--color-border);padding-top:0.4rem;margin-top:0.2rem"><span>Monthly Payment</span><strong style="color:var(--color-primary-600)">' + fmtBA(preview.monthlyPayment) + '</strong></div>';
+    renderLoanTermCompare(amt, term);
+}
+
+// All 5 terms for the entered amount, side by side, so comparing them
+// doesn't require switching the Term dropdown 5 times — the selected term
+// (matching the dropdown) is highlighted.
+function renderLoanTermCompare(amt, selectedTerm) {
+    var el = document.getElementById('loanTermCompare');
+    if (!el) return;
+    if (!amt || amt <= 0) { el.innerHTML = ''; return; }
+    var terms = Object.keys(LOAN_TERMS_CLIENT).map(Number).sort(function(a, b) { return a - b; });
+    var cells = terms.map(function(t) {
+        var p = computeLoanPreview(amt, t);
+        var isSelected = t === selectedTerm;
+        return '<button type="button" onclick="selectLoanTerm(' + t + ')" style="text-align:left;cursor:pointer;font:inherit;flex:1;min-width:110px;background:' +
+            (isSelected ? 'var(--color-primary-50)' : 'var(--color-surface)') + ';border:1.5px solid ' + (isSelected ? 'var(--color-primary-500)' : 'var(--color-border)') +
+            ';border-radius:8px;padding:0.6rem 0.7rem">' +
+            '<div style="font-size:0.72rem;color:var(--color-gray-500)">' + t + ' mo · ' + p.apr + '%</div>' +
+            '<div style="font-weight:700;font-size:0.9rem;color:var(--color-gray-800)">' + fmtBA(p.monthlyPayment) + '/mo</div>' +
+            '<div style="font-size:0.7rem;color:var(--color-gray-400)">' + fmtBA(p.totalInterest) + ' interest</div>' +
+            '</button>';
+    }).join('');
+    el.innerHTML = '<div style="display:flex;gap:0.5rem;flex-wrap:nowrap">' + cells + '</div>';
+}
+
+function selectLoanTerm(term) {
+    var termEl = document.getElementById('loanTerm');
+    if (termEl) { termEl.value = String(term); updateLoanPreview(); }
+}
+
+// Loan Amount already has min/max attributes for native validation on
+// submit — this just surfaces the ƒ500–ƒ20,000 limit as the user types
+// instead of only in the page's intro paragraph, and flags an out-of-range
+// value before they hit Apply.
+function checkLoanAmountRange() {
+    var amtEl = document.getElementById('loanAmount');
+    var hint  = document.getElementById('loanAmountRangeHint');
+    if (!amtEl || !hint) return;
+    var amt = parseFloat(amtEl.value);
+    if (amt && (amt < 500 || amt > 20000)) {
+        hint.textContent = '⚠ Must be between ƒ500 and ƒ20,000.';
+        hint.style.color = '#dc2626';
+    } else {
+        hint.textContent = 'Between ƒ500 and ƒ20,000.';
+        hint.style.color = 'var(--color-gray-400)';
+    }
 }
 
 function loadLoansTab() {
@@ -289,7 +370,7 @@ function loadLoansTab() {
             if (card) card.innerHTML =
                 '<div style="font-size:3rem;margin-bottom:0.5rem">🎉</div>' +
                 '<h2 style="margin-bottom:0.5rem">Loan Paid Off!</h2>' +
-                '<p style="color:var(--color-gray-500);margin-bottom:1.25rem">You borrowed ' + fmtBA(loan.principal) + ' and paid it back in full' + (loan.paidOffAt ? ' on ' + new Date(loan.paidOffAt).toLocaleDateString() : '') + '.</p>' +
+                '<p style="color:var(--color-gray-500);margin-bottom:1.25rem">You borrowed ' + fmtBA(loan.principal) + ' and paid it back in full' + (loan.paidOffAt ? ' on ' + new Date(loan.paidOffAt).toLocaleDateString('en-US') : '') + '.</p>' +
                 '<button type="button" class="btn btn-primary" onclick="resetLoanApplyForm()">Apply for a New Loan</button>';
             return;
         }
@@ -322,7 +403,7 @@ function renderLoanSummary(loan) {
         '</div>' +
         '<div style="display:flex;justify-content:space-between;font-size:0.78rem;color:var(--color-gray-500);margin-bottom:0.3rem"><span>Payoff Progress</span><span>' + pct + '%</span></div>' +
         '<div style="height:10px;background:#e2e8f0;border-radius:99px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,var(--color-primary-600),#2f855a);transition:width 0.6s"></div></div>' +
-        '<div style="font-size:0.75rem;color:var(--color-gray-400);margin-top:0.5rem">' + loan.termMonths + '-month term · opened ' + (loan.openedAt ? new Date(loan.openedAt).toLocaleDateString() : '') + '</div>';
+        '<div style="font-size:0.75rem;color:var(--color-gray-400);margin-top:0.5rem">' + loan.termMonths + '-month term · opened ' + (loan.openedAt ? new Date(loan.openedAt).toLocaleDateString('en-US') : '') + '</div>';
 }
 
 function loadLoanPayments() {
@@ -411,7 +492,20 @@ function loadGoalsTab() {
         var list = document.getElementById('goalsList');
         if (!list) return;
         if (goals.length === 0) {
-            list.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem;text-align:center">No goals yet — create one above!</p>';
+            var examples = [
+                { name: 'Emergency Fund', target: 1000 },
+                { name: 'New Laptop', target: 1200 },
+                { name: 'Weekend Trip', target: 600 }
+            ];
+            list.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem 1rem 0.5rem;text-align:center">No goals yet — try an example or create your own above.</p>' +
+                '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:center;padding:0 1rem 1rem">' +
+                examples.map(function(ex) {
+                    return '<button type="button" class="btn" style="font-size:0.78rem;padding:0.4rem 0.75rem" onclick="fillGoalExample(' +
+                        JSON.stringify(ex.name).replace(/"/g, '&quot;') + ',' + ex.target + ')">' +
+                        escBA(ex.name) + ' — ' + fmtBA(ex.target) +
+                        '</button>';
+                }).join('') +
+                '</div>';
             return;
         }
         list.innerHTML = goals.map(function(g) {
@@ -420,7 +514,8 @@ function loadGoalsTab() {
             return '<div class="goal-card' + (isDone ? ' goal-done' : '') + '">' +
                 '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.5rem">' +
                     '<div><strong>' + (isDone ? '🏆 ' : '🎯 ') + escBA(g.name) + '</strong>' +
-                    (isDone ? '<div style="font-size:0.72rem;color:#16a34a;margin-top:0.15rem">Goal reached' + (g.completedAt ? ' ' + new Date(g.completedAt).toLocaleDateString() : '') + '!</div>' : '') +
+                    (isDone ? '<div style="font-size:0.72rem;color:#16a34a;margin-top:0.15rem">Goal reached' + (g.completedAt ? ' ' + new Date(g.completedAt).toLocaleDateString('en-US') : '') + '!</div>' : '') +
+                    (!isDone && g.targetDate ? '<div style="font-size:0.72rem;color:var(--color-gray-500);margin-top:0.15rem">Target: ' + new Date(g.targetDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + '</div>' : '') +
                     '</div>' +
                     '<button type="button" class="btn-remove" onclick="deleteGoal(' + g.id + ')" title="Delete goal">×</button>' +
                 '</div>' +
@@ -436,6 +531,15 @@ function loadGoalsTab() {
                 '</div>';
         }).join('');
     }).catch(function(err) { console.error('loadGoalsTab:', err); });
+}
+
+function fillGoalExample(name, target) {
+    var nameEl = document.getElementById('goalName');
+    var targetEl = document.getElementById('goalTarget');
+    if (nameEl) nameEl.value = name;
+    if (targetEl) targetEl.value = target;
+    updateGoalMonthlyPreview();
+    if (nameEl) nameEl.focus();
 }
 
 function contributeGoal(id) {
@@ -498,12 +602,38 @@ function deleteGoal(id) {
     });
 }
 
+function updateGoalMonthlyPreview() {
+    var previewEl = document.getElementById('goalMonthlyPreview');
+    if (!previewEl) return;
+    var target     = parseFloat((document.getElementById('goalTarget') || {}).value);
+    var dateStr    = (document.getElementById('goalTargetDate') || {}).value;
+    if (!target || target < 10 || !dateStr) {
+        previewEl.style.display = 'none';
+        previewEl.textContent = '';
+        return;
+    }
+    var targetDate = new Date(dateStr + 'T00:00:00');
+    var now = new Date();
+    if (isNaN(targetDate.getTime()) || targetDate <= now) {
+        previewEl.style.display = 'none';
+        previewEl.textContent = '';
+        return;
+    }
+    var msPerMonth = 1000 * 60 * 60 * 24 * 30.4375;
+    var months = Math.max(1, (targetDate - now) / msPerMonth);
+    var monthly = target / months;
+    var monthLabel = targetDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    previewEl.textContent = fmtBA(monthly) + '/month to reach ' + fmtBA(target) + ' by ' + monthLabel + '.';
+    previewEl.style.display = 'block';
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     var goalCreateForm = document.getElementById('goalCreateForm');
     if (goalCreateForm) goalCreateForm.addEventListener('submit', function(e) {
         e.preventDefault();
-        var name   = document.getElementById('goalName').value.trim();
-        var target = parseFloat(document.getElementById('goalTarget').value);
+        var name       = document.getElementById('goalName').value.trim();
+        var target     = parseFloat(document.getElementById('goalTarget').value);
+        var targetDate = document.getElementById('goalTargetDate').value || null;
         if (!name) { showNotification('Enter a goal name.', 'error'); return; }
         if (!target || target < 10) { showNotification('Target must be at least ƒ10.', 'error'); return; }
         withBankingActionLock(function() {
@@ -512,9 +642,10 @@ document.addEventListener('DOMContentLoaded', function() {
             // for free, so it can't carry a flat reward without becoming
             // an infinite-XP exploit. Contributing (below) already costs
             // real, capped money and is where the reward belongs.
-            return DigifinwizDB.createSavingsGoal(name, target).then(function() {
+            return DigifinwizDB.createSavingsGoal(name, target, targetDate).then(function() {
                 showNotification('Goal created!', 'success');
                 goalCreateForm.reset();
+                updateGoalMonthlyPreview();
                 loadGoalsTab();
             }).catch(function(err) {
                 showNotification(err && err.message ? err.message : 'Could not create goal.', 'error');
@@ -526,6 +657,8 @@ document.addEventListener('DOMContentLoaded', function() {
 /* ══════════════════════════════════════════════════════════════════════════
    STATEMENTS
    ══════════════════════════════════════════════════════════════════════════ */
+var statementAccountListenerBound = false;
+
 function loadStatementsTab() {
     var monthInput = document.getElementById('stmtMonth');
     if (monthInput && !monthInput.value) {
@@ -535,15 +668,23 @@ function loadStatementsTab() {
         monthInput.max   = monthInput.value;
     }
     renderStatementArchiveList();
+    // Bound once — the archive counts are per-account, so switching between
+    // Checking and Savings needs to re-tally them.
+    if (!statementAccountListenerBound) {
+        var acctSel = document.getElementById('stmtAccount');
+        if (acctSel) acctSel.addEventListener('change', renderStatementArchiveList);
+        statementAccountListenerBound = true;
+    }
 }
 
-// Statement archive: DigiFinWiz reconstructs statements on demand from
+// Statement archive: DigiBank reconstructs statements on demand from
 // existing transaction records rather than storing generated PDFs, so this
 // is a list of the last 12 selectable months (not a list of what's actually
 // been generated before) — clicking one just pre-fills the month picker.
 function renderStatementArchiveList() {
     var el = document.getElementById('stmtArchiveList');
     if (!el) return;
+    var account = (document.getElementById('stmtAccount') || {}).value || 'checking';
     var months = [];
     var cursor = new Date();
     cursor.setDate(1);
@@ -552,16 +693,38 @@ function renderStatementArchiveList() {
         var m = String(cursor.getMonth() + 1).padStart(2, '0');
         months.push({
             value: y + '-' + m,
-            label: cursor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+            label: cursor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+            short: cursor.toLocaleDateString('en-US', { month: 'short' }),
+            count: 0
         });
         cursor.setMonth(cursor.getMonth() - 1);
     }
-    el.innerHTML = '<div style="font-size:0.78rem;color:var(--color-gray-500);margin:0.75rem 0 0.4rem">Or pick a recent month:</div>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:0.5rem">' +
-        months.map(function(m) {
-            return '<button type="button" class="statement-archive-item" onclick="loadArchivedStatement(\'' + m.value + '\')">📄 ' + m.label + '</button>';
-        }).join('') +
-        '</div>';
+    var render = function() {
+        el.innerHTML = '<div style="font-size:0.78rem;color:var(--color-gray-500);margin:0.75rem 0 0.4rem">Or pick a recent month:</div>' +
+            '<div style="display:flex;flex-wrap:wrap;gap:0.5rem">' +
+            months.map(function(m) {
+                var empty = m.count === 0;
+                return '<button type="button" class="statement-archive-item"' + (empty ? ' style="opacity:0.5"' : '') +
+                    ' onclick="loadArchivedStatement(\'' + m.value + '\')">📄 ' + m.short + ' · ' + m.count + '</button>';
+            }).join('') +
+            '</div>';
+    };
+    render();
+    // Counts are an approximation — transfers and own-account moves only
+    // (the statement itself also includes loan/card/goal activity, which
+    // would need several more requests to count per month here).
+    if (typeof DigifinwizDB === 'undefined' || !DigifinwizDB.getTransactions) return;
+    DigifinwizDB.getTransactions(1000).then(function(txs) {
+        (txs || []).forEach(function(t) {
+            if (!(t.fromAccount === account || (isInternalMove(t) && t.toAccount === account))) return;
+            var ts = t.timestamp; if (!ts) return;
+            var d = new Date(ts);
+            var key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+            var bucket = months.find(function(m) { return m.value === key; });
+            if (bucket) bucket.count++;
+        });
+        render();
+    }).catch(function() {});
 }
 
 function loadArchivedStatement(monthValue) {
@@ -592,17 +755,24 @@ function renderStatement(stmt) {
     if (!out) return;
     var session    = (typeof DigifinwizModuleAuth !== 'undefined' && DigifinwizModuleAuth.getSession) ? DigifinwizModuleAuth.getSession() : null;
     var monthLabel = new Date(stmt.month + '-01T00:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    // Running balance column — server sends events oldest-first (see
+    // events.sort by timestamp in /api/me/statement), so accumulating
+    // forward from openingBalance lands exactly on closingBalance at the
+    // last row, letting you trace how one became the other.
+    var running = stmt.openingBalance;
     var rows = stmt.events.map(function(e) {
+        running = Math.round((running + e.amount) * 100) / 100;
         return '<tr>' +
             '<td>' + escBA(e.date) + '</td>' +
             '<td>' + escBA(e.label) + '</td>' +
             '<td style="text-align:right;color:' + (e.amount < 0 ? '#dc2626' : '#059669') + '">' + (e.amount < 0 ? '−' : '+') + fmtBA(Math.abs(e.amount)) + '</td>' +
+            '<td style="text-align:right;color:var(--color-gray-500)">' + fmtBA(running) + '</td>' +
             '</tr>';
     }).join('');
     out.innerHTML =
         '<div class="banking-section full-width statement-paper" id="statementPaper">' +
             '<div class="statement-header">' +
-                '<div><h2 style="margin:0">DigiFinWiz</h2><p style="margin:0.2rem 0 0;color:var(--color-gray-500);font-size:0.85rem">Account Statement</p></div>' +
+                '<div><h2 style="margin:0">DigiBank</h2><p style="margin:0.2rem 0 0;color:var(--color-gray-500);font-size:0.85rem">Account Statement</p></div>' +
                 '<div style="text-align:right"><strong>' + escBA(monthLabel) + '</strong><div style="font-size:0.8rem;color:var(--color-gray-500)">' + (stmt.account === 'savings' ? 'Savings Account' : 'Checking Account') + '</div></div>' +
             '</div>' +
             (session ? '<p style="font-size:0.85rem;color:var(--color-gray-500);margin:0.5rem 0 1rem">Account holder: ' + escBA(session.fullName || session.username) + '</p>' : '') +
@@ -610,17 +780,35 @@ function renderStatement(stmt) {
                 '<div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.75rem"><div style="font-weight:700">' + fmtBA(stmt.openingBalance) + '</div><div style="font-size:0.72rem;color:var(--color-gray-500)">Opening Balance</div></div>' +
                 '<div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.75rem"><div style="font-weight:700;color:#059669">' + fmtBA(stmt.totalCredits) + '</div><div style="font-size:0.72rem;color:var(--color-gray-500)">Total Credits</div></div>' +
                 '<div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.75rem"><div style="font-weight:700;color:#dc2626">' + fmtBA(Math.abs(stmt.totalDebits)) + '</div><div style="font-size:0.72rem;color:var(--color-gray-500)">Total Debits</div></div>' +
-                '<div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.75rem"><div style="font-weight:700">' + fmtBA(stmt.closingBalance) + '</div><div style="font-size:0.72rem;color:var(--color-gray-500)">Closing Balance' + (stmt.isCurrentMonth ? ' (as of today)' : '') + '</div></div>' +
+                '<div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.75rem"><div style="font-weight:700">' + fmtBA(stmt.closingBalance) + '</div><div style="font-size:0.72rem;color:var(--color-gray-500)">Closing Balance' + (stmt.isCurrentMonth ? '<br><span style="font-size:0.68rem">(as of today)</span>' : '') + '</div></div>' +
             '</div>' +
-            (rows ? '<table class="statement-table"><thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead><tbody>' + rows + '</tbody></table>'
+            (rows ? '<table class="statement-table"><thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th><th style="text-align:right">Balance</th></tr></thead><tbody>' + rows + '</tbody></table>'
                   : '<p style="color:var(--color-gray-500);text-align:center;padding:1rem">No activity this month.</p>') +
-            '<p style="font-size:0.7rem;color:var(--color-gray-400);margin-top:1.25rem">Generated ' + escBA(new Date(stmt.generatedAt).toLocaleString()) + ' · DigiFinWiz is a financial-literacy learning tool; this statement is a simulation, not a real bank record.</p>' +
+            '<p style="font-size:0.7rem;color:var(--color-gray-400);margin-top:1.25rem">Generated ' + escBA(new Date(stmt.generatedAt).toLocaleString('en-US')) + ' · DigiBank is a financial-literacy learning tool; this statement is a simulation, not a real bank record.</p>' +
         '</div>';
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
    ALERT PREFERENCES
    ══════════════════════════════════════════════════════════════════════════ */
+// Greys out an alert's threshold field while its switch is off (it's
+// otherwise a live, editable number sitting next to an "off" toggle, which
+// looks like a value that's actually being enforced) and writes a plain
+// "On"/"Off" word next to the switch for anyone who can't rely on its color.
+function syncAlertRowEnabled(checkbox, thresholdId, onOffId) {
+    var thresh = document.getElementById(thresholdId);
+    var onOff  = document.getElementById(onOffId);
+    var on     = !!checkbox.checked;
+    if (thresh) {
+        thresh.disabled = !on;
+        thresh.style.opacity = on ? '1' : '0.5';
+    }
+    if (onOff) {
+        onOff.textContent = on ? 'On' : 'Off';
+        onOff.style.color = on ? '#16a34a' : 'var(--color-gray-400)';
+    }
+}
+
 function loadAlertsTab() {
     if (typeof DigifinwizDB === 'undefined') return;
     DigifinwizDB.getAlertPrefs().then(function(prefs) {
@@ -632,6 +820,8 @@ function loadAlertsTab() {
         if (lowThresh)    lowThresh.value      = prefs.lowBalanceThreshold;
         if (largeEnabled) largeEnabled.checked = !!prefs.largeTxEnabled;
         if (largeThresh)  largeThresh.value    = prefs.largeTxThreshold;
+        if (lowEnabled)   syncAlertRowEnabled(lowEnabled,   'alertLowBalThreshold',   'alertLowBalOnOff');
+        if (largeEnabled) syncAlertRowEnabled(largeEnabled, 'alertLargeTxThreshold', 'alertLargeTxOnOff');
     }).catch(function(err) { console.error('loadAlertsTab:', err); });
 }
 
@@ -730,7 +920,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 /* ══════════════════════════════════════════════════════════════════════════
    ACCOUNT / ROUTING NUMBERS (cosmetic realism — deterministic per user, not
-   stored server-side; DigiFinWiz is a simulation, there is no real bank)
+   stored server-side; DigiBank is a simulation, there is no real bank)
    ══════════════════════════════════════════════════════════════════════════ */
 var DIGIFINWIZ_ROUTING_NUMBER = '123456789';
 
@@ -743,9 +933,9 @@ function fakeAccountNumber(userId, type) {
 function maskAccountNumber(num) { return '••••••' + String(num).slice(-4); }
 
 var BANK_BRANCHES = [
-    { name: 'DigiFinWiz — Downtown Branch', address: '120 Market Street, Suite 100', hours: 'Mon–Fri 9am–5pm · Sat 9am–1pm', phone: '1-800-555-0199' },
-    { name: 'DigiFinWiz — Riverside Branch', address: '48 Riverside Avenue', hours: 'Mon–Fri 9am–6pm', phone: '1-800-555-0142' },
-    { name: 'DigiFinWiz — Campus ATM', address: 'Student Union Building, Ground Floor', hours: '24/7 ATM access', phone: '—' }
+    { name: 'DigiBank — Downtown Branch', address: '120 Market Street, Suite 100', hours: 'Mon–Fri 9am–5pm · Sat 9am–1pm', phone: '1-800-555-0199' },
+    { name: 'DigiBank — Riverside Branch', address: '48 Riverside Avenue', hours: 'Mon–Fri 9am–6pm', phone: '1-800-555-0142' },
+    { name: 'DigiBank — Campus ATM', address: 'Student Union Building, Ground Floor', hours: '24/7 ATM access', phone: '—' }
 ];
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -823,13 +1013,19 @@ function renderDashActivity(events, transactions) {
         var clickAttrs = tx
             ? ' style="cursor:pointer" onclick=\'showTransactionDetailModal(' + jsAttrB(tx) + ')\''
             : '';
+        // A real transfer always leaves this account, so it renders the same
+        // way it does on the Transfer tab's own list (red, with a minus sign)
+        // instead of looking like money coming in.
+        var isOutgoingTransfer = !isMove && e.type === 'transfer';
+        var amountClass = isMove ? '' : (isOutgoingTransfer ? ' sent' : '');
+        var amountPrefix = isMove ? '⇄ ' : (isOutgoingTransfer ? '-' : '');
         return '<div class="transaction-item"' + clickAttrs + '>' +
             '<div style="width:40px;height:40px;border-radius:50%;background:' + (isMove ? '#e0e7ef;border:1px dashed #94a3b8' : 'var(--color-gray-100)') + ';display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">' + icon + '</div>' +
             '<div class="transaction-details" style="flex:1;min-width:0">' +
                 '<div style="font-weight:600;font-size:0.875rem">' + escBA(label) + '</div>' +
                 '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">' + sub + '</div>' +
             '</div>' +
-            '<div class="transaction-amount"' + (isMove ? ' style="color:#475569"' : '') + '>' + (isMove ? '⇄ ' : '') + escBA(e.detail) + '</div>' +
+            '<div class="transaction-amount' + amountClass + '"' + (isMove ? ' style="color:#475569"' : '') + '>' + amountPrefix + escBA(e.detail) + '</div>' +
             '</div>';
     }).join('');
 }
@@ -847,7 +1043,7 @@ function renderDashUpcomingSchedule(schedules) {
             '<div style="width:40px;height:40px;border-radius:50%;background:var(--color-gray-100);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">🔁</div>' +
             '<div class="transaction-details" style="flex:1;min-width:0">' +
                 '<div style="font-weight:600;font-size:0.875rem">' + escBA(s.recipient) + '</div>' +
-                '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">Next ' + escBA(new Date(s.nextRunDate).toLocaleDateString()) + ' · ' + escBA(s.frequency) + '</div>' +
+                '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">Next ' + escBA(new Date(s.nextRunDate).toLocaleDateString('en-US')) + ' · ' + escBA(s.frequency) + '</div>' +
             '</div>' +
             '<div class="transaction-amount">' + fmtBA(s.amount) + '</div>' +
             '</div>';
@@ -898,6 +1094,7 @@ function loadScheduledTab() {
         startEl.min = today;
         if (!startEl.value || startEl.value < today) startEl.value = today;
     }
+    renderSchedRecentRecipients();
     return DigifinwizDB.getScheduledTransfers().then(function(schedules) {
         renderSchedList(schedules);
         if (typeof loadBalanceCards === 'function') loadBalanceCards();
@@ -905,6 +1102,94 @@ function loadScheduledTab() {
         // writes completed/skipped notices to the inbox.
         if (typeof refreshMessageBadge === 'function') refreshMessageBadge();
     }).catch(function(err) { console.error('loadScheduledTab:', err); });
+}
+
+// Reuses the Transfer tab's own "recent recipients" idea (same source data —
+// the user's real transfer history) so setting up a recurring transfer isn't
+// two blank text boxes with no memory of who was paid before.
+function selectSchedRecipient(name, account) {
+    document.getElementById('schedRecipientName').value = name;
+    document.getElementById('schedRecipientAccount').value = account;
+    showNotification(name + ' selected as recipient', 'info');
+}
+
+function renderSchedRecentRecipients() {
+    var grid = document.getElementById('schedRecentRecipientsGrid');
+    if (!grid || typeof DigifinwizDB === 'undefined') return;
+    DigifinwizDB.getTransactions(1000).then(function(allTxs) {
+        var seen = {};
+        var recent = [];
+        (allTxs || []).filter(isExternalTransfer).forEach(function(t) {
+            if (recent.length >= 4 || !t.recipient) return;
+            var key = String(t.recipient).trim().toLowerCase() + '|' + String(t.account || '').trim();
+            if (seen[key]) return;
+            seen[key] = true;
+            recent.push(t);
+        });
+        if (recent.length === 0) {
+            grid.innerHTML = '<div class="db-recip-empty">No recent recipients yet — people you send money to will show up here for one-click reuse.</div>';
+            return;
+        }
+        grid.innerHTML = recent.map(function(t) {
+            var name = String(t.recipient);
+            var acct = String(t.account || '');
+            return '<div class="recipient-card" role="button" tabindex="0" onclick="selectSchedRecipient(' +
+                JSON.stringify(name).replace(/"/g, '&quot;') + ',' + JSON.stringify(acct).replace(/"/g, '&quot;') + ')">' +
+                '<div class="recipient-avatar" style="background:' + avatarGradientFor(name) + '">' + escBA(initialsFor(name)) + '</div>' +
+                '<div class="recipient-info"><strong>' + escBA(name) + '</strong><span>****' + escBA(acct.slice(-4)) + '</span></div>' +
+                '</div>';
+        }).join('');
+    }).catch(function(err) { console.error('renderSchedRecentRecipients:', err); });
+}
+
+function setSchedPreset(val) {
+    var inp = document.getElementById('schedAmount');
+    if (inp) { inp.value = val; }
+    document.querySelectorAll('#schedPresetRow .preset-btn').forEach(function(b) {
+        b.classList.toggle('active', parseFloat(b.textContent.replace('ƒ', '')) === val);
+    });
+    updateSchedRunPreview();
+}
+
+// Client-side mirror of server.js's advanceScheduleDate (weekly +7 days,
+// biweekly +14 days, monthly +1 month) so the preview matches what will
+// actually happen.
+function advanceScheduleDateBA(current, frequency) {
+    var d = new Date(current);
+    if (frequency === 'weekly') d.setDate(d.getDate() + 7);
+    else if (frequency === 'biweekly') d.setDate(d.getDate() + 14);
+    else if (frequency === 'monthly') d.setMonth(d.getMonth() + 1);
+    return d.getTime();
+}
+
+function updateSchedRunPreview() {
+    var previewEl = document.getElementById('schedRunPreview');
+    if (!previewEl) return;
+    var amount = parseFloat((document.getElementById('schedAmount') || {}).value);
+    var frequency = (document.getElementById('schedFrequency') || {}).value;
+    var startDateStr = (document.getElementById('schedStartDate') || {}).value;
+    if (!amount || amount <= 0 || !startDateStr) {
+        previewEl.style.display = 'none';
+        previewEl.textContent = '';
+        return;
+    }
+    var start = new Date(startDateStr + 'T00:00:00').getTime();
+    if (isNaN(start)) {
+        previewEl.style.display = 'none';
+        previewEl.textContent = '';
+        return;
+    }
+    if (frequency === 'once') {
+        previewEl.textContent = fmtBA(amount) + ' on ' + new Date(start).toLocaleDateString('en-US');
+        previewEl.style.display = 'block';
+        return;
+    }
+    var dates = [start];
+    for (var i = 1; i < 3; i++) dates.push(advanceScheduleDateBA(dates[i - 1], frequency));
+    var total = amount * dates.length;
+    var dateList = dates.map(function(d) { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }).join(', ');
+    previewEl.textContent = 'Next 3: ' + dateList + ' — ' + fmtBA(total) + ' in total.';
+    previewEl.style.display = 'block';
 }
 
 var FREQUENCY_LABELS = { once: 'One time', weekly: 'Weekly', biweekly: 'Every 2 weeks', monthly: 'Monthly' };
@@ -938,7 +1223,7 @@ function renderSchedList(schedules) {
     var list = document.getElementById('schedList');
     if (!list) return;
     if (!schedules || schedules.length === 0) {
-        list.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem;text-align:center">No scheduled transfers yet.</p>';
+        list.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem;text-align:center">No scheduled transfers yet — try "ƒ50 to savings every payday" above.</p>';
         return;
     }
     list.innerHTML = schedules.map(function(s) {
@@ -955,8 +1240,8 @@ function renderSchedList(schedules) {
         var statusBadge = '<span class="db-sched-badge" data-state="' + state + '" style="font-size:0.7rem;color:' + b[1] + ';background:' + b[2] + ';padding:0.15rem 0.5rem;border-radius:99px;font-weight:600">' + b[0] + '</span>';
 
         var when = '';
-        if (state === 'active') when = ' · next ' + escBA(new Date(s.nextRunDate).toLocaleDateString());
-        else if (state === 'completed') when = ' · for ' + escBA(new Date(s.nextRunDate).toLocaleDateString());
+        if (state === 'active') when = ' · next ' + escBA(new Date(s.nextRunDate).toLocaleDateString('en-US'));
+        else if (state === 'completed') when = ' · for ' + escBA(new Date(s.nextRunDate).toLocaleDateString('en-US'));
 
         var buttons = '';
         if (state === 'active') {
@@ -1042,6 +1327,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     showNotification('Transfer scheduled!', 'success');
                 }
                 schedForm.reset();
+                updateSchedRunPreview();
+                document.querySelectorAll('#schedPresetRow .preset-btn').forEach(function(b) { b.classList.remove('active'); });
                 loadScheduledTab();
                 if (typeof refreshBankingPage === 'function') refreshBankingPage();
             }).catch(function(err) {
@@ -1094,6 +1381,13 @@ function updateMessageBadge(msgs) {
         badge.textContent   = unread > 99 ? '99+' : String(unread);
         badge.style.display = unread > 0 ? '' : 'none';
         badge.setAttribute('aria-label', unread + ' unread message' + (unread === 1 ? '' : 's'));
+    }
+    // Same count, mirrored on the header bell icon so it's visible from any
+    // tab, not just when the Messages sidebar item happens to be in view.
+    var headerBadge = document.getElementById('headerMsgBadge');
+    if (headerBadge) {
+        headerBadge.textContent   = unread > 99 ? '99+' : String(unread);
+        headerBadge.style.display = unread > 0 ? 'flex' : 'none';
     }
     var countEl = document.getElementById('inboxUnreadCount');
     if (countEl) countEl.textContent = unread > 0 ? unread + ' unread' : 'All caught up';
@@ -1242,7 +1536,7 @@ function renderBankingGuideStatus() {
         }
         if (c.completed) {
             btn.style.display = 'none';
-            status.textContent = '✅ Read — "Bank Explorer" challenge complete' + (c.completedAt ? ' (' + new Date(c.completedAt).toLocaleDateString() + ')' : '') + '.';
+            status.textContent = '✅ Read — "Bank Explorer" challenge complete' + (c.completedAt ? ' (' + new Date(c.completedAt).toLocaleDateString('en-US') + ')' : '') + '.';
         } else {
             btn.style.display = '';
             btn.textContent = 'Mark as read · +' + (c.points || 0) + ' XP';

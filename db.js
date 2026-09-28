@@ -520,8 +520,12 @@ const DigifinwizDB = (() => {
         return _api('POST', '/api/me/credit-card/purchase', { amount, description });
     }
 
-    function creditCardPayment(amount) {
-        return _api('POST', '/api/me/credit-card/payment', { amount });
+    // fromAccount ('checking'|'savings') is optional and defaults to
+    // checking on the server.
+    function creditCardPayment(amount, fromAccount) {
+        var body = { amount: amount };
+        if (fromAccount) body.fromAccount = fromAccount;
+        return _api('POST', '/api/me/credit-card/payment', body);
     }
 
     function getCreditCardActivity() {
@@ -550,8 +554,11 @@ const DigifinwizDB = (() => {
         return _api('GET', '/api/me/savings-goals');
     }
 
-    function createSavingsGoal(name, target) {
-        return _api('POST', '/api/me/savings-goals', { name, target });
+    // targetDate is optional — an ISO date string ('YYYY-MM-DD') or omitted.
+    function createSavingsGoal(name, target, targetDate) {
+        var body = { name: name, target: target };
+        if (targetDate) body.targetDate = targetDate;
+        return _api('POST', '/api/me/savings-goals', body);
     }
 
     function contributeSavingsGoal(id, amount) {

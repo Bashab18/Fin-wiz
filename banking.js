@@ -16,6 +16,15 @@ function fmtMoneyB(n) {
     return 'ƒ' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Mirrors POST /api/me/transfer's reward rule (TRANSFER_XP / TRANSFER_XP_MIN_AMOUNT
+// in server.js) so the confirm dialog can preview the real XP before the
+// server actually awards it. Preview only — the server always decides.
+var TRANSFER_XP_PREVIEW = 45;
+var TRANSFER_XP_MIN_AMOUNT_PREVIEW = 1;
+function previewTransferXp(amount) {
+    return (amount || 0) < TRANSFER_XP_MIN_AMOUNT_PREVIEW ? 0 : TRANSFER_XP_PREVIEW;
+}
+
 function acctLabelB(a) {
     return a === 'savings' ? 'Savings' : a === 'checking' ? 'Checking' : String(a || '?');
 }
@@ -69,6 +78,7 @@ function showBankConfirmModal(opts, onConfirm) {
 }
 
 function showConfirmModal(details, onConfirm) {
+    var xp = previewTransferXp(details.amount);
     showBankConfirmModal({
         title: 'Confirm Transfer',
         confirmLabel: 'Confirm Transfer',
@@ -76,8 +86,9 @@ function showConfirmModal(details, onConfirm) {
             ['To', '<strong>' + escHtml(details.recipient) + '</strong>'],
             ['Account', '<span style="font-family:monospace">' + escHtml(details.account) + '</span>'],
             ['From', '<span>' + escHtml(details.fromLabel) + '</span>'],
-            ['Amount', '<strong style="color:#6366f1;font-size:1.1rem">' + fmtMoneyB(details.amount) + '</strong>', 'sep'],
-            ['New balance', '<span style="color:' + (details.newBalance < 0 ? '#ef4444' : '#10b981') + '">' + fmtMoneyB(details.newBalance) + '</span>']
+            ['Amount', '<strong style="color:var(--color-primary-600);font-size:1.1rem">' + fmtMoneyB(details.amount) + '</strong>', 'sep'],
+            ['New balance', '<span style="color:' + (details.newBalance < 0 ? '#ef4444' : '#10b981') + '">' + fmtMoneyB(details.newBalance) + '</span>'],
+            ['XP earned', '<span style="color:' + (xp > 0 ? '#10b981' : '#94a3b8') + ';font-weight:600">+' + xp + ' XP' + (xp > 0 ? '' : ' (under ƒ1)') + '</span>']
         ]
     }, onConfirm);
 }
@@ -95,7 +106,12 @@ function showTransactionDetailModal(transaction) {
     var typeLabel = internal ? 'Account Move' : 'Transfer';
     // t.date is just a pre-formatted display string with no time-of-day —
     // t.timestamp is the real millisecond epoch, so format that instead.
-    var fullDateTime = t.timestamp ? new Date(t.timestamp).toLocaleString() : (t.date || '');
+    // Locale pinned to 'en-US' (matching every other date in this app) —
+    // toLocaleString() with no locale argument uses the browser/OS locale,
+    // which can render as "2026/9/12" instead of "9/12/2026" depending on
+    // the visitor's system settings, looking like a different date format
+    // from the rest of the page rather than a real inconsistency in the data.
+    var fullDateTime = t.timestamp ? new Date(t.timestamp).toLocaleString('en-US') : (t.date || '');
 
     var row = function(label, valueHtml, extra) {
         return '<div style="display:flex;justify-content:space-between;gap:1rem;margin-bottom:0.5rem;' + (extra || '') + '"><span style="color:#64748b">' + label + '</span>' + valueHtml + '</div>';
@@ -106,7 +122,7 @@ function showTransactionDetailModal(transaction) {
         body =
             row('From', '<span>' + escHtml(acctLabelB(t.fromAccount)) + ' Account</span>') +
             row('To', '<span>' + escHtml(acctLabelB(t.toAccount)) + ' Account</span>') +
-            row('Amount', '<strong style="color:#6366f1;font-size:1.1rem">' + fmtMoneyB(t.amount) + '</strong>', 'border-top:1px solid #e2e8f0;padding-top:0.5rem;margin-top:0.5rem') +
+            row('Amount', '<strong style="color:var(--color-primary-600);font-size:1.1rem">' + fmtMoneyB(t.amount) + '</strong>', 'border-top:1px solid #e2e8f0;padding-top:0.5rem;margin-top:0.5rem') +
             row('Date &amp; Time', '<span style="text-align:right">' + escHtml(fullDateTime) + '</span>') +
             '<div style="font-size:0.78rem;color:#64748b;margin-top:0.5rem">A move between your own accounts. Your total balance is unchanged, and it isn\'t counted as a transfer (no XP).</div>';
     } else {
@@ -114,7 +130,7 @@ function showTransactionDetailModal(transaction) {
             row('To', '<strong>' + escHtml(t.recipient) + '</strong>') +
             row('Account', '<span style="font-family:monospace">' + escHtml(t.account) + '</span>') +
             row('From', '<span>' + escHtml(acctLabelB(t.fromAccount)) + ' Account</span>') +
-            row('Amount', '<strong style="color:#6366f1;font-size:1.1rem">' + fmtMoneyB(t.amount) + '</strong>', 'border-top:1px solid #e2e8f0;padding-top:0.5rem;margin-top:0.5rem') +
+            row('Amount', '<strong style="color:var(--color-primary-600);font-size:1.1rem">' + fmtMoneyB(t.amount) + '</strong>', 'border-top:1px solid #e2e8f0;padding-top:0.5rem;margin-top:0.5rem') +
             row('Date &amp; Time', '<span style="text-align:right">' + escHtml(fullDateTime) + '</span>') +
             (t.description ? row('Description', '<span style="text-align:right;max-width:230px;word-break:break-word">' + escHtml(t.description) + '</span>') : '') +
             '<div style="display:flex;justify-content:space-between"><span style="color:#64748b">XP Earned</span><span style="color:' + ((t.pointsEarned || 0) > 0 ? '#10b981' : '#94a3b8') + ';font-weight:600">+' + (t.pointsEarned || 0) + ' XP</span></div>';
@@ -250,6 +266,15 @@ document.getElementById('transferForm').addEventListener('submit', function(e) {
                     (r.pts > 0 ? ' +' + r.pts + ' XP' : ' (no XP for transfers under ƒ1)'), 'success');
                 showTransferReceipt({ recipient: recipientName, account: recipientAcct, fromLabel: fromLabel, amount: sentAmt, pointsEarned: r.pts });
                 document.getElementById('transferForm').reset();
+                // form.reset() puts the amount field and range slider back to
+                // their HTML defaults (both ƒ50) natively, but the slider's
+                // text label and the preset-button highlight are plain DOM
+                // state it doesn't touch — resync them explicitly so the
+                // slider never shows a value the amount field doesn't have.
+                if (typeof syncAmountFromSlider === 'function') {
+                    var sliderEl = document.getElementById('amountSlider');
+                    if (sliderEl) syncAmountFromSlider(sliderEl.value);
+                }
                 var fb = document.getElementById('amountFeedback');
                 if (fb) fb.style.display = 'none';
                 refreshAfterMoneyAction();
@@ -306,7 +331,7 @@ function submitMoveMoney(e) {
             rows: [
                 ['From', '<strong>' + acctLabelB(from) + '</strong>'],
                 ['To', '<strong>' + acctLabelB(to) + '</strong>'],
-                ['Amount', '<strong style="color:#6366f1;font-size:1.1rem">' + fmtMoneyB(amount) + '</strong>', 'sep'],
+                ['Amount', '<strong style="color:var(--color-primary-600);font-size:1.1rem">' + fmtMoneyB(amount) + '</strong>', 'sep'],
                 [acctLabelB(from) + ' after', '<span style="color:' + (fromBal - amount < 0 ? '#ef4444' : '#1e293b') + '">' + fmtMoneyB(fromBal - amount) + '</span>'],
                 [acctLabelB(to) + ' after', '<span style="color:#10b981">' + fmtMoneyB(toBal + amount) + '</span>']
             ]
@@ -434,7 +459,7 @@ function showTransferReceipt(details) {
             '<div style="display:flex;justify-content:space-between;margin-bottom:0.6rem"><span style="color:#64748b">To</span><strong>' + escHtml(details.recipient) + '</strong></div>' +
             '<div style="display:flex;justify-content:space-between;margin-bottom:0.6rem"><span style="color:#64748b">Account</span><span style="font-family:monospace">' + escHtml(details.account) + '</span></div>' +
             '<div style="display:flex;justify-content:space-between;margin-bottom:0.6rem"><span style="color:#64748b">From</span><span>' + escHtml(details.fromLabel) + '</span></div>' +
-            '<div style="display:flex;justify-content:space-between;margin-bottom:0.6rem;padding-top:0.6rem;border-top:1px solid #e2e8f0"><span style="color:#64748b">Amount</span><strong style="color:#6366f1;font-size:1.1rem">' + fmtMoneyB(details.amount) + '</strong></div>' +
+            '<div style="display:flex;justify-content:space-between;margin-bottom:0.6rem;padding-top:0.6rem;border-top:1px solid #e2e8f0"><span style="color:#64748b">Amount</span><strong style="color:var(--color-primary-600);font-size:1.1rem">' + fmtMoneyB(details.amount) + '</strong></div>' +
             '<div style="display:flex;justify-content:space-between"><span style="color:#64748b">XP Earned</span><span style="color:' + (pts > 0 ? '#10b981' : '#94a3b8') + ';font-weight:600">+' + pts + ' XP' + (pts > 0 ? '' : ' (under ƒ1)') + '</span></div>' +
         '</div>' +
         '<div style="display:flex;gap:0.75rem">' +
