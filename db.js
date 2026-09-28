@@ -46,11 +46,17 @@ const DigifinwizDB = (() => {
         const res = await fetch((window.API_BASE_URL || '') + url, opts);
         if (!res.ok) {
             let msg = res.statusText;
+            let errJson = null;
             try {
-                const errJson = await res.json();
+                errJson = await res.json();
                 msg = errJson.error || errJson.reason || msg;
             } catch (_) { /* ignore */ }
-            throw new Error(msg);
+            // status + the full error body (e.g. a bill-pay 409's currentTotal)
+            // ride along on the Error so callers can react to specifics.
+            const err = new Error(msg);
+            err.status = res.status;
+            err.data   = errJson;
+            throw err;
         }
         // 204 No Content — return null
         if (res.status === 204) return null;
@@ -232,7 +238,24 @@ const DigifinwizDB = (() => {
         return _api('POST', '/api/me/balances/' + account + '/set', { amount }).then(r => r.amount);
     }
 
+    // ── Transfers (atomic, server-side) ─────────────────────────────────────────
+    // payload: { recipient, account, fromAccount: 'checking'|'savings', amount, description? }
+    // Resolves { transaction, balance } — balance is fromAccount's new balance.
+    // The server debits and records in one locked request; the caller awards
+    // transaction.pointsEarned XP (0 for transfers under ƒ1).
+    function transfer(payload) {
+        return _api('POST', '/api/me/transfer', payload);
+    }
+
+    // Moves money between the caller's own checking and savings. Resolves
+    // { transaction, balances: { checking, savings } }. Earns no XP and
+    // doesn't count as a transfer for stats/challenges.
+    function moveMoney(from, to, amount) {
+        return _api('POST', '/api/me/move-money', { from, to, amount });
+    }
+
     // ── Transactions ──────────────────────────────────────────────────────────
+    // Admin-only on the server (raw record insert, used by the data import).
     function addTransaction(tx) {
         return _api('POST', '/api/me/transactions', tx);
     }
@@ -265,8 +288,12 @@ const DigifinwizDB = (() => {
         return _api('GET', '/api/me/bills');
     }
 
-    function payBillCycle(cycleId) {
-        return _api('POST', '/api/me/bills/' + cycleId + '/pay');
+    // expectedTotal (optional): the amount the confirm modal showed. If the
+    // server's live total differs (e.g. a late fee kicked in since the page
+    // loaded) it refuses with 409 { error, currentTotal } and charges nothing.
+    function payBillCycle(cycleId, expectedTotal) {
+        const body = (typeof expectedTotal === 'number') ? { expectedTotal } : {};
+        return _api('POST', '/api/me/bills/' + cycleId + '/pay', body);
     }
 
     function getCustomBills() {
@@ -387,8 +414,10 @@ const DigifinwizDB = (() => {
         return _api('POST', '/api/admin/challenges/reseed');
     }
 
-    function checkAndCompleteChallenges(ctx) {
-        return _api('POST', '/api/me/challenges/check', ctx);
+    // The server ignores any body and computes progress from the caller's
+    // own records; ctx is accepted only for backward compatibility.
+    function checkAndCompleteChallenges(_ctx) {
+        return _api('POST', '/api/me/challenges/check', {});
     }
 
     function getLevel1Requirements() {
@@ -491,8 +520,12 @@ const DigifinwizDB = (() => {
         return _api('POST', '/api/me/credit-card/purchase', { amount, description });
     }
 
-    function creditCardPayment(amount) {
-        return _api('POST', '/api/me/credit-card/payment', { amount });
+    // fromAccount ('checking'|'savings') is optional and defaults to
+    // checking on the server.
+    function creditCardPayment(amount, fromAccount) {
+        var body = { amount: amount };
+        if (fromAccount) body.fromAccount = fromAccount;
+        return _api('POST', '/api/me/credit-card/payment', body);
     }
 
     function getCreditCardActivity() {
@@ -521,8 +554,11 @@ const DigifinwizDB = (() => {
         return _api('GET', '/api/me/savings-goals');
     }
 
-    function createSavingsGoal(name, target) {
-        return _api('POST', '/api/me/savings-goals', { name, target });
+    // targetDate is optional — an ISO date string ('YYYY-MM-DD') or omitted.
+    function createSavingsGoal(name, target, targetDate) {
+        var body = { name: name, target: target };
+        if (targetDate) body.targetDate = targetDate;
+        return _api('POST', '/api/me/savings-goals', body);
     }
 
     function contributeSavingsGoal(id, amount) {
@@ -650,6 +686,10 @@ const DigifinwizDB = (() => {
         getAllBalances,
         adjustBalance,
         setBalance,
+
+        // Transfers
+        transfer,
+        moveMoney,
 
         // Transactions
         addTransaction,

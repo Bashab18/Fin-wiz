@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <link rel="icon" href="data:,">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>InStyl - Order Details</title>
     <link rel="stylesheet" href="styles.css">
@@ -13,7 +14,7 @@
 <body class="instyl-theme">
     <header class="shop-header">
         <div class="shop-container amz-unified-bar">
-            <div class="shop-logo">InStyl.</div>
+            <a href="ecommerce.html" class="shop-logo" title="Back to the store">InStyl.</a>
             <nav class="shop-nav">
                 <a href="ecommerce.html?sale=true">On Sale</a>
                 <a href="ecommerce.html?category=women">Women</a>
@@ -24,23 +25,24 @@
                 <a href="ecommerce.html?category=accessories">Accessories</a>
             </nav>
             <div class="amz-progress-compact" title="Game progress">
-                <span class="amz-progress-level">Lvl <strong>2/50</strong></span>
-                <div class="amz-progress-mini"><div class="amz-progress-mini-fill" style="width: 40%"></div></div>
-                <span class="amz-progress-pct">40% completed</span>
-                <span class="amz-progress-stat"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg><span>1400 XP</span></span>
-                <span class="amz-progress-stat coins"><div class="coin-icon">&#402;</div><span>3400</span></span>
+                <span class="amz-progress-level">Lvl <strong id="shopProgressLevel">&ndash;/50</strong></span>
+                <div class="amz-progress-mini"><div class="amz-progress-mini-fill" id="shopProgressFill" style="width: 0%"></div></div>
+                <span class="amz-progress-pct" id="shopProgressText">&ndash;% completed</span>
+                <span class="amz-progress-stat"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg><span id="shopProgressXP">&ndash; XP</span></span>
+                <span class="amz-progress-stat coins"><div class="coin-icon">&#402;</div><span id="shopProgressCoins">&ndash;</span></span>
             </div>
             <div class="shop-header-right">
                 <div class="shop-search-box"><input type="text" placeholder="Search..."></div>
                 <div class="shop-icons">
-                    <button class="shop-icon-btn home" onclick="window.location.href='shop-account.html'">
+                    <button class="shop-icon-btn home" onclick="window.location.href='shop-account.html'" title="Account Summary" aria-label="Account Summary">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
                     </button>
-                    <button class="shop-icon-btn user"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg></button>
-                    <button class="shop-icon-btn bookmark" onclick="window.location.href='shop-saved-items.html'">
+                    <button class="shop-icon-btn user" onclick="window.location.href='shop-account.html'" title="My Account" aria-label="My Account"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg></button>
+                    <button class="shop-icon-btn bookmark" onclick="window.location.href='shop-saved-items.html'" title="Saved Items" aria-label="Saved Items">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
+                    <span class="amz-icon-badge" id="headerWishlistBadge" style="display:none">0</span>
                     </button>
-                    <button class="shop-icon-btn cart" onclick="window.location.href='shop-cart.html'"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg></button>
+                    <button class="shop-icon-btn cart" onclick="window.location.href='shop-cart.html'" title="View Cart" aria-label="View Cart"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg><span class="amz-icon-badge" id="headerCartBadge" style="display:none">0</span></button>
                 </div>
                 <a href="#" class="amz-header-logout" data-logout title="Logout">Logout</a>
             </div>
@@ -61,6 +63,7 @@
                     <a href="shop-saved-items.html" class="shop-nav-item">Saved Items</a>
                     <a href="shop-cart.html" class="shop-nav-item">Cart</a>
                     <a href="shop-alerts.html" class="shop-nav-item">Alerts</a>
+                    <a href="shop-messages.html" class="shop-nav-item">Messages <span class="shop-msg-badge" style="display:none;margin-left:6px;background:#f08804;color:#fff;border-radius:999px;font-size:0.72rem;font-weight:700;padding:1px 7px;vertical-align:1px">0</span></a>
                     <a href="ecommerce.html" class="shop-nav-item back-link">&#8592; Back to Store</a>
                 </nav>
             </aside>

@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <link rel="icon" href="data:,">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Digifinwiz Banking - Register</title>
     <link rel="stylesheet" href="styles.css">
@@ -51,8 +52,9 @@
                     </div>
 
                     <div class="form-group">
-                        <label>Password <span style="font-size:0.78rem;color:#94a3b8">(minimum 6 characters)</span></label>
-                        <input type="password" class="form-input" id="regPassword" placeholder="Create a password" required minlength="6" autocomplete="new-password">
+                        <label>Password</label>
+                        <input type="password" class="form-input" id="regPassword" placeholder="Create a password" required minlength="8" autocomplete="new-password">
+                        <div style="font-size:0.78rem;color:#94a3b8;margin-top:0.3rem">At least 8 characters, with an uppercase letter, a lowercase letter, and a number.</div>
                     </div>
 
                     <div class="form-group">
@@ -111,7 +113,14 @@
                 return;
             }
             if (!email || email.indexOf('@') === -1) { showError('Please enter a valid email address.'); return; }
-            if (password.length < 6) { showError('Password must be at least 6 characters.'); return; }
+            // Same rule Change Password enforces on this account later
+            // (banking-accounts.js) — used to be a lighter 6-character
+            // minimum here, which read as two different password policies
+            // for the same account.
+            if (password.length < 8)     { showError('Password must be at least 8 characters.'); return; }
+            if (!/[A-Z]/.test(password)) { showError('Password must contain an uppercase letter.'); return; }
+            if (!/[a-z]/.test(password)) { showError('Password must contain a lowercase letter.'); return; }
+            if (!/[0-9]/.test(password)) { showError('Password must contain a number.'); return; }
             if (password !== confirmPassword) { showError('Passwords do not match.'); return; }
 
             registerBtn.disabled    = true;

@@ -29,12 +29,24 @@ function withBankingActionLock(fn) {
 // add points, level up once XP crosses 1000, with the level-1→2 transition
 // gated behind the three core banking/ecommerce/utilities activities.
 // Centralized here since several new account-type actions each award XP.
-function awardXP(points) {
+// `increments` (optional) adds to other counters in the same write, e.g.
+// { coins: 500, challenges: 1, completedTasks: 1 }. Always refreshes the
+// header level/XP bar afterwards.
+function awardXP(points, increments) {
+    points = Number(points) || 0;
     return DigifinwizDB.getUserData().then(function(userData) {
         if (!userData) return null;
+        Object.keys(increments || {}).forEach(function(k) {
+            userData[k] = (Number(userData[k]) || 0) + (Number(increments[k]) || 0);
+        });
         userData.points            = (userData.points || 0) + points;
         userData.pointsToNextLevel = (userData.pointsToNextLevel != null ? userData.pointsToNextLevel : 1000) - points;
-        var save = function() { return DigifinwizDB.setUserData(userData).then(function() { return userData; }); };
+        var save = function() {
+            return DigifinwizDB.setUserData(userData).then(function() {
+                if (typeof refreshHeaderProgress === 'function') refreshHeaderProgress(userData);
+                return userData;
+            });
+        };
         if (userData.pointsToNextLevel <= 0) {
             if (userData.level === 1) {
                 return DigifinwizDB.getLevel1Requirements().then(function(req) {
@@ -56,11 +68,24 @@ function awardXP(points) {
     }).catch(function(err) { console.error('awardXP error:', err); return null; });
 }
 
+// Flat per-action rewards below only apply to amounts of at least ƒ1, so a
+// loop of ƒ0.01 actions can't farm XP (same threshold the server applies
+// to transfers).
+var XP_MIN_AMOUNT = 1;
+function xpFor(amount, points) {
+    return (Number(amount) || 0) >= XP_MIN_AMOUNT ? points : 0;
+}
+function xpSuffix(points) {
+    return points > 0 ? ' +' + points + ' XP' : '';
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    CREDIT CARD
    ══════════════════════════════════════════════════════════════════════════ */
 var CC_TIERS = [
-    { key: 'starter',  name: 'Starter',  limit: 1000, apr: 24.99, color: 'linear-gradient(135deg,#94a3b8,#64748b)' },
+    // Starter used to be a grey gradient that read as a disabled card — navy
+    // fits the DigiBank theme and doesn't look like a greyed-out option.
+    { key: 'starter',  name: 'Starter',  limit: 1000, apr: 24.99, color: 'linear-gradient(135deg,#1c56a8,#123a6c)' },
     { key: 'standard', name: 'Standard', limit: 2500, apr: 21.99, color: 'linear-gradient(135deg,#6366f1,#4f46e5)' },
     { key: 'premium',  name: 'Premium',  limit: 5000, apr: 18.99, color: 'linear-gradient(135deg,#f59e0b,#b45309)' }
 ];
@@ -122,20 +147,38 @@ function renderCCVisual(card) {
     var barColor = pct < 30 ? '#10b981' : pct < 70 ? '#f59e0b' : '#ef4444';
     el.innerHTML =
         '<div class="cc-visual-card" style="background:' + tier.color + '">' +
-            '<div class="cc-visual-top"><span>DigiFinWiz</span><span>' + escBA(tier.name) + '</span></div>' +
+            '<div class="cc-visual-top"><span>DigiBank</span><span>' + escBA(tier.name) + '</span></div>' +
             '<div class="cc-visual-number">•••• •••• •••• ' + String(1000 + card.id).slice(-4) + '</div>' +
             '<div class="cc-visual-bottom">' +
                 '<div><div class="cc-visual-label">Balance Owed</div><div class="cc-visual-value">' + fmtBA(card.balance) + '</div></div>' +
                 '<div style="text-align:right"><div class="cc-visual-label">Available Credit</div><div class="cc-visual-value">' + fmtBA(card.limit - card.balance) + '</div></div>' +
             '</div>' +
         '</div>' +
-        '<div style="margin-top:0.75rem">' +
+        // APR as its own stat with a concrete cost example (matching how the
+        // Loans tab shows Total Interest/Monthly Payment) — it used to only
+        // appear as small grey text at the end of the utilization line,
+        // easy to miss despite being nearly 4x the 12-month loan rate.
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:0.85rem">' +
+            '<div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.7rem;border:1px solid var(--color-border)">' +
+                '<div style="font-size:1.15rem;font-weight:700;color:#dc2626">' + card.apr + '%</div>' +
+                '<div style="font-size:0.7rem;color:var(--color-gray-500)">APR</div>' +
+            '</div>' +
+            '<div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.7rem;border:1px solid var(--color-border)">' +
+                '<div style="font-size:0.82rem;font-weight:600;color:var(--color-gray-800)">' + fmtBA(card.balance * card.apr / 100 / 12) + '</div>' +
+                '<div style="font-size:0.7rem;color:var(--color-gray-500)">Owe ' + fmtBA(card.balance) + ' for a month, pay about this in interest</div>' +
+            '</div>' +
+        '</div>' +
+        '<div style="margin-top:0.85rem">' +
             '<div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--color-gray-500);margin-bottom:0.3rem">' +
-                '<span>Credit Utilization</span><span>' + pct + '% of ' + fmtBA(card.limit) + ' · ' + card.apr + '% APR</span>' +
+                '<span>Credit Utilization</span><span>' + pct + '% of ' + fmtBA(card.limit) + '</span>' +
             '</div>' +
-            '<div style="height:8px;background:#e2e8f0;border-radius:99px;overflow:hidden">' +
-                '<div style="height:100%;width:' + pct + '%;background:' + barColor + ';transition:width 0.5s"></div>' +
+            '<div style="position:relative;height:8px;background:#e2e8f0;border-radius:99px;overflow:visible">' +
+                '<div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:99px;transition:width 0.5s"></div>' +
+                // 30% marker — utilization has no other explanation of what
+                // "0% of ƒ1,000" is supposed to mean or aim for.
+                '<div style="position:absolute;top:-3px;left:30%;width:2px;height:14px;background:#475569" title="30% — try to stay below this"></div>' +
             '</div>' +
+            '<div style="font-size:0.7rem;color:var(--color-gray-400);margin-top:0.3rem">| marks 30% — try to stay below this to help your credit score.</div>' +
             (pct >= 70 ? '<div style="font-size:0.75rem;color:#dc2626;margin-top:0.4rem">⚠ High utilization can hurt your credit score — try to keep it under 30%.</div>' : '') +
         '</div>';
 }
@@ -170,12 +213,14 @@ document.addEventListener('DOMContentLoaded', function() {
         var desc = document.getElementById('ccPurchaseDesc').value.trim();
         if (!amt || amt <= 0) { showNotification('Enter a valid amount.', 'error'); return; }
         withBankingActionLock(function() {
+            var pts = xpFor(amt, 10);
             return DigifinwizDB.creditCardPurchase(amt, desc).then(function() {
-                return awardXP(10);
+                return pts > 0 ? awardXP(pts) : null;
             }).then(function() {
-                showNotification('Charged ' + fmtBA(amt) + ' to your card. +10 XP', 'success');
+                showNotification('Charged ' + fmtBA(amt) + ' to your card.' + xpSuffix(pts), 'success');
                 ccPurchaseForm.reset();
                 loadCreditCardTab();
+                if (typeof refreshMessageBadge === 'function') refreshMessageBadge();
             }).catch(function(err) {
                 showNotification(err && err.message ? err.message : 'Purchase failed.', 'error');
             });
@@ -186,16 +231,21 @@ document.addEventListener('DOMContentLoaded', function() {
     if (ccPaymentForm) ccPaymentForm.addEventListener('submit', function(e) {
         e.preventDefault();
         var amt = parseFloat(document.getElementById('ccPaymentAmount').value);
+        var fromAccountEl = document.getElementById('ccPaymentFromAccount');
+        var fromAccount = fromAccountEl ? fromAccountEl.value : 'checking';
         if (!amt || amt <= 0) { showNotification('Enter a valid amount.', 'error'); return; }
         withBankingActionLock(function() {
-            return DigifinwizDB.creditCardPayment(amt).then(function(result) {
+            return DigifinwizDB.creditCardPayment(amt, fromAccount).then(function(result) {
                 // The server caps the payment at the card's outstanding
                 // balance, so the amount actually applied can be less than
                 // what was typed — show the real figure, not the request.
                 var applied = (result && result.activity && result.activity.amount != null) ? result.activity.amount : amt;
-                return awardXP(25).then(function() { return applied; });
-            }).then(function(applied) {
-                showNotification('Payment of ' + fmtBA(applied) + ' applied. +25 XP', 'success');
+                var pts = xpFor(applied, 25);
+                return (pts > 0 ? awardXP(pts) : Promise.resolve()).then(function() { return { applied: applied, pts: pts }; });
+            }).then(function(r) {
+                var applied = r.applied;
+                showNotification('Payment of ' + fmtBA(applied) + ' applied from ' + acctLabelB(fromAccount) + '.' + xpSuffix(r.pts), 'success');
+                if (typeof refreshMessageBadge === 'function') refreshMessageBadge();
                 ccPaymentForm.reset();
                 loadCreditCardTab();
                 if (typeof loadBalanceCards === 'function') loadBalanceCards();
@@ -217,12 +267,25 @@ var LOAN_TERMS_CLIENT = {
     60: { apr: 12.99 }
 };
 
+// Standard fixed-payment amortization formula — identical to
+// computeAmortizedMonthlyPayment() in server.js, so this preview always
+// matches what applying for the loan actually charges. The loan itself is
+// still stored and paid down as one fixed lump sum (not a real per-payment
+// principal/interest schedule), so paying extra reduces the balance faster
+// but doesn't reduce total interest owed.
 function computeLoanPreview(amount, term) {
     var info = LOAN_TERMS_CLIENT[term];
     if (!info || !amount || amount <= 0) return null;
-    var totalInterest  = Math.round(amount * (info.apr / 100) * (term / 12) * 100) / 100;
-    var totalOwed      = Math.round((amount + totalInterest) * 100) / 100;
-    var monthlyPayment = Math.round((totalOwed / term) * 100) / 100;
+    var monthlyRate = (info.apr / 100) / 12;
+    var monthlyPayment;
+    if (monthlyRate === 0) {
+        monthlyPayment = Math.round((amount / term) * 100) / 100;
+    } else {
+        var factor = Math.pow(1 + monthlyRate, term);
+        monthlyPayment = Math.round((amount * monthlyRate * factor / (factor - 1)) * 100) / 100;
+    }
+    var totalOwed     = Math.round((monthlyPayment * term) * 100) / 100;
+    var totalInterest = Math.round((totalOwed - amount) * 100) / 100;
     return { apr: info.apr, totalInterest: totalInterest, totalOwed: totalOwed, monthlyPayment: monthlyPayment };
 }
 
@@ -234,12 +297,58 @@ function updateLoanPreview() {
     var amt  = parseFloat(amtEl.value);
     var term = parseInt(termEl.value, 10);
     var preview = computeLoanPreview(amt, term);
-    if (!preview) { out.innerHTML = ''; return; }
+    if (!preview) { out.innerHTML = ''; document.getElementById('loanTermCompare').innerHTML = ''; return; }
     out.innerHTML =
         '<div style="display:flex;justify-content:space-between;margin-bottom:0.3rem"><span>APR</span><strong>' + preview.apr + '%</strong></div>' +
         '<div style="display:flex;justify-content:space-between;margin-bottom:0.3rem"><span>Total Interest</span><strong>' + fmtBA(preview.totalInterest) + '</strong></div>' +
         '<div style="display:flex;justify-content:space-between;margin-bottom:0.3rem"><span>Total to Repay</span><strong>' + fmtBA(preview.totalOwed) + '</strong></div>' +
         '<div style="display:flex;justify-content:space-between;border-top:1px solid var(--color-border);padding-top:0.4rem;margin-top:0.2rem"><span>Monthly Payment</span><strong style="color:var(--color-primary-600)">' + fmtBA(preview.monthlyPayment) + '</strong></div>';
+    renderLoanTermCompare(amt, term);
+}
+
+// All 5 terms for the entered amount, side by side, so comparing them
+// doesn't require switching the Term dropdown 5 times — the selected term
+// (matching the dropdown) is highlighted.
+function renderLoanTermCompare(amt, selectedTerm) {
+    var el = document.getElementById('loanTermCompare');
+    if (!el) return;
+    if (!amt || amt <= 0) { el.innerHTML = ''; return; }
+    var terms = Object.keys(LOAN_TERMS_CLIENT).map(Number).sort(function(a, b) { return a - b; });
+    var cells = terms.map(function(t) {
+        var p = computeLoanPreview(amt, t);
+        var isSelected = t === selectedTerm;
+        return '<button type="button" onclick="selectLoanTerm(' + t + ')" style="text-align:left;cursor:pointer;font:inherit;flex:1;min-width:110px;background:' +
+            (isSelected ? 'var(--color-primary-50)' : 'var(--color-surface)') + ';border:1.5px solid ' + (isSelected ? 'var(--color-primary-500)' : 'var(--color-border)') +
+            ';border-radius:8px;padding:0.6rem 0.7rem">' +
+            '<div style="font-size:0.72rem;color:var(--color-gray-500)">' + t + ' mo · ' + p.apr + '%</div>' +
+            '<div style="font-weight:700;font-size:0.9rem;color:var(--color-gray-800)">' + fmtBA(p.monthlyPayment) + '/mo</div>' +
+            '<div style="font-size:0.7rem;color:var(--color-gray-400)">' + fmtBA(p.totalInterest) + ' interest</div>' +
+            '</button>';
+    }).join('');
+    el.innerHTML = '<div style="display:flex;gap:0.5rem;flex-wrap:nowrap">' + cells + '</div>';
+}
+
+function selectLoanTerm(term) {
+    var termEl = document.getElementById('loanTerm');
+    if (termEl) { termEl.value = String(term); updateLoanPreview(); }
+}
+
+// Loan Amount already has min/max attributes for native validation on
+// submit — this just surfaces the ƒ500–ƒ20,000 limit as the user types
+// instead of only in the page's intro paragraph, and flags an out-of-range
+// value before they hit Apply.
+function checkLoanAmountRange() {
+    var amtEl = document.getElementById('loanAmount');
+    var hint  = document.getElementById('loanAmountRangeHint');
+    if (!amtEl || !hint) return;
+    var amt = parseFloat(amtEl.value);
+    if (amt && (amt < 500 || amt > 20000)) {
+        hint.textContent = '⚠ Must be between ƒ500 and ƒ20,000.';
+        hint.style.color = '#dc2626';
+    } else {
+        hint.textContent = 'Between ƒ500 and ƒ20,000.';
+        hint.style.color = 'var(--color-gray-400)';
+    }
 }
 
 function loadLoansTab() {
@@ -261,7 +370,7 @@ function loadLoansTab() {
             if (card) card.innerHTML =
                 '<div style="font-size:3rem;margin-bottom:0.5rem">🎉</div>' +
                 '<h2 style="margin-bottom:0.5rem">Loan Paid Off!</h2>' +
-                '<p style="color:var(--color-gray-500);margin-bottom:1.25rem">You borrowed ' + fmtBA(loan.principal) + ' and paid it back in full' + (loan.paidOffAt ? ' on ' + new Date(loan.paidOffAt).toLocaleDateString() : '') + '.</p>' +
+                '<p style="color:var(--color-gray-500);margin-bottom:1.25rem">You borrowed ' + fmtBA(loan.principal) + ' and paid it back in full' + (loan.paidOffAt ? ' on ' + new Date(loan.paidOffAt).toLocaleDateString('en-US') : '') + '.</p>' +
                 '<button type="button" class="btn btn-primary" onclick="resetLoanApplyForm()">Apply for a New Loan</button>';
             return;
         }
@@ -294,7 +403,7 @@ function renderLoanSummary(loan) {
         '</div>' +
         '<div style="display:flex;justify-content:space-between;font-size:0.78rem;color:var(--color-gray-500);margin-bottom:0.3rem"><span>Payoff Progress</span><span>' + pct + '%</span></div>' +
         '<div style="height:10px;background:#e2e8f0;border-radius:99px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,var(--color-primary-600),#2f855a);transition:width 0.6s"></div></div>' +
-        '<div style="font-size:0.75rem;color:var(--color-gray-400);margin-top:0.5rem">' + loan.termMonths + '-month term · opened ' + (loan.openedAt ? new Date(loan.openedAt).toLocaleDateString() : '') + '</div>';
+        '<div style="font-size:0.75rem;color:var(--color-gray-400);margin-top:0.5rem">' + loan.termMonths + '-month term · opened ' + (loan.openedAt ? new Date(loan.openedAt).toLocaleDateString('en-US') : '') + '</div>';
 }
 
 function loadLoanPayments() {
@@ -350,12 +459,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!amt || amt <= 0) { showNotification('Enter a valid amount.', 'error'); return; }
         withBankingActionLock(function() {
             return DigifinwizDB.makeLoanPayment(amt).then(function(result) {
-                return awardXP(25).then(function() { return result; });
-            }).then(function(result) {
                 // Server caps the payment at the remaining loan balance —
-                // show what was actually applied, not the typed amount.
+                // reward/show what was actually applied, not the typed amount.
                 var applied = (result && result.payment && result.payment.amount != null) ? result.payment.amount : amt;
-                var msg = 'Payment of ' + fmtBA(applied) + ' applied. +25 XP';
+                var pts = xpFor(applied, 25);
+                return (pts > 0 ? awardXP(pts) : Promise.resolve()).then(function() {
+                    return { result: result, applied: applied, pts: pts };
+                });
+            }).then(function(r) {
+                var result  = r.result;
+                var applied = r.applied;
+                var msg = 'Payment of ' + fmtBA(applied) + ' applied.' + xpSuffix(r.pts);
+                if (typeof refreshMessageBadge === 'function') refreshMessageBadge();
                 if (result && result.loan && result.loan.paidOff) msg = '🎉 Loan paid off! ' + msg;
                 showNotification(msg, 'success');
                 loanPaymentForm.reset();
@@ -377,7 +492,20 @@ function loadGoalsTab() {
         var list = document.getElementById('goalsList');
         if (!list) return;
         if (goals.length === 0) {
-            list.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem;text-align:center">No goals yet — create one above!</p>';
+            var examples = [
+                { name: 'Emergency Fund', target: 1000 },
+                { name: 'New Laptop', target: 1200 },
+                { name: 'Weekend Trip', target: 600 }
+            ];
+            list.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem 1rem 0.5rem;text-align:center">No goals yet — try an example or create your own above.</p>' +
+                '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:center;padding:0 1rem 1rem">' +
+                examples.map(function(ex) {
+                    return '<button type="button" class="btn" style="font-size:0.78rem;padding:0.4rem 0.75rem" onclick="fillGoalExample(' +
+                        JSON.stringify(ex.name).replace(/"/g, '&quot;') + ',' + ex.target + ')">' +
+                        escBA(ex.name) + ' — ' + fmtBA(ex.target) +
+                        '</button>';
+                }).join('') +
+                '</div>';
             return;
         }
         list.innerHTML = goals.map(function(g) {
@@ -386,7 +514,8 @@ function loadGoalsTab() {
             return '<div class="goal-card' + (isDone ? ' goal-done' : '') + '">' +
                 '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.5rem">' +
                     '<div><strong>' + (isDone ? '🏆 ' : '🎯 ') + escBA(g.name) + '</strong>' +
-                    (isDone ? '<div style="font-size:0.72rem;color:#16a34a;margin-top:0.15rem">Goal reached' + (g.completedAt ? ' ' + new Date(g.completedAt).toLocaleDateString() : '') + '!</div>' : '') +
+                    (isDone ? '<div style="font-size:0.72rem;color:#16a34a;margin-top:0.15rem">Goal reached' + (g.completedAt ? ' ' + new Date(g.completedAt).toLocaleDateString('en-US') : '') + '!</div>' : '') +
+                    (!isDone && g.targetDate ? '<div style="font-size:0.72rem;color:var(--color-gray-500);margin-top:0.15rem">Target: ' + new Date(g.targetDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + '</div>' : '') +
                     '</div>' +
                     '<button type="button" class="btn-remove" onclick="deleteGoal(' + g.id + ')" title="Delete goal">×</button>' +
                 '</div>' +
@@ -404,21 +533,36 @@ function loadGoalsTab() {
     }).catch(function(err) { console.error('loadGoalsTab:', err); });
 }
 
+function fillGoalExample(name, target) {
+    var nameEl = document.getElementById('goalName');
+    var targetEl = document.getElementById('goalTarget');
+    if (nameEl) nameEl.value = name;
+    if (targetEl) targetEl.value = target;
+    updateGoalMonthlyPreview();
+    if (nameEl) nameEl.focus();
+}
+
 function contributeGoal(id) {
     var input = document.getElementById('goalAmt-' + id);
     var amt   = input ? parseFloat(input.value) : NaN;
     if (!amt || amt <= 0) { showNotification('Enter a valid amount.', 'error'); return; }
     withBankingActionLock(function() {
         return DigifinwizDB.contributeSavingsGoal(id, amt).then(function(result) {
-            if (result && result.justCompleted) {
-                return awardXP(20).then(function() { return awardXP(75); }).then(function() {
-                    showNotification('🏆 Goal reached! ' + fmtBA(amt) + ' added. +20 XP, +75 bonus XP!', 'success');
-                });
-            }
-            return awardXP(20).then(function() {
-                showNotification(fmtBA(amt) + ' added to your goal. +20 XP', 'success');
+            var pts = xpFor(amt, 20);
+            // The server reports justCompleted only the FIRST time a goal
+            // reaches its target, so the bonus can't be re-earned by
+            // withdrawing and contributing again.
+            var bonus = (result && result.justCompleted === true) ? 75 : 0;
+            var total = pts + bonus;
+            return (total > 0 ? awardXP(total) : Promise.resolve()).then(function() {
+                if (bonus) {
+                    showNotification('🏆 Goal reached! ' + fmtBA(amt) + ' added.' + xpSuffix(pts) + ' +75 bonus XP!', 'success');
+                } else {
+                    showNotification(fmtBA(amt) + ' added to your goal.' + xpSuffix(pts), 'success');
+                }
             });
         }).then(function() {
+            if (typeof refreshMessageBadge === 'function') refreshMessageBadge();
             loadGoalsTab();
             if (typeof loadBalanceCards === 'function') loadBalanceCards();
         }).catch(function(err) {
@@ -436,7 +580,9 @@ function withdrawGoal(id) {
             // Server caps the withdrawal at the goal's saved balance — show
             // what actually moved, not the typed amount.
             var applied = (result && result.withdrawn != null) ? result.withdrawn : amt;
+            // Withdrawing earns no XP (contribute/withdraw loops would farm it).
             showNotification(fmtBA(applied) + ' moved back to checking.', 'info');
+            if (typeof refreshMessageBadge === 'function') refreshMessageBadge();
             loadGoalsTab();
             if (typeof loadBalanceCards === 'function') loadBalanceCards();
         }).catch(function(err) {
@@ -456,12 +602,38 @@ function deleteGoal(id) {
     });
 }
 
+function updateGoalMonthlyPreview() {
+    var previewEl = document.getElementById('goalMonthlyPreview');
+    if (!previewEl) return;
+    var target     = parseFloat((document.getElementById('goalTarget') || {}).value);
+    var dateStr    = (document.getElementById('goalTargetDate') || {}).value;
+    if (!target || target < 10 || !dateStr) {
+        previewEl.style.display = 'none';
+        previewEl.textContent = '';
+        return;
+    }
+    var targetDate = new Date(dateStr + 'T00:00:00');
+    var now = new Date();
+    if (isNaN(targetDate.getTime()) || targetDate <= now) {
+        previewEl.style.display = 'none';
+        previewEl.textContent = '';
+        return;
+    }
+    var msPerMonth = 1000 * 60 * 60 * 24 * 30.4375;
+    var months = Math.max(1, (targetDate - now) / msPerMonth);
+    var monthly = target / months;
+    var monthLabel = targetDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    previewEl.textContent = fmtBA(monthly) + '/month to reach ' + fmtBA(target) + ' by ' + monthLabel + '.';
+    previewEl.style.display = 'block';
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     var goalCreateForm = document.getElementById('goalCreateForm');
     if (goalCreateForm) goalCreateForm.addEventListener('submit', function(e) {
         e.preventDefault();
-        var name   = document.getElementById('goalName').value.trim();
-        var target = parseFloat(document.getElementById('goalTarget').value);
+        var name       = document.getElementById('goalName').value.trim();
+        var target     = parseFloat(document.getElementById('goalTarget').value);
+        var targetDate = document.getElementById('goalTargetDate').value || null;
         if (!name) { showNotification('Enter a goal name.', 'error'); return; }
         if (!target || target < 10) { showNotification('Target must be at least ƒ10.', 'error'); return; }
         withBankingActionLock(function() {
@@ -470,9 +642,10 @@ document.addEventListener('DOMContentLoaded', function() {
             // for free, so it can't carry a flat reward without becoming
             // an infinite-XP exploit. Contributing (below) already costs
             // real, capped money and is where the reward belongs.
-            return DigifinwizDB.createSavingsGoal(name, target).then(function() {
+            return DigifinwizDB.createSavingsGoal(name, target, targetDate).then(function() {
                 showNotification('Goal created!', 'success');
                 goalCreateForm.reset();
+                updateGoalMonthlyPreview();
                 loadGoalsTab();
             }).catch(function(err) {
                 showNotification(err && err.message ? err.message : 'Could not create goal.', 'error');
@@ -484,6 +657,8 @@ document.addEventListener('DOMContentLoaded', function() {
 /* ══════════════════════════════════════════════════════════════════════════
    STATEMENTS
    ══════════════════════════════════════════════════════════════════════════ */
+var statementAccountListenerBound = false;
+
 function loadStatementsTab() {
     var monthInput = document.getElementById('stmtMonth');
     if (monthInput && !monthInput.value) {
@@ -493,15 +668,23 @@ function loadStatementsTab() {
         monthInput.max   = monthInput.value;
     }
     renderStatementArchiveList();
+    // Bound once — the archive counts are per-account, so switching between
+    // Checking and Savings needs to re-tally them.
+    if (!statementAccountListenerBound) {
+        var acctSel = document.getElementById('stmtAccount');
+        if (acctSel) acctSel.addEventListener('change', renderStatementArchiveList);
+        statementAccountListenerBound = true;
+    }
 }
 
-// Statement archive: DigiFinWiz reconstructs statements on demand from
+// Statement archive: DigiBank reconstructs statements on demand from
 // existing transaction records rather than storing generated PDFs, so this
 // is a list of the last 12 selectable months (not a list of what's actually
 // been generated before) — clicking one just pre-fills the month picker.
 function renderStatementArchiveList() {
     var el = document.getElementById('stmtArchiveList');
     if (!el) return;
+    var account = (document.getElementById('stmtAccount') || {}).value || 'checking';
     var months = [];
     var cursor = new Date();
     cursor.setDate(1);
@@ -510,16 +693,38 @@ function renderStatementArchiveList() {
         var m = String(cursor.getMonth() + 1).padStart(2, '0');
         months.push({
             value: y + '-' + m,
-            label: cursor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+            label: cursor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+            short: cursor.toLocaleDateString('en-US', { month: 'short' }),
+            count: 0
         });
         cursor.setMonth(cursor.getMonth() - 1);
     }
-    el.innerHTML = '<div style="font-size:0.78rem;color:var(--color-gray-500);margin:0.75rem 0 0.4rem">Or pick a recent month:</div>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:0.5rem">' +
-        months.map(function(m) {
-            return '<button type="button" class="statement-archive-item" onclick="loadArchivedStatement(\'' + m.value + '\')">📄 ' + m.label + '</button>';
-        }).join('') +
-        '</div>';
+    var render = function() {
+        el.innerHTML = '<div style="font-size:0.78rem;color:var(--color-gray-500);margin:0.75rem 0 0.4rem">Or pick a recent month:</div>' +
+            '<div style="display:flex;flex-wrap:wrap;gap:0.5rem">' +
+            months.map(function(m) {
+                var empty = m.count === 0;
+                return '<button type="button" class="statement-archive-item"' + (empty ? ' style="opacity:0.5"' : '') +
+                    ' onclick="loadArchivedStatement(\'' + m.value + '\')">📄 ' + m.short + ' · ' + m.count + '</button>';
+            }).join('') +
+            '</div>';
+    };
+    render();
+    // Counts are an approximation — transfers and own-account moves only
+    // (the statement itself also includes loan/card/goal activity, which
+    // would need several more requests to count per month here).
+    if (typeof DigifinwizDB === 'undefined' || !DigifinwizDB.getTransactions) return;
+    DigifinwizDB.getTransactions(1000).then(function(txs) {
+        (txs || []).forEach(function(t) {
+            if (!(t.fromAccount === account || (isInternalMove(t) && t.toAccount === account))) return;
+            var ts = t.timestamp; if (!ts) return;
+            var d = new Date(ts);
+            var key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+            var bucket = months.find(function(m) { return m.value === key; });
+            if (bucket) bucket.count++;
+        });
+        render();
+    }).catch(function() {});
 }
 
 function loadArchivedStatement(monthValue) {
@@ -550,17 +755,24 @@ function renderStatement(stmt) {
     if (!out) return;
     var session    = (typeof DigifinwizModuleAuth !== 'undefined' && DigifinwizModuleAuth.getSession) ? DigifinwizModuleAuth.getSession() : null;
     var monthLabel = new Date(stmt.month + '-01T00:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    // Running balance column — server sends events oldest-first (see
+    // events.sort by timestamp in /api/me/statement), so accumulating
+    // forward from openingBalance lands exactly on closingBalance at the
+    // last row, letting you trace how one became the other.
+    var running = stmt.openingBalance;
     var rows = stmt.events.map(function(e) {
+        running = Math.round((running + e.amount) * 100) / 100;
         return '<tr>' +
             '<td>' + escBA(e.date) + '</td>' +
             '<td>' + escBA(e.label) + '</td>' +
             '<td style="text-align:right;color:' + (e.amount < 0 ? '#dc2626' : '#059669') + '">' + (e.amount < 0 ? '−' : '+') + fmtBA(Math.abs(e.amount)) + '</td>' +
+            '<td style="text-align:right;color:var(--color-gray-500)">' + fmtBA(running) + '</td>' +
             '</tr>';
     }).join('');
     out.innerHTML =
         '<div class="banking-section full-width statement-paper" id="statementPaper">' +
             '<div class="statement-header">' +
-                '<div><h2 style="margin:0">DigiFinWiz</h2><p style="margin:0.2rem 0 0;color:var(--color-gray-500);font-size:0.85rem">Account Statement</p></div>' +
+                '<div><h2 style="margin:0">DigiBank</h2><p style="margin:0.2rem 0 0;color:var(--color-gray-500);font-size:0.85rem">Account Statement</p></div>' +
                 '<div style="text-align:right"><strong>' + escBA(monthLabel) + '</strong><div style="font-size:0.8rem;color:var(--color-gray-500)">' + (stmt.account === 'savings' ? 'Savings Account' : 'Checking Account') + '</div></div>' +
             '</div>' +
             (session ? '<p style="font-size:0.85rem;color:var(--color-gray-500);margin:0.5rem 0 1rem">Account holder: ' + escBA(session.fullName || session.username) + '</p>' : '') +
@@ -568,17 +780,35 @@ function renderStatement(stmt) {
                 '<div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.75rem"><div style="font-weight:700">' + fmtBA(stmt.openingBalance) + '</div><div style="font-size:0.72rem;color:var(--color-gray-500)">Opening Balance</div></div>' +
                 '<div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.75rem"><div style="font-weight:700;color:#059669">' + fmtBA(stmt.totalCredits) + '</div><div style="font-size:0.72rem;color:var(--color-gray-500)">Total Credits</div></div>' +
                 '<div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.75rem"><div style="font-weight:700;color:#dc2626">' + fmtBA(Math.abs(stmt.totalDebits)) + '</div><div style="font-size:0.72rem;color:var(--color-gray-500)">Total Debits</div></div>' +
-                '<div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.75rem"><div style="font-weight:700">' + fmtBA(stmt.closingBalance) + '</div><div style="font-size:0.72rem;color:var(--color-gray-500)">Closing Balance' + (stmt.isCurrentMonth ? ' (as of today)' : '') + '</div></div>' +
+                '<div style="text-align:center;background:var(--color-gray-50);border-radius:10px;padding:0.75rem"><div style="font-weight:700">' + fmtBA(stmt.closingBalance) + '</div><div style="font-size:0.72rem;color:var(--color-gray-500)">Closing Balance' + (stmt.isCurrentMonth ? '<br><span style="font-size:0.68rem">(as of today)</span>' : '') + '</div></div>' +
             '</div>' +
-            (rows ? '<table class="statement-table"><thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead><tbody>' + rows + '</tbody></table>'
+            (rows ? '<table class="statement-table"><thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th><th style="text-align:right">Balance</th></tr></thead><tbody>' + rows + '</tbody></table>'
                   : '<p style="color:var(--color-gray-500);text-align:center;padding:1rem">No activity this month.</p>') +
-            '<p style="font-size:0.7rem;color:var(--color-gray-400);margin-top:1.25rem">Generated ' + escBA(new Date(stmt.generatedAt).toLocaleString()) + ' · DigiFinWiz is a financial-literacy learning tool; this statement is a simulation, not a real bank record.</p>' +
+            '<p style="font-size:0.7rem;color:var(--color-gray-400);margin-top:1.25rem">Generated ' + escBA(new Date(stmt.generatedAt).toLocaleString('en-US')) + ' · DigiBank is a financial-literacy learning tool; this statement is a simulation, not a real bank record.</p>' +
         '</div>';
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
    ALERT PREFERENCES
    ══════════════════════════════════════════════════════════════════════════ */
+// Greys out an alert's threshold field while its switch is off (it's
+// otherwise a live, editable number sitting next to an "off" toggle, which
+// looks like a value that's actually being enforced) and writes a plain
+// "On"/"Off" word next to the switch for anyone who can't rely on its color.
+function syncAlertRowEnabled(checkbox, thresholdId, onOffId) {
+    var thresh = document.getElementById(thresholdId);
+    var onOff  = document.getElementById(onOffId);
+    var on     = !!checkbox.checked;
+    if (thresh) {
+        thresh.disabled = !on;
+        thresh.style.opacity = on ? '1' : '0.5';
+    }
+    if (onOff) {
+        onOff.textContent = on ? 'On' : 'Off';
+        onOff.style.color = on ? '#16a34a' : 'var(--color-gray-400)';
+    }
+}
+
 function loadAlertsTab() {
     if (typeof DigifinwizDB === 'undefined') return;
     DigifinwizDB.getAlertPrefs().then(function(prefs) {
@@ -590,6 +820,8 @@ function loadAlertsTab() {
         if (lowThresh)    lowThresh.value      = prefs.lowBalanceThreshold;
         if (largeEnabled) largeEnabled.checked = !!prefs.largeTxEnabled;
         if (largeThresh)  largeThresh.value    = prefs.largeTxThreshold;
+        if (lowEnabled)   syncAlertRowEnabled(lowEnabled,   'alertLowBalThreshold',   'alertLowBalOnOff');
+        if (largeEnabled) syncAlertRowEnabled(largeEnabled, 'alertLargeTxThreshold', 'alertLargeTxOnOff');
     }).catch(function(err) { console.error('loadAlertsTab:', err); });
 }
 
@@ -688,7 +920,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 /* ══════════════════════════════════════════════════════════════════════════
    ACCOUNT / ROUTING NUMBERS (cosmetic realism — deterministic per user, not
-   stored server-side; DigiFinWiz is a simulation, there is no real bank)
+   stored server-side; DigiBank is a simulation, there is no real bank)
    ══════════════════════════════════════════════════════════════════════════ */
 var DIGIFINWIZ_ROUTING_NUMBER = '123456789';
 
@@ -701,9 +933,9 @@ function fakeAccountNumber(userId, type) {
 function maskAccountNumber(num) { return '••••••' + String(num).slice(-4); }
 
 var BANK_BRANCHES = [
-    { name: 'DigiFinWiz — Downtown Branch', address: '120 Market Street, Suite 100', hours: 'Mon–Fri 9am–5pm · Sat 9am–1pm', phone: '1-800-555-0199' },
-    { name: 'DigiFinWiz — Riverside Branch', address: '48 Riverside Avenue', hours: 'Mon–Fri 9am–6pm', phone: '1-800-555-0142' },
-    { name: 'DigiFinWiz — Campus ATM', address: 'Student Union Building, Ground Floor', hours: '24/7 ATM access', phone: '—' }
+    { name: 'DigiBank — Downtown Branch', address: '120 Market Street, Suite 100', hours: 'Mon–Fri 9am–5pm · Sat 9am–1pm', phone: '1-800-555-0199' },
+    { name: 'DigiBank — Riverside Branch', address: '48 Riverside Avenue', hours: 'Mon–Fri 9am–6pm', phone: '1-800-555-0142' },
+    { name: 'DigiBank — Campus ATM', address: 'Student Union Building, Ground Floor', hours: '24/7 ATM access', phone: '—' }
 ];
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -730,6 +962,7 @@ function loadDashboardTab() {
         renderDashGoalsSummary(results[3]);
         renderDashBranchLocator();
     }).catch(function(err) { console.error('loadDashboardTab:', err); });
+    if (typeof renderBankingGuideStatus === 'function') renderBankingGuideStatus();
 }
 
 function renderDashAccountsSummary(balances, session) {
@@ -768,17 +1001,31 @@ function renderDashActivity(events, transactions) {
     (transactions || []).forEach(function(t) { txByTimestamp[t.timestamp] = t; });
 
     list.innerHTML = events.map(function(e) {
-        var tx = (e.type === 'transfer') ? txByTimestamp[e.timestamp] : null;
+        var tx = (e.type === 'transfer' || e.type === 'internal') ? txByTimestamp[e.timestamp] : null;
+        // Own-account moves (checking <-> savings) render as a move, not a
+        // transfer — also when an older feed labels them as a transfer.
+        var isMove = e.type === 'internal' || (tx && tx.type === 'internal');
+        var icon   = isMove ? '🔄' : e.icon;
+        var label  = isMove
+            ? (tx ? internalMoveLabel(tx) : e.label)
+            : e.label;
+        var sub    = isMove ? 'Between your accounts · ' + escBA(e.date) : escBA(e.date);
         var clickAttrs = tx
             ? ' style="cursor:pointer" onclick=\'showTransactionDetailModal(' + jsAttrB(tx) + ')\''
             : '';
+        // A real transfer always leaves this account, so it renders the same
+        // way it does on the Transfer tab's own list (red, with a minus sign)
+        // instead of looking like money coming in.
+        var isOutgoingTransfer = !isMove && e.type === 'transfer';
+        var amountClass = isMove ? '' : (isOutgoingTransfer ? ' sent' : '');
+        var amountPrefix = isMove ? '⇄ ' : (isOutgoingTransfer ? '-' : '');
         return '<div class="transaction-item"' + clickAttrs + '>' +
-            '<div style="width:40px;height:40px;border-radius:50%;background:var(--color-gray-100);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">' + e.icon + '</div>' +
+            '<div style="width:40px;height:40px;border-radius:50%;background:' + (isMove ? '#e0e7ef;border:1px dashed #94a3b8' : 'var(--color-gray-100)') + ';display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">' + icon + '</div>' +
             '<div class="transaction-details" style="flex:1;min-width:0">' +
-                '<div style="font-weight:600;font-size:0.875rem">' + escBA(e.label) + '</div>' +
-                '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">' + escBA(e.date) + '</div>' +
+                '<div style="font-weight:600;font-size:0.875rem">' + escBA(label) + '</div>' +
+                '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">' + sub + '</div>' +
             '</div>' +
-            '<div class="transaction-amount">' + escBA(e.detail) + '</div>' +
+            '<div class="transaction-amount' + amountClass + '"' + (isMove ? ' style="color:#475569"' : '') + '>' + amountPrefix + escBA(e.detail) + '</div>' +
             '</div>';
     }).join('');
 }
@@ -786,7 +1033,7 @@ function renderDashActivity(events, transactions) {
 function renderDashUpcomingSchedule(schedules) {
     var el = document.getElementById('dashUpcomingSchedule');
     if (!el) return;
-    var upcoming = (schedules || []).filter(function(s) { return s.active; }).slice(0, 4);
+    var upcoming = (schedules || []).filter(function(s) { return s.active && !isScheduleCompletedBA(s); }).slice(0, 4);
     if (upcoming.length === 0) {
         el.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem;text-align:center">No upcoming transfers.</p>';
         return;
@@ -796,7 +1043,7 @@ function renderDashUpcomingSchedule(schedules) {
             '<div style="width:40px;height:40px;border-radius:50%;background:var(--color-gray-100);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">🔁</div>' +
             '<div class="transaction-details" style="flex:1;min-width:0">' +
                 '<div style="font-weight:600;font-size:0.875rem">' + escBA(s.recipient) + '</div>' +
-                '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">Next ' + escBA(new Date(s.nextRunDate).toLocaleDateString()) + ' · ' + escBA(s.frequency) + '</div>' +
+                '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">Next ' + escBA(new Date(s.nextRunDate).toLocaleDateString('en-US')) + ' · ' + escBA(s.frequency) + '</div>' +
             '</div>' +
             '<div class="transaction-amount">' + fmtBA(s.amount) + '</div>' +
             '</div>';
@@ -839,43 +1086,182 @@ function renderDashBranchLocator() {
 function loadScheduledTab() {
     if (typeof DigifinwizDB === 'undefined') return;
     var startEl = document.getElementById('schedStartDate');
-    if (startEl && !startEl.value) {
-        var now = new Date();
-        startEl.value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
-        startEl.min   = startEl.value;
+    if (startEl) {
+        var now   = new Date();
+        var today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+        // The server rejects start dates in the past — keep the picker's
+        // floor at today (refreshed on every visit, so it rolls over).
+        startEl.min = today;
+        if (!startEl.value || startEl.value < today) startEl.value = today;
     }
-    DigifinwizDB.getScheduledTransfers().then(function(schedules) {
+    renderSchedRecentRecipients();
+    return DigifinwizDB.getScheduledTransfers().then(function(schedules) {
         renderSchedList(schedules);
         if (typeof loadBalanceCards === 'function') loadBalanceCards();
+        // Loading the list can execute due transfers server-side, which
+        // writes completed/skipped notices to the inbox.
+        if (typeof refreshMessageBadge === 'function') refreshMessageBadge();
     }).catch(function(err) { console.error('loadScheduledTab:', err); });
 }
 
+// Reuses the Transfer tab's own "recent recipients" idea (same source data —
+// the user's real transfer history) so setting up a recurring transfer isn't
+// two blank text boxes with no memory of who was paid before.
+function selectSchedRecipient(name, account) {
+    document.getElementById('schedRecipientName').value = name;
+    document.getElementById('schedRecipientAccount').value = account;
+    showNotification(name + ' selected as recipient', 'info');
+}
+
+function renderSchedRecentRecipients() {
+    var grid = document.getElementById('schedRecentRecipientsGrid');
+    if (!grid || typeof DigifinwizDB === 'undefined') return;
+    DigifinwizDB.getTransactions(1000).then(function(allTxs) {
+        var seen = {};
+        var recent = [];
+        (allTxs || []).filter(isExternalTransfer).forEach(function(t) {
+            if (recent.length >= 4 || !t.recipient) return;
+            var key = String(t.recipient).trim().toLowerCase() + '|' + String(t.account || '').trim();
+            if (seen[key]) return;
+            seen[key] = true;
+            recent.push(t);
+        });
+        if (recent.length === 0) {
+            grid.innerHTML = '<div class="db-recip-empty">No recent recipients yet — people you send money to will show up here for one-click reuse.</div>';
+            return;
+        }
+        grid.innerHTML = recent.map(function(t) {
+            var name = String(t.recipient);
+            var acct = String(t.account || '');
+            return '<div class="recipient-card" role="button" tabindex="0" onclick="selectSchedRecipient(' +
+                JSON.stringify(name).replace(/"/g, '&quot;') + ',' + JSON.stringify(acct).replace(/"/g, '&quot;') + ')">' +
+                '<div class="recipient-avatar" style="background:' + avatarGradientFor(name) + '">' + escBA(initialsFor(name)) + '</div>' +
+                '<div class="recipient-info"><strong>' + escBA(name) + '</strong><span>****' + escBA(acct.slice(-4)) + '</span></div>' +
+                '</div>';
+        }).join('');
+    }).catch(function(err) { console.error('renderSchedRecentRecipients:', err); });
+}
+
+function setSchedPreset(val) {
+    var inp = document.getElementById('schedAmount');
+    if (inp) { inp.value = val; }
+    document.querySelectorAll('#schedPresetRow .preset-btn').forEach(function(b) {
+        b.classList.toggle('active', parseFloat(b.textContent.replace('ƒ', '')) === val);
+    });
+    updateSchedRunPreview();
+}
+
+// Client-side mirror of server.js's advanceScheduleDate (weekly +7 days,
+// biweekly +14 days, monthly +1 month) so the preview matches what will
+// actually happen.
+function advanceScheduleDateBA(current, frequency) {
+    var d = new Date(current);
+    if (frequency === 'weekly') d.setDate(d.getDate() + 7);
+    else if (frequency === 'biweekly') d.setDate(d.getDate() + 14);
+    else if (frequency === 'monthly') d.setMonth(d.getMonth() + 1);
+    return d.getTime();
+}
+
+function updateSchedRunPreview() {
+    var previewEl = document.getElementById('schedRunPreview');
+    if (!previewEl) return;
+    var amount = parseFloat((document.getElementById('schedAmount') || {}).value);
+    var frequency = (document.getElementById('schedFrequency') || {}).value;
+    var startDateStr = (document.getElementById('schedStartDate') || {}).value;
+    if (!amount || amount <= 0 || !startDateStr) {
+        previewEl.style.display = 'none';
+        previewEl.textContent = '';
+        return;
+    }
+    var start = new Date(startDateStr + 'T00:00:00').getTime();
+    if (isNaN(start)) {
+        previewEl.style.display = 'none';
+        previewEl.textContent = '';
+        return;
+    }
+    if (frequency === 'once') {
+        previewEl.textContent = fmtBA(amount) + ' on ' + new Date(start).toLocaleDateString('en-US');
+        previewEl.style.display = 'block';
+        return;
+    }
+    var dates = [start];
+    for (var i = 1; i < 3; i++) dates.push(advanceScheduleDateBA(dates[i - 1], frequency));
+    var total = amount * dates.length;
+    var dateList = dates.map(function(d) { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }).join(', ');
+    previewEl.textContent = 'Next 3: ' + dateList + ' — ' + fmtBA(total) + ' in total.';
+    previewEl.style.display = 'block';
+}
+
 var FREQUENCY_LABELS = { once: 'One time', weekly: 'Weekly', biweekly: 'Every 2 weeks', monthly: 'Monthly' };
+
+// A one-time schedule that already ran successfully (legacy records without
+// the `completed` flag are recognized by their last run status).
+function isScheduleCompletedBA(s) {
+    return !!s.completed || (s.frequency === 'once' && s.lastRunStatus === 'completed');
+}
+
+// Plain-language last-run status. 'skipped' is the server's status for an
+// occurrence that couldn't run because the account lacked funds.
+function describeLastRun(s) {
+    if (!s.lastRunAt && !s.lastRunStatus) return '';
+    var when = s.lastRunAt ? new Date(s.lastRunAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+    var status = s.lastRunStatus === 'completed' ? 'Sent'
+        : s.lastRunStatus === 'skipped' ? 'Skipped — insufficient funds in ' + (s.fromAccount || 'account')
+        : String(s.lastRunStatus || 'Unknown');
+    var color = s.lastRunStatus === 'completed' ? '#059669' : s.lastRunStatus === 'skipped' ? '#b45309' : '#64748b';
+    return '<div style="font-size:0.72rem;margin-top:0.15rem;color:' + color + '">Last run: ' + escBA(when) + ' — ' + escBA(status) + '</div>';
+}
+
+var SCHED_BADGE = {
+    active:    ['Active',    '#059669', '#dcfce7'],
+    paused:    ['Paused',    '#64748b', '#f1f5f9'],
+    completed: ['Completed', '#1e3a8a', '#dbeafe'],
+    notsent:   ['Not sent',  '#b45309', '#fef3c7']
+};
 
 function renderSchedList(schedules) {
     var list = document.getElementById('schedList');
     if (!list) return;
     if (!schedules || schedules.length === 0) {
-        list.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem;text-align:center">No scheduled transfers yet.</p>';
+        list.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem;text-align:center">No scheduled transfers yet — try "ƒ50 to savings every payday" above.</p>';
         return;
     }
     list.innerHTML = schedules.map(function(s) {
         var freqLabel = FREQUENCY_LABELS[s.frequency] || s.frequency;
-        var statusBadge = s.active
-            ? '<span style="font-size:0.7rem;color:#059669;background:#dcfce7;padding:0.15rem 0.5rem;border-radius:99px">Active</span>'
-            : '<span style="font-size:0.7rem;color:#64748b;background:#f1f5f9;padding:0.15rem 0.5rem;border-radius:99px">Paused</span>';
-        return '<div class="transaction-item">' +
-            '<div style="width:40px;height:40px;border-radius:50%;background:var(--color-gray-100);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">🔁</div>' +
+        var completed = isScheduleCompletedBA(s);
+        // A one-time transfer that was skipped for insufficient funds is
+        // deactivated by the server; it can be retried (resumed), but it
+        // isn't a user "pause".
+        var state = completed ? 'completed'
+            : s.active ? 'active'
+            : (s.frequency === 'once' && s.lastRunStatus === 'skipped') ? 'notsent'
+            : 'paused';
+        var b = SCHED_BADGE[state];
+        var statusBadge = '<span class="db-sched-badge" data-state="' + state + '" style="font-size:0.7rem;color:' + b[1] + ';background:' + b[2] + ';padding:0.15rem 0.5rem;border-radius:99px;font-weight:600">' + b[0] + '</span>';
+
+        var when = '';
+        if (state === 'active') when = ' · next ' + escBA(new Date(s.nextRunDate).toLocaleDateString('en-US'));
+        else if (state === 'completed') when = ' · for ' + escBA(new Date(s.nextRunDate).toLocaleDateString('en-US'));
+
+        var buttons = '';
+        if (state === 'active') {
+            buttons += '<button type="button" class="btn" style="padding:0.35rem 0.6rem;font-size:0.75rem" onclick="toggleSchedule(' + s.id + ',false)">Pause</button>';
+        } else if (state === 'paused') {
+            buttons += '<button type="button" class="btn" style="padding:0.35rem 0.6rem;font-size:0.75rem" onclick="toggleSchedule(' + s.id + ',true)">Resume</button>';
+        } else if (state === 'notsent') {
+            buttons += '<button type="button" class="btn" style="padding:0.35rem 0.6rem;font-size:0.75rem" onclick="toggleSchedule(' + s.id + ',true)" title="Try sending it again now">Retry</button>';
+        }
+        buttons += '<button type="button" class="btn-remove" onclick="cancelSchedule(' + s.id + ',' + (state === 'completed') + ')" title="' + (state === 'completed' ? 'Remove from list' : 'Cancel') + '">×</button>';
+
+        return '<div class="transaction-item db-sched-item" data-sched-id="' + s.id + '">' +
+            '<div style="width:40px;height:40px;border-radius:50%;background:var(--color-gray-100);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">' + (state === 'completed' ? '✅' : s.frequency === 'once' ? '📅' : '🔁') + '</div>' +
             '<div class="transaction-details" style="flex:1;min-width:0">' +
                 '<div style="font-weight:600;font-size:0.875rem">' + escBA(s.recipient) + ' ' + statusBadge + '</div>' +
-                '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">' + freqLabel + ' from ' + escBA(s.fromAccount) +
-                    (s.active ? ' · next ' + escBA(new Date(s.nextRunDate).toLocaleDateString()) : '') + '</div>' +
+                '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">' + escBA(freqLabel) + ' from ' + escBA(s.fromAccount) + when + '</div>' +
+                describeLastRun(s) +
             '</div>' +
             '<div class="transaction-amount" style="margin-right:0.75rem">' + fmtBA(s.amount) + '</div>' +
-            '<div style="display:flex;gap:0.4rem;flex-shrink:0">' +
-                '<button type="button" class="btn" style="padding:0.35rem 0.6rem;font-size:0.75rem" onclick="toggleSchedule(' + s.id + ',' + !s.active + ')">' + (s.active ? 'Pause' : 'Resume') + '</button>' +
-                '<button type="button" class="btn-remove" onclick="cancelSchedule(' + s.id + ')" title="Cancel">×</button>' +
-            '</div>' +
+            '<div style="display:flex;gap:0.4rem;flex-shrink:0">' + buttons + '</div>' +
             '</div>';
     }).join('');
 }
@@ -885,14 +1271,21 @@ function toggleSchedule(id, active) {
         showNotification(active ? 'Transfer resumed.' : 'Transfer paused.', 'info');
         loadScheduledTab();
     }).catch(function(err) {
-        showNotification(err && err.message ? err.message : 'Could not update transfer.', 'error');
+        if (err && err.status === 409) {
+            // e.g. a one-time transfer that already completed (maybe in
+            // another tab) — it can't be sent a second time.
+            showNotification(err.message || 'This transfer has already been completed.', 'info');
+        } else {
+            showNotification(err && err.message ? err.message : 'Could not update transfer.', 'error');
+        }
+        loadScheduledTab();
     });
 }
 
-function cancelSchedule(id) {
-    if (!confirm('Cancel this scheduled transfer?')) return;
+function cancelSchedule(id, isCompleted) {
+    if (!confirm(isCompleted ? 'Remove this completed transfer from the list? (The transfer itself stays in your history.)' : 'Cancel this scheduled transfer?')) return;
     DigifinwizDB.cancelScheduledTransfer(id).then(function() {
-        showNotification('Scheduled transfer cancelled.', 'info');
+        showNotification(isCompleted ? 'Removed from the list.' : 'Scheduled transfer cancelled.', 'info');
         loadScheduledTab();
     }).catch(function(err) {
         showNotification(err && err.message ? err.message : 'Could not cancel transfer.', 'error');
@@ -922,15 +1315,271 @@ document.addEventListener('DOMContentLoaded', function() {
         // create (server.js), so a double-submit here doesn't just create
         // a duplicate schedule — it can send the money twice.
         withBankingActionLock(function() {
-            return DigifinwizDB.createScheduledTransfer(data).then(function() {
-                return awardXP(15);
-            }).then(function() {
-                showNotification('Transfer scheduled! +15 XP', 'success');
+            // No XP for creating a schedule: create-then-cancel moved no
+            // money and was a free XP loop.
+            return DigifinwizDB.createScheduledTransfer(data).then(function(rec) {
+                rec = rec || {};
+                if (rec.lastRunStatus === 'completed') {
+                    showNotification('Transfer scheduled for today and sent: ' + fmtBA(rec.amount) + ' to ' + rec.recipient + '.', 'success');
+                } else if (rec.lastRunStatus === 'skipped') {
+                    showNotification('Scheduled, but today\'s transfer was skipped — insufficient funds in ' + rec.fromAccount + '.', 'error');
+                } else {
+                    showNotification('Transfer scheduled!', 'success');
+                }
                 schedForm.reset();
+                updateSchedRunPreview();
+                document.querySelectorAll('#schedPresetRow .preset-btn').forEach(function(b) { b.classList.remove('active'); });
                 loadScheduledTab();
+                if (typeof refreshBankingPage === 'function') refreshBankingPage();
             }).catch(function(err) {
                 showNotification(err && err.message ? err.message : 'Could not schedule transfer.', 'error');
             });
         });
     });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MESSAGES INBOX
+   The server writes banking alerts (low balance, large transaction),
+   scheduled-transfer completed/skipped notices, goal-reached, loan-paid-off,
+   card-utilization and security notices here. db.js sends X-App, so this
+   list is scoped to the Banking module's own inbox. A message is read when
+   its readBy array contains the current user's id.
+   ══════════════════════════════════════════════════════════════════════════ */
+var MSG_TYPE_META = {
+    warning: { icon: '⚠️', label: 'Alert',   color: '#b45309', bg: '#fef3c7' },
+    success: { icon: '✅', label: 'Update',  color: '#047857', bg: '#d1fae5' },
+    info:    { icon: 'ℹ️', label: 'Notice',  color: '#1e40af', bg: '#dbeafe' },
+    error:   { icon: '⛔', label: 'Problem', color: '#b91c1c', bg: '#fee2e2' }
+};
+var MSG_CATEGORY_LABELS = { banking: 'Banking', system: 'Security', ecommerce: 'Shopping', utilities: 'Utilities', general: 'General' };
+
+var inboxMessages = [];
+var inboxFilter   = 'all';
+var inboxOpenId   = null;
+
+function currentBankUserId() {
+    var s = (typeof DigifinwizModuleAuth !== 'undefined' && DigifinwizModuleAuth.getSession) ? DigifinwizModuleAuth.getSession() : null;
+    return s ? s.userId : null;
+}
+
+function isMessageUnread(m) {
+    var uid = currentBankUserId();
+    return !(m.readBy || []).some(function(id) { return String(id) === String(uid); });
+}
+
+function sortMessagesNewestFirst(msgs) {
+    return (msgs || []).slice().sort(function(a, b) {
+        return (b.sentAt || 0) - (a.sentAt || 0) || (b.id || 0) - (a.id || 0);
+    });
+}
+
+function updateMessageBadge(msgs) {
+    var unread = (msgs || []).filter(isMessageUnread).length;
+    var badge  = document.getElementById('msgNavBadge');
+    if (badge) {
+        badge.textContent   = unread > 99 ? '99+' : String(unread);
+        badge.style.display = unread > 0 ? '' : 'none';
+        badge.setAttribute('aria-label', unread + ' unread message' + (unread === 1 ? '' : 's'));
+    }
+    // Same count, mirrored on the header bell icon so it's visible from any
+    // tab, not just when the Messages sidebar item happens to be in view.
+    var headerBadge = document.getElementById('headerMsgBadge');
+    if (headerBadge) {
+        headerBadge.textContent   = unread > 99 ? '99+' : String(unread);
+        headerBadge.style.display = unread > 0 ? 'flex' : 'none';
+    }
+    var countEl = document.getElementById('inboxUnreadCount');
+    if (countEl) countEl.textContent = unread > 0 ? unread + ' unread' : 'All caught up';
+    var markAll = document.getElementById('inboxMarkAllBtn');
+    if (markAll) markAll.disabled = unread === 0;
+    return unread;
+}
+
+function refreshMessageBadge() {
+    if (typeof DigifinwizDB === 'undefined') return Promise.resolve();
+    return DigifinwizDB.getMessagesForUser().then(function(msgs) {
+        inboxMessages = sortMessagesNewestFirst(msgs);
+        updateMessageBadge(inboxMessages);
+        var panel = document.getElementById('panel-messages');
+        if (panel && panel.classList.contains('active')) renderInbox();
+    }).catch(function(err) { console.error('refreshMessageBadge:', err); });
+}
+
+function loadMessagesTab() {
+    var list = document.getElementById('inboxList');
+    if (list && !inboxMessages.length) list.innerHTML = '<p style="color:var(--color-gray-500);padding:1rem;text-align:center">Loading messages…</p>';
+    return DigifinwizDB.getMessagesForUser().then(function(msgs) {
+        inboxMessages = sortMessagesNewestFirst(msgs);
+        updateMessageBadge(inboxMessages);
+        renderInbox();
+    }).catch(function(err) {
+        console.error('loadMessagesTab:', err);
+        if (list) list.innerHTML = '<p style="color:#dc2626;padding:1rem;text-align:center">Could not load messages.</p>';
+    });
+}
+
+function setInboxFilter(f) {
+    inboxFilter = f;
+    ['all', 'unread'].forEach(function(x) {
+        var b = document.getElementById('inboxFilter-' + x);
+        if (b) b.classList.toggle('active', x === f);
+    });
+    renderInbox();
+}
+
+function renderInbox() {
+    var list = document.getElementById('inboxList');
+    if (!list) return;
+    var shown = inboxFilter === 'unread' ? inboxMessages.filter(isMessageUnread) : inboxMessages;
+    if (shown.length === 0) {
+        list.innerHTML =
+            '<div class="db-inbox-empty">' +
+                '<div style="font-size:2rem;margin-bottom:0.4rem">📭</div>' +
+                '<strong>' + (inboxFilter === 'unread' && inboxMessages.length ? 'No unread messages' : 'Your inbox is empty') + '</strong>' +
+                '<p>Balance alerts, scheduled-transfer results, goal and loan milestones, and security notices will appear here. ' +
+                'You can tune alert thresholds on the <a href="#" onclick="switchPageTab(\'alerts\');return false;">Alerts</a> tab.</p>' +
+            '</div>';
+        return;
+    }
+    list.innerHTML = shown.map(function(m) {
+        var meta    = MSG_TYPE_META[m.type] || MSG_TYPE_META.info;
+        var unread  = isMessageUnread(m);
+        var open    = inboxOpenId === m.id;
+        var cat     = MSG_CATEGORY_LABELS[m.category] || (m.category ? String(m.category) : 'General');
+        var sent    = m.sentAt ? new Date(m.sentAt) : null;
+        var dateStr = sent ? sent.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
+        var preview = String(m.body || '');
+        if (preview.length > 110) preview = preview.slice(0, 110) + '…';
+        var idNum   = Number(m.id);
+        return '<div class="db-inbox-item' + (unread ? ' is-unread' : '') + (open ? ' is-open' : '') + '" data-msg-id="' + idNum + '" role="button" tabindex="0" aria-expanded="' + open + '" ' +
+                'onclick="openInboxMessage(' + idNum + ')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openInboxMessage(' + idNum + ')}">' +
+            '<div class="db-inbox-icon" style="background:' + meta.bg + '">' + meta.icon + '</div>' +
+            '<div style="flex:1;min-width:0">' +
+                '<div class="db-inbox-top">' +
+                    '<span class="db-inbox-subject">' + (unread ? '<span class="db-inbox-dot" aria-label="Unread"></span>' : '') + escBA(m.subject || '(no subject)') + '</span>' +
+                    '<span class="db-inbox-date">' + escBA(dateStr) + '</span>' +
+                '</div>' +
+                '<div class="db-inbox-tags">' +
+                    '<span class="db-inbox-tag" style="color:' + meta.color + ';background:' + meta.bg + '">' + meta.label + '</span>' +
+                    '<span class="db-inbox-tag">' + escBA(cat) + '</span>' +
+                    (m.senderName && m.senderName !== 'System' ? '<span class="db-inbox-tag">From ' + escBA(m.senderName) + '</span>' : '') +
+                '</div>' +
+                (open
+                    ? '<div class="db-inbox-body">' + escBA(m.body || '') + '</div>'
+                    : '<div class="db-inbox-preview">' + escBA(preview) + '</div>') +
+            '</div>' +
+            '</div>';
+    }).join('');
+}
+
+function openInboxMessage(id) {
+    inboxOpenId = (inboxOpenId === id) ? null : id;
+    var msg = inboxMessages.filter(function(m) { return Number(m.id) === id; })[0];
+    if (msg && isMessageUnread(msg)) {
+        // Optimistically mark read so the badge drops immediately.
+        var uid = currentBankUserId();
+        msg.readBy = (msg.readBy || []).concat([uid]);
+        updateMessageBadge(inboxMessages);
+        DigifinwizDB.markMessageRead(id).catch(function(err) {
+            console.error('markMessageRead:', err);
+            msg.readBy = (msg.readBy || []).filter(function(x) { return String(x) !== String(uid); });
+            updateMessageBadge(inboxMessages);
+            renderInbox();
+        });
+    }
+    renderInbox();
+}
+
+function markAllMessagesRead() {
+    var unread = inboxMessages.filter(isMessageUnread);
+    if (!unread.length) return;
+    var uid = currentBankUserId();
+    // Sequential: the server's message PATCH rewrites the whole store, so
+    // parallel requests could lose each other's writes.
+    unread.reduce(function(p, m) {
+        return p.then(function() {
+            return DigifinwizDB.markMessageRead(m.id).then(function() {
+                m.readBy = (m.readBy || []).concat([uid]);
+            });
+        });
+    }, Promise.resolve()).then(function() {
+        showNotification('All messages marked as read.', 'info');
+    }).catch(function(err) {
+        showNotification(err && err.message ? err.message : 'Could not mark every message read.', 'error');
+    }).then(function() {
+        updateMessageBadge(inboxMessages);
+        renderInbox();
+    });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HOW BANKING WORKS (completes the manual "Bank Explorer" challenge)
+   ══════════════════════════════════════════════════════════════════════════ */
+var BANK_EXPLORER_TITLE = 'Bank Explorer';
+var bankExplorerBusy = false;
+
+function findBankExplorer(challenges) {
+    return (challenges || []).filter(function(c) { return c.title === BANK_EXPLORER_TITLE && c.condition === 'manual'; })[0] || null;
+}
+
+function renderBankingGuideStatus() {
+    var btn    = document.getElementById('bankGuideReadBtn');
+    var status = document.getElementById('bankGuideStatus');
+    if (!btn || !status || typeof DigifinwizDB === 'undefined') return Promise.resolve();
+    return DigifinwizDB.getChallenges().then(function(challenges) {
+        var c = findBankExplorer(challenges);
+        if (!c) {
+            btn.style.display = 'none';
+            status.textContent = '';
+            return;
+        }
+        if (c.completed) {
+            btn.style.display = 'none';
+            status.textContent = '✅ Read — "Bank Explorer" challenge complete' + (c.completedAt ? ' (' + new Date(c.completedAt).toLocaleDateString('en-US') + ')' : '') + '.';
+        } else {
+            btn.style.display = '';
+            btn.textContent = 'Mark as read · +' + (c.points || 0) + ' XP';
+            status.textContent = 'Read the topics above, then mark this guide as read to complete the "Bank Explorer" challenge.';
+        }
+    }).catch(function(err) { console.error('renderBankingGuideStatus:', err); });
+}
+
+function markBankingGuideRead() {
+    if (bankExplorerBusy) return;
+    bankExplorerBusy = true;
+    var btn = document.getElementById('bankGuideReadBtn');
+    if (btn) btn.disabled = true;
+    DigifinwizDB.getChallenges().then(function(challenges) {
+        var c = findBankExplorer(challenges);
+        if (!c) throw new Error('The Bank Explorer challenge isn\'t available on this account.');
+        if (c.completed) return { already: true };
+        return DigifinwizDB.updateChallenge(c.id, { completed: true }).then(function() {
+            // Same reward the app gives for any manual challenge
+            // (challenges.html markChallengeComplete): points, florins, and
+            // the completed-challenge counter. Only reached when the server
+            // accepted the completion (a repeat gets 409 and awards nothing).
+            return awardXP(c.points || 0, { coins: c.florins || 0, challenges: 1 });
+        }).then(function() { return { challenge: c }; });
+    }).then(function(r) {
+        if (r.already) {
+            showNotification('You\'ve already completed Bank Explorer.', 'info');
+        } else {
+            var c = r.challenge;
+            showNotification('🏦 Challenge complete: "Bank Explorer" +' + (c.points || 0) + ' XP' + (c.florins ? ' and +' + c.florins + ' florins' : '') + '!', 'success');
+        }
+    }).catch(function(err) {
+        if (err && err.status === 409) showNotification('You\'ve already completed Bank Explorer.', 'info');
+        else showNotification(err && err.message ? err.message : 'Could not complete the challenge. Try again.', 'error');
+    }).then(function() {
+        bankExplorerBusy = false;
+        if (btn) btn.disabled = false;
+        renderBankingGuideStatus();
+        if (typeof loadBankingChallenges === 'function') loadBankingChallenges();
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    refreshMessageBadge();
+    renderBankingGuideStatus();
 });

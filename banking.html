@@ -2,10 +2,78 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <link rel="icon" href="data:,">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Digifinwiz - Banking</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="shopping-styles.css">
+    <style>
+    /* Page-local DigiBank styles (move money, inbox, recipients, guide).
+       Every rule is scoped under body.digibank-theme + a db- class so it
+       can't leak into another module. */
+    body.digibank-theme .db-move-card {
+        background: var(--color-surface); border: 1px solid var(--color-border);
+        border-left: 4px solid #b7862c; border-radius: var(--radius-xl);
+        padding: 1.25rem; margin-bottom: 1.5rem;
+    }
+    body.digibank-theme .db-move-card h2 { font-size: 1rem; font-weight: 700; margin: 0 0 0.25rem; }
+    body.digibank-theme .db-move-card .db-move-sub { font-size: 0.8rem; color: var(--color-gray-500); margin: 0 0 1rem; }
+    body.digibank-theme .db-move-row { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end; }
+    body.digibank-theme .db-move-dirs { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    body.digibank-theme .db-move-dir {
+        border: 1.5px solid var(--color-border); background: var(--color-gray-50);
+        border-radius: 10px; padding: 0.5rem 0.8rem; cursor: pointer; text-align: left;
+        font: inherit; color: var(--color-gray-700); min-width: 150px;
+    }
+    body.digibank-theme .db-move-dir strong { display: block; font-size: 0.82rem; }
+    body.digibank-theme .db-move-dir span { font-size: 0.72rem; color: var(--color-gray-500); }
+    body.digibank-theme .db-move-dir.active { border-color: var(--color-primary-600); background: var(--color-primary-50); box-shadow: 0 0 0 2px rgba(201,154,46,0.25); }
+    body.digibank-theme .db-move-dir:focus-visible { outline: 2px solid var(--color-primary-500); outline-offset: 2px; }
+
+    body.digibank-theme .db-recip-empty {
+        grid-column: 1 / -1; font-size: 0.8rem; color: var(--color-gray-500);
+        background: var(--color-gray-50); border: 1px dashed var(--color-border);
+        border-radius: 10px; padding: 0.75rem; text-align: center;
+    }
+
+    body.digibank-theme .db-inbox-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    body.digibank-theme .db-inbox-item {
+        display: flex; gap: 0.85rem; align-items: flex-start; padding: 0.85rem 1rem;
+        border: 1px solid var(--color-border); border-left: 4px solid transparent;
+        border-radius: 10px; margin-bottom: 0.6rem; cursor: pointer; background: var(--color-surface);
+        transition: box-shadow 0.15s, background 0.15s;
+    }
+    body.digibank-theme .db-inbox-item:hover { box-shadow: 0 2px 10px rgba(13,43,82,0.08); }
+    body.digibank-theme .db-inbox-item:focus-visible { outline: 2px solid var(--color-primary-500); outline-offset: 2px; }
+    body.digibank-theme .db-inbox-item.is-unread { border-left-color: #b7862c; background: #fffdf7; }
+    body.digibank-theme .db-inbox-item.is-open { background: var(--color-gray-50); }
+    body.digibank-theme .db-inbox-icon { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
+    body.digibank-theme .db-inbox-top { display: flex; justify-content: space-between; gap: 0.75rem; align-items: baseline; }
+    body.digibank-theme .db-inbox-subject { font-size: 0.9rem; font-weight: 600; color: var(--color-gray-800); min-width: 0; overflow-wrap: anywhere; }
+    body.digibank-theme .db-inbox-item.is-unread .db-inbox-subject { font-weight: 700; }
+    body.digibank-theme .db-inbox-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #b7862c; margin-right: 0.4rem; vertical-align: middle; }
+    body.digibank-theme .db-inbox-date { font-size: 0.72rem; color: var(--color-gray-400); white-space: nowrap; flex-shrink: 0; }
+    body.digibank-theme .db-inbox-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.3rem 0; }
+    body.digibank-theme .db-inbox-tag { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 1px 7px; border-radius: 99px; background: var(--color-gray-100); color: var(--color-gray-600); }
+    body.digibank-theme .db-inbox-preview { font-size: 0.8rem; color: var(--color-gray-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    body.digibank-theme .db-inbox-body { font-size: 0.86rem; color: var(--color-gray-700); line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 0.35rem; }
+    body.digibank-theme .db-inbox-empty { text-align: center; padding: 2rem 1rem; color: var(--color-gray-500); }
+    body.digibank-theme .db-inbox-empty p { font-size: 0.82rem; max-width: 460px; margin: 0.4rem auto 0; }
+
+    body.digibank-theme .db-guide dl { margin: 0; }
+    body.digibank-theme .db-guide dt { font-weight: 700; font-size: 0.86rem; color: var(--color-gray-800); margin-top: 0.75rem; }
+    body.digibank-theme .db-guide dt:first-child { margin-top: 0; }
+    body.digibank-theme .db-guide dd { margin: 0.2rem 0 0; font-size: 0.82rem; color: var(--color-gray-600); line-height: 1.55; }
+    body.digibank-theme .db-guide a { color: var(--color-primary-500); font-weight: 600; }
+    body.digibank-theme .db-guide-footer { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--color-border); }
+    body.digibank-theme .db-guide-status { font-size: 0.78rem; color: var(--color-gray-500); flex: 1; min-width: 200px; }
+    body.digibank-theme .sidebar-nav #tab-btn-messages { display: flex; align-items: center; justify-content: space-between; }
+    body.digibank-theme .sidebar-nav-group-label {
+        font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+        color: var(--color-gray-400); padding: 0.9rem 0.9rem 0.3rem;
+    }
+    body.digibank-theme .sidebar-nav-group-label:first-child { padding-top: 0.3rem; }
+    </style>
 </head>
 <body class="digibank-theme">
     <!-- DigiBank Header — logo, tab, game progress, account icons, and logout
@@ -15,7 +83,11 @@
             <div class="shop-logo">DigiBank.</div>
 
             <nav class="shop-nav">
-                <a href="#" onclick="switchPageTab('banking');return false;" class="active">Banking</a>
+                <!-- Plain label, not a link — this used to be a fake "Banking"
+                     nav item that always looked active but actually jumped to
+                     Transfer Money, which read as a bug. Real navigation lives
+                     in the sidebar and the icons to the right. -->
+                <span style="color:#fff;opacity:0.85;font-size:13px;font-weight:600;letter-spacing:0.02em;white-space:nowrap">Online Banking</span>
             </nav>
 
             <div class="amz-progress-compact" title="Game progress">
@@ -34,11 +106,15 @@
 
             <div class="shop-header-right">
                 <div class="shop-icons">
-                    <button class="shop-icon-btn home" onclick="switchPageTab('dashboard');return false;" title="My Progress">
+                    <button class="shop-icon-btn home" onclick="switchPageTab('dashboard');return false;" title="Dashboard">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
                     </button>
-                    <button class="shop-icon-btn bookmark" onclick="switchPageTab('dashboard');return false;" title="Account Balances">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
+                    <button class="shop-icon-btn" style="position:relative" onclick="switchPageTab('messages');return false;" title="Messages">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+                        <span id="headerMsgBadge" style="display:none;position:absolute;top:2px;right:2px;background:#dc2626;color:#fff;font-size:0.6rem;font-weight:700;min-width:15px;height:15px;border-radius:8px;align-items:center;justify-content:center;padding:0 3px;line-height:1">0</span>
+                    </button>
+                    <button class="shop-icon-btn bookmark" onclick="switchPageTab('profile');return false;" title="Profile">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
                     </button>
                     <button class="shop-icon-btn cart" onclick="switchPageTab('banking');setTimeout(function(){document.getElementById('transferForm').scrollIntoView({behavior:'smooth'})},50)" title="Quick Transfer">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
@@ -68,6 +144,11 @@
             <!-- ── Account Balance Cards (always visible) — plain statement-style
                  tiles with a colored accent bar instead of full-color gradient
                  fills, matching how a real bank's account summary reads. ──── -->
+            <!-- Just the two real account balances — "Total Transferred" and
+                 "Transfers Made" used to live here too, duplicating the
+                 Transfer tab's own "Total Transfers"/"Total Sent" stats
+                 (and the account numbers/balances also shown in the
+                 Dashboard's welcome card) with no page of their own. -->
             <div id="balanceCardsGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:1.5rem">
                 <div style="background:var(--color-surface);border:1px solid var(--color-border);border-left:4px solid var(--color-primary-600);border-radius:var(--radius-lg);padding:1.25rem">
                     <div style="font-size:0.72rem;color:var(--color-gray-500);margin-bottom:0.25rem;text-transform:uppercase;letter-spacing:0.05em">Checking Account</div>
@@ -78,16 +159,6 @@
                     <div style="font-size:0.72rem;color:var(--color-gray-500);margin-bottom:0.25rem;text-transform:uppercase;letter-spacing:0.05em">Savings Account</div>
                     <div style="font-size:1.6rem;font-weight:700;color:var(--color-gray-800)" id="balanceSavings">ƒ—</div>
                     <div style="font-size:0.7rem;color:var(--color-gray-400);margin-top:0.3rem">Available balance</div>
-                </div>
-                <div style="background:var(--color-surface);border:1px solid var(--color-border);border-left:4px solid #b7862c;border-radius:var(--radius-lg);padding:1.25rem">
-                    <div style="font-size:0.72rem;color:var(--color-gray-500);margin-bottom:0.25rem;text-transform:uppercase;letter-spacing:0.05em">Total Transferred</div>
-                    <div style="font-size:1.6rem;font-weight:700;color:var(--color-gray-800)" id="totalTransferred">ƒ—</div>
-                    <div style="font-size:0.7rem;color:var(--color-gray-400);margin-top:0.3rem">All-time outgoing</div>
-                </div>
-                <div style="background:var(--color-surface);border:1px solid var(--color-border);border-left:4px solid var(--color-gray-400);border-radius:var(--radius-lg);padding:1.25rem">
-                    <div style="font-size:0.72rem;color:var(--color-gray-500);margin-bottom:0.25rem;text-transform:uppercase;letter-spacing:0.05em">Transfers Made</div>
-                    <div style="font-size:1.6rem;font-weight:700;color:var(--color-gray-800)" id="transferCount">—</div>
-                    <div style="font-size:0.7rem;color:var(--color-gray-400);margin-top:0.3rem">Total transactions</div>
                 </div>
             </div>
 
@@ -112,15 +183,27 @@
             <div class="module-layout">
             <aside class="sidebar module-sidebar">
                 <nav class="sidebar-nav">
+                    <!-- Grouped instead of nine flat, equal-weight items —
+                         Profile moved to the header's person icon (it's
+                         rarely used and doesn't belong next to the money
+                         pages); everything else is clustered by what it's
+                         actually for. Group labels are plain text, not links. -->
+                    <div class="sidebar-nav-group-label">Accounts</div>
                     <a href="#" class="nav-item active" id="tab-btn-dashboard" onclick="switchPageTab('dashboard');return false;">Dashboard</a>
-                    <a href="#" class="nav-item" id="tab-btn-profile" onclick="switchPageTab('profile');return false;">Profile</a>
+                    <a href="#" class="nav-item" id="tab-btn-statements" onclick="switchPageTab('statements');return false;">Statements</a>
+
+                    <div class="sidebar-nav-group-label">Move Money</div>
                     <a href="#" class="nav-item" id="tab-btn-banking" onclick="switchPageTab('banking');return false;">Transfer Money</a>
                     <a href="#" class="nav-item" id="tab-btn-scheduled" onclick="switchPageTab('scheduled');return false;">Scheduled Transfers</a>
+
+                    <div class="sidebar-nav-group-label">Credit</div>
                     <a href="#" class="nav-item" id="tab-btn-creditcard" onclick="switchPageTab('creditcard');return false;">Credit Card</a>
                     <a href="#" class="nav-item" id="tab-btn-loans" onclick="switchPageTab('loans');return false;">Loans</a>
+
+                    <div class="sidebar-nav-group-label">Plan</div>
                     <a href="#" class="nav-item" id="tab-btn-goals" onclick="switchPageTab('goals');return false;">Savings Goals</a>
-                    <a href="#" class="nav-item" id="tab-btn-statements" onclick="switchPageTab('statements');return false;">Statements</a>
                     <a href="#" class="nav-item" id="tab-btn-alerts" onclick="switchPageTab('alerts');return false;">Alerts</a>
+                    <a href="#" class="nav-item" id="tab-btn-messages" onclick="switchPageTab('messages');return false;">Messages <span class="nav-badge" id="msgNavBadge" style="display:none">0</span></a>
                 </nav>
             </aside>
 
@@ -148,6 +231,29 @@
                             </div>
                             <div id="dashUpcomingSchedule"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">No upcoming transfers.</p></div>
                         </div>
+
+                        <div class="banking-section full-width db-guide" id="bankGuideCard" style="margin-top:1.5rem">
+                            <h2 style="margin:0 0 0.25rem">How Banking Works</h2>
+                            <p style="color:var(--color-gray-500);font-size:0.82rem;margin:0 0 1rem">A two-minute guide to the accounts and tools in DigiBank.</p>
+                            <dl>
+                                <dt>Checking vs. savings</dt>
+                                <dd>Checking is your everyday account: transfers, card and loan payments, and savings-goal contributions all come out of it. Savings is money you set aside; in a real bank it usually earns interest and may limit withdrawals. Use <a href="#" onclick="goToMoveMoney();return false;">Move Money</a> to shift funds between the two — it's free and doesn't change your total.</dd>
+                                <dt>Transfers</dt>
+                                <dd>A transfer sends money to someone else's account and can't be pulled back, so always double-check the name and account number. Scheduled transfers repeat automatically — if the account is short on funds when one is due, it's skipped and you get a message.</dd>
+                                <dt>Credit card utilization</dt>
+                                <dd>Utilization is how much of your credit limit you're using (balance ÷ limit). Keeping it under 30% helps your credit score; paying the full balance each month avoids interest entirely.</dd>
+                                <dt>Loan interest</dt>
+                                <dd>A loan's APR is the yearly cost of borrowing. Longer terms mean smaller monthly payments but more total interest — compare the "Total to Repay" figure, not just the monthly payment.</dd>
+                                <dt>Savings goals</dt>
+                                <dd>Naming a goal and a target makes saving concrete. Small regular contributions add up; watching the progress bar is a proven way to stay on track.</dd>
+                                <dt>Alerts</dt>
+                                <dd>Low-balance and large-transaction alerts arrive in your <a href="#" onclick="switchPageTab('messages');return false;">Messages</a> inbox — a simple habit that helps you catch mistakes and fraud early.</dd>
+                            </dl>
+                            <div class="db-guide-footer">
+                                <span class="db-guide-status" id="bankGuideStatus"></span>
+                                <button type="button" class="btn btn-primary" id="bankGuideReadBtn" style="display:none" onclick="markBankingGuideRead()">Mark as read</button>
+                            </div>
+                        </div>
                     </div>
 
                     <div>
@@ -163,6 +269,7 @@
                             <h2 style="margin:0 0 0.75rem">Quick Actions</h2>
                             <div style="display:flex;flex-direction:column;gap:0.5rem">
                                 <a href="#" onclick="switchPageTab('banking');return false;" class="btn btn-block" style="text-align:left">Send Money</a>
+                                <a href="#" onclick="goToMoveMoney();return false;" class="btn btn-block" style="text-align:left">Move Money Between Accounts</a>
                                 <a href="#" onclick="switchPageTab('scheduled');return false;" class="btn btn-block" style="text-align:left">Schedule a Transfer</a>
                                 <a href="#" onclick="switchPageTab('statements');return false;" class="btn btn-block" style="text-align:left">View Statements</a>
                             </div>
@@ -191,7 +298,7 @@
                 <div class="banking-section full-width">
                     <h2>Profile Information</h2>
                     <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1.25rem">Update your name, username, and email address.</p>
-                    <form id="profileForm">
+                    <form id="profileForm" class="form-stack">
                         <div class="form-group">
                             <label>Full Name</label>
                             <input type="text" class="form-input" id="profileFullName" placeholder="Your full name" required>
@@ -211,7 +318,7 @@
                 <div class="banking-section full-width" style="margin-top:1.5rem">
                     <h2>Change Password</h2>
                     <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1.25rem">Choose a strong password you don't use anywhere else.</p>
-                    <form id="profilePasswordForm">
+                    <form id="profilePasswordForm" class="form-stack">
                         <div class="form-group">
                             <label>Current Password</label>
                             <input type="password" class="form-input" id="profileCurrentPassword" required>
@@ -243,12 +350,38 @@
                     <div class="challenge-summary-grid">
                         <div class="csg-item"><div class="csg-val" style="color:#10b981" id="chalDoneCount">—</div><div class="csg-lbl">Completed</div></div>
                         <div class="csg-item"><div class="csg-val" style="color:#6366f1" id="chalPendingCount">—</div><div class="csg-lbl">In Progress</div></div>
-                        <div class="csg-item"><div class="csg-val" style="color:#f59e0b" id="chalTotalXp">—</div><div class="csg-lbl">Total XP</div></div>
-                        <div class="csg-item"><div class="csg-val" style="color:#8b5cf6" id="chalEarnedXp">—</div><div class="csg-lbl">XP Earned</div></div>
+                        <!-- "of" the banking-challenge XP pool specifically — distinct from the
+                             account's real total XP shown in the header (bankProgressXP), which
+                             also includes transfer XP, other modules' challenges, etc. -->
+                        <div class="csg-item" style="grid-column:span 2"><div class="csg-val" style="color:#f59e0b" id="chalEarnedOfTotalXp">—</div><div class="csg-lbl">Banking Challenge XP Earned</div></div>
                     </div>
                     <div id="bankingChallengesList" style="display:flex;flex-direction:column;gap:0.6rem">
                         <p style="color:var(--color-gray-500);font-size:0.875rem">Loading challenges…</p>
                     </div>
+                </div>
+
+                <!-- Move money between the user's own accounts -->
+                <div class="db-move-card" id="moveMoneyCard">
+                    <h2>Move Money Between Your Accounts</h2>
+                    <p class="db-move-sub">Shift funds between checking and savings instantly. Free, no XP, and it isn't counted as a transfer.</p>
+                    <form id="moveMoneyForm" class="db-move-row" novalidate>
+                        <input type="hidden" id="moveFrom" value="checking">
+                        <div class="db-move-dirs" role="radiogroup" aria-label="Direction">
+                            <button type="button" class="db-move-dir active" id="moveDir-checking" role="radio" onclick="setMoveDirection('checking')">
+                                <strong>Checking → Savings</strong>
+                                <span>Checking: <span id="moveBal-checking">ƒ—</span></span>
+                            </button>
+                            <button type="button" class="db-move-dir" id="moveDir-savings" role="radio" onclick="setMoveDirection('savings')">
+                                <strong>Savings → Checking</strong>
+                                <span>Savings: <span id="moveBal-savings">ƒ—</span></span>
+                            </button>
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;flex:1;min-width:140px">
+                            <label for="moveAmount">Amount (ƒ) <span style="color:var(--color-gray-400);font-weight:400" id="moveDirectionLabel">Checking → Savings</span></label>
+                            <input type="number" class="form-input" id="moveAmount" placeholder="0.00" min="0.01" step="0.01">
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="moveMoneyBtn">Move Money</button>
+                    </form>
                 </div>
 
                 <!-- Transfer Form + Transactions -->
@@ -279,7 +412,9 @@
                             </div>
                             <div class="form-group">
                                 <label>Recipient Name</label>
-                                <input type="text" class="form-input" id="recipientName" placeholder="Enter recipient name" required>
+                                <input type="text" class="form-input" id="recipientName" placeholder="Enter recipient name"
+                                    pattern="[A-Za-z][A-Za-z .'\-]{1,59}" minlength="2" maxlength="60"
+                                    title="2-60 letters, spaces, apostrophes or hyphens, starting with a letter" required>
                             </div>
                             <div class="form-group">
                                 <label>Recipient Account Number</label>
@@ -287,11 +422,11 @@
                             </div>
                             <div class="form-group">
                                 <label>Amount (ƒ)</label>
-                                <input type="number" class="form-input" id="amount" placeholder="0.00" min="0.01" step="0.01" required>
+                                <input type="number" class="form-input" id="amount" placeholder="0.00" min="0.01" step="0.01" value="50" required>
                                 <div class="amount-presets">
                                     <button type="button" class="preset-btn" onclick="setAmount(10)">ƒ10</button>
                                     <button type="button" class="preset-btn" onclick="setAmount(25)">ƒ25</button>
-                                    <button type="button" class="preset-btn" onclick="setAmount(50)">ƒ50</button>
+                                    <button type="button" class="preset-btn active" onclick="setAmount(50)">ƒ50</button>
                                     <button type="button" class="preset-btn" onclick="setAmount(100)">ƒ100</button>
                                     <button type="button" class="preset-btn" onclick="setAmount(500)">ƒ500</button>
                                 </div>
@@ -311,24 +446,10 @@
                         </form>
                         <!-- Saved Recipients -->
                         <div style="margin-top:1.5rem">
-                            <div class="section-label">Quick Select Recipient</div>
-                            <div class="recipients-grid">
-                                <div class="recipient-card" onclick="selectRecipient('Bruce Lee','1234567890')">
-                                    <div class="recipient-avatar" style="background:linear-gradient(135deg,#667eea,#764ba2)">BL</div>
-                                    <div class="recipient-info"><strong>Bruce Lee</strong><span>****7890</span></div>
-                                </div>
-                                <div class="recipient-card" onclick="selectRecipient('Alice Johnson','9876543210')">
-                                    <div class="recipient-avatar" style="background:linear-gradient(135deg,#f093fb,#f5576c)">AJ</div>
-                                    <div class="recipient-info"><strong>Alice Johnson</strong><span>****3210</span></div>
-                                </div>
-                                <div class="recipient-card" onclick="selectRecipient('Mike Smith','5555555555')">
-                                    <div class="recipient-avatar" style="background:linear-gradient(135deg,#4facfe,#00f2fe)">MS</div>
-                                    <div class="recipient-info"><strong>Mike Smith</strong><span>****5555</span></div>
-                                </div>
-                                <div class="recipient-card" onclick="selectRecipient('Sarah Williams','1111222233')">
-                                    <div class="recipient-avatar" style="background:linear-gradient(135deg,#fa709a,#fee140)">SW</div>
-                                    <div class="recipient-info"><strong>Sarah Williams</strong><span>****2233</span></div>
-                                </div>
+                            <div class="section-label">Recent Recipients</div>
+                            <!-- Filled from the user's own transfer history (renderRecentRecipients) -->
+                            <div class="recipients-grid" id="recentRecipientsGrid">
+                                <div class="db-recip-empty">Loading recent recipients…</div>
                             </div>
 
                             <!-- Saved custom recipients (from localStorage) -->
@@ -449,7 +570,17 @@
             <div class="page-tab-panel" id="panel-scheduled">
                 <div class="banking-section full-width">
                     <h2>Schedule a Transfer</h2>
-                    <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1rem">Set up a one-time future transfer, or a recurring one that repeats automatically.</p>
+                    <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1rem">Set up a one-time future transfer, or a recurring one that repeats automatically — for example, ƒ50 to savings every payday.</p>
+
+                    <!-- Reuses the Transfer tab's own recent-recipient one-click pattern
+                         instead of making this a plain two blank text inputs. -->
+                    <div style="margin-bottom:1rem">
+                        <div class="section-label">Recent Recipients</div>
+                        <div class="recipients-grid" id="schedRecentRecipientsGrid">
+                            <div class="db-recip-empty">Loading recent recipients…</div>
+                        </div>
+                    </div>
+
                     <form id="schedCreateForm">
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
                             <div class="form-group"><label>Recipient Name</label><input type="text" class="form-input" id="schedRecipientName" required></div>
@@ -461,24 +592,34 @@
                                     <option value="savings">Savings</option>
                                 </select>
                             </div>
-                            <div class="form-group"><label>Amount (ƒ)</label><input type="number" class="form-input" id="schedAmount" min="0.01" step="0.01" required></div>
+                            <div class="form-group">
+                                <label>Amount (ƒ)</label>
+                                <input type="number" class="form-input" id="schedAmount" min="0.01" step="0.01" required oninput="updateSchedRunPreview()">
+                                <div style="display:flex;gap:0.4rem;margin-top:0.4rem" id="schedPresetRow">
+                                    <button type="button" class="preset-btn" onclick="setSchedPreset(25)">ƒ25</button>
+                                    <button type="button" class="preset-btn" onclick="setSchedPreset(50)">ƒ50</button>
+                                    <button type="button" class="preset-btn" onclick="setSchedPreset(100)">ƒ100</button>
+                                    <button type="button" class="preset-btn" onclick="setSchedPreset(200)">ƒ200</button>
+                                </div>
+                            </div>
                             <div class="form-group">
                                 <label>Frequency</label>
-                                <select class="form-input" id="schedFrequency">
+                                <select class="form-input" id="schedFrequency" onchange="updateSchedRunPreview()">
                                     <option value="once">One time</option>
                                     <option value="weekly">Weekly</option>
                                     <option value="biweekly">Every 2 weeks</option>
                                     <option value="monthly">Monthly</option>
                                 </select>
                             </div>
-                            <div class="form-group"><label>Start Date</label><input type="date" class="form-input" id="schedStartDate" required></div>
+                            <div class="form-group"><label>Start Date</label><input type="date" class="form-input" id="schedStartDate" required oninput="updateSchedRunPreview()"></div>
                         </div>
+                        <div id="schedRunPreview" style="display:none;font-size:0.8rem;color:var(--color-primary-600);font-weight:600;margin-bottom:0.75rem"></div>
                         <button type="submit" class="btn btn-primary" style="margin-top:0.5rem">Schedule Transfer</button>
                     </form>
                 </div>
                 <div class="banking-section full-width" style="margin-top:1.5rem">
                     <h2>Your Scheduled Transfers</h2>
-                    <div id="schedList"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">No scheduled transfers yet.</p></div>
+                    <div id="schedList"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">No scheduled transfers yet — try "ƒ50 to savings every payday" above.</p></div>
                 </div>
             </div><!-- /panel-scheduled -->
 
@@ -499,7 +640,7 @@
                         <div class="cc-forms-grid" style="margin-top:1.5rem;display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
                             <div>
                                 <h3 style="font-size:0.95rem;margin-bottom:0.6rem">Make a Purchase</h3>
-                                <form id="ccPurchaseForm">
+                                <form id="ccPurchaseForm" class="form-stack">
                                     <div class="form-group"><label>Amount (ƒ)</label><input type="number" class="form-input" id="ccPurchaseAmount" min="0.01" step="0.01" required></div>
                                     <div class="form-group"><label>Description <span style="color:var(--color-gray-400);font-weight:400">(Optional)</span></label><input type="text" class="form-input" id="ccPurchaseDesc" placeholder="What did you buy?"></div>
                                     <button type="submit" class="btn btn-primary btn-block">Charge to Card</button>
@@ -507,10 +648,21 @@
                             </div>
                             <div>
                                 <h3 style="font-size:0.95rem;margin-bottom:0.6rem">Pay Your Card</h3>
-                                <form id="ccPaymentForm">
+                                <form id="ccPaymentForm" class="form-stack">
                                     <div class="form-group"><label>Amount (ƒ)</label><input type="number" class="form-input" id="ccPaymentAmount" min="0.01" step="0.01" required></div>
-                                    <div id="ccPaymentHint" style="font-size:0.78rem;color:var(--color-gray-500);margin:-0.4rem 0 0.75rem"></div>
-                                    <button type="submit" class="btn btn-primary btn-block">Pay from Checking</button>
+                                    <!-- .form-stack's gap already gives every child real spacing
+                                         (unlike the old 0px-gap layout this -0.4rem was written to
+                                         compensate for) — a smaller pull-up now reads as a caption
+                                         under the Amount field instead of crowding into it. -->
+                                    <div id="ccPaymentHint" style="font-size:0.78rem;color:var(--color-gray-500);margin-top:-0.7rem"></div>
+                                    <div class="form-group">
+                                        <label>Pay From</label>
+                                        <select class="form-input" id="ccPaymentFromAccount">
+                                            <option value="checking">Checking Account</option>
+                                            <option value="savings">Savings Account</option>
+                                        </select>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary btn-block">Pay Card</button>
                                 </form>
                             </div>
                         </div>
@@ -530,8 +682,12 @@
                     <div class="banking-section full-width">
                         <h2>Apply for a Loan</h2>
                         <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1rem">Borrow between ƒ500 and ƒ20,000. Shorter terms cost less in total interest.</p>
-                        <form id="loanApplyForm">
-                            <div class="form-group"><label>Loan Amount (ƒ)</label><input type="number" class="form-input" id="loanAmount" min="500" max="20000" step="0.01" value="1000" required></div>
+                        <form id="loanApplyForm" class="form-stack">
+                            <div class="form-group">
+                                <label>Loan Amount (ƒ)</label>
+                                <input type="number" class="form-input" id="loanAmount" min="500" max="20000" step="0.01" value="1000" required oninput="checkLoanAmountRange()">
+                                <div style="font-size:0.72rem;color:var(--color-gray-400);margin-top:0.3rem" id="loanAmountRangeHint">Between ƒ500 and ƒ20,000.</div>
+                            </div>
                             <div class="form-group">
                                 <label>Term</label>
                                 <select class="form-input" id="loanTerm">
@@ -542,7 +698,13 @@
                                     <option value="60">60 months — 12.99% APR</option>
                                 </select>
                             </div>
-                            <div id="loanPreview" style="background:var(--color-gray-50);border-radius:10px;padding:0.875rem;margin-bottom:1rem;font-size:0.85rem"></div>
+                            <div id="loanPreview" style="background:var(--color-gray-50);border-radius:10px;padding:0.875rem;margin-bottom:0.75rem;font-size:0.85rem"></div>
+                            <!-- All 5 terms side by side for the entered amount, instead of
+                                 needing to switch the Term dropdown 5 times to compare them. -->
+                            <div style="margin-bottom:1rem">
+                                <div style="font-size:0.78rem;color:var(--color-gray-500);margin-bottom:0.4rem">Compare all terms for this amount:</div>
+                                <div id="loanTermCompare" style="overflow-x:auto"></div>
+                            </div>
                             <button type="submit" class="btn btn-primary btn-block">Apply for Loan</button>
                         </form>
                     </div>
@@ -551,7 +713,7 @@
                     <div class="banking-section full-width" id="loanSummaryCard"></div>
                     <div class="banking-section full-width" style="margin-top:1.5rem">
                         <h2>Make a Payment</h2>
-                        <form id="loanPaymentForm">
+                        <form id="loanPaymentForm" class="form-stack">
                             <div class="form-group"><label>Amount (ƒ)</label><input type="number" class="form-input" id="loanPaymentAmount" min="0.01" step="0.01" required></div>
                             <button type="submit" class="btn btn-primary btn-block">Pay from Checking</button>
                         </form>
@@ -574,8 +736,17 @@
                     <h2>Create a New Goal</h2>
                     <form id="goalCreateForm" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:flex-end">
                         <div class="form-group" style="flex:2;min-width:180px;margin-bottom:0"><label>Goal Name</label><input type="text" class="form-input" id="goalName" placeholder="e.g. New Laptop" maxlength="60" required></div>
-                        <div class="form-group" style="flex:1;min-width:120px;margin-bottom:0"><label>Target (ƒ)</label><input type="number" class="form-input" id="goalTarget" min="10" max="1000000" step="0.01" required></div>
+                        <div class="form-group" style="flex:1;min-width:120px;margin-bottom:0">
+                            <label>Target (ƒ)</label>
+                            <input type="number" class="form-input" id="goalTarget" min="10" max="1000000" step="0.01" required oninput="updateGoalMonthlyPreview()">
+                            <div style="font-size:0.7rem;color:var(--color-gray-400);margin-top:0.25rem">Minimum ƒ10.</div>
+                        </div>
+                        <div class="form-group" style="flex:1;min-width:150px;margin-bottom:0">
+                            <label>Target Date <span style="color:var(--color-gray-400);font-weight:400">(Optional)</span></label>
+                            <input type="date" class="form-input" id="goalTargetDate" oninput="updateGoalMonthlyPreview()">
+                        </div>
                         <button type="submit" class="btn btn-primary">Create Goal</button>
+                        <div id="goalMonthlyPreview" style="flex-basis:100%;font-size:0.8rem;color:var(--color-primary-600);font-weight:600;display:none"></div>
                     </form>
                 </div>
                 <div class="banking-section full-width" style="margin-top:1.5rem">
@@ -613,22 +784,57 @@
             <div class="page-tab-panel" id="panel-alerts">
                 <div class="banking-section full-width">
                     <h2>Alert Preferences</h2>
-                    <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1.25rem">Alerts are delivered to your Messages inbox.</p>
+                    <p style="color:var(--color-gray-500);font-size:0.875rem;margin-bottom:1.25rem">Alerts are delivered to your <a href="#" onclick="switchPageTab('messages');return false;" style="color:var(--color-primary-500);font-weight:600">Messages inbox</a>.</p>
                     <form id="alertPrefsForm">
                         <div class="alert-pref-row">
-                            <label class="autopay-switch"><input type="checkbox" id="alertLowBalEnabled"><span class="autopay-slider"></span></label>
-                            <div style="flex:1"><strong>Low Balance Alert</strong><div style="font-size:0.8rem;color:var(--color-gray-500)">Notify me when checking or savings drops to or below:</div></div>
-                            <div class="form-group" style="margin-bottom:0;width:140px"><input type="number" class="form-input" id="alertLowBalThreshold" min="0" step="0.01"></div>
+                            <label class="autopay-switch"><input type="checkbox" id="alertLowBalEnabled" aria-label="Low Balance Alert" onchange="syncAlertRowEnabled(this,'alertLowBalThreshold','alertLowBalOnOff')"><span class="autopay-slider"></span></label>
+                            <div style="flex:1">
+                                <strong>Low Balance Alert</strong> <span id="alertLowBalOnOff" style="font-size:0.72rem;font-weight:700;color:var(--color-gray-400)">Off</span>
+                                <div style="font-size:0.8rem;color:var(--color-gray-500)">Notify me when checking or savings drops to or below:</div>
+                                <div style="font-size:0.72rem;color:var(--color-gray-400);margin-top:0.15rem">A common starting point is about one week of typical spending.</div>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;width:140px">
+                                <div style="display:flex;align-items:center;gap:0.35rem"><span style="color:var(--color-gray-400)">ƒ</span><input type="number" class="form-input" id="alertLowBalThreshold" min="0" step="0.01" aria-label="Low balance threshold amount"></div>
+                            </div>
                         </div>
                         <div class="alert-pref-row">
-                            <label class="autopay-switch"><input type="checkbox" id="alertLargeTxEnabled"><span class="autopay-slider"></span></label>
-                            <div style="flex:1"><strong>Large Transaction Alert</strong><div style="font-size:0.8rem;color:var(--color-gray-500)">Notify me when any single transaction is at or above:</div></div>
-                            <div class="form-group" style="margin-bottom:0;width:140px"><input type="number" class="form-input" id="alertLargeTxThreshold" min="0" step="0.01"></div>
+                            <label class="autopay-switch"><input type="checkbox" id="alertLargeTxEnabled" aria-label="Large Transaction Alert" onchange="syncAlertRowEnabled(this,'alertLargeTxThreshold','alertLargeTxOnOff')"><span class="autopay-slider"></span></label>
+                            <div style="flex:1">
+                                <strong>Large Transaction Alert</strong> <span id="alertLargeTxOnOff" style="font-size:0.72rem;font-weight:700;color:var(--color-gray-400)">Off</span>
+                                <div style="font-size:0.8rem;color:var(--color-gray-500)">Notify me when any single transaction is at or above:</div>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;width:140px">
+                                <div style="display:flex;align-items:center;gap:0.35rem"><span style="color:var(--color-gray-400)">ƒ</span><input type="number" class="form-input" id="alertLargeTxThreshold" min="0" step="0.01" aria-label="Large transaction threshold amount"></div>
+                            </div>
                         </div>
                         <button type="submit" class="btn btn-primary" style="margin-top:1rem">Save Preferences</button>
                     </form>
                 </div>
             </div><!-- /panel-alerts -->
+
+            <!-- ═══════════════════════════════════════════════════════
+                 MESSAGES TAB (banking inbox — alerts, scheduled-transfer
+                 results, milestones, security notices)
+            ═══════════════════════════════════════════════════════ -->
+            <div class="page-tab-panel" id="panel-messages">
+                <div class="banking-section full-width">
+                    <div class="db-inbox-toolbar">
+                        <div>
+                            <h2 style="margin:0">Messages</h2>
+                            <div style="font-size:0.8rem;color:var(--color-gray-500);margin-top:0.15rem" id="inboxUnreadCount"></div>
+                        </div>
+                        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+                            <div class="tx-filter-tabs" style="margin:0">
+                                <button type="button" class="tx-filter-btn active" id="inboxFilter-all" onclick="setInboxFilter('all')">All</button>
+                                <button type="button" class="tx-filter-btn" id="inboxFilter-unread" onclick="setInboxFilter('unread')">Unread</button>
+                            </div>
+                            <button type="button" class="btn" id="inboxMarkAllBtn" style="padding:0.4rem 0.8rem;font-size:0.8rem" onclick="markAllMessagesRead()">Mark all read</button>
+                        </div>
+                    </div>
+                    <div id="inboxList"><p style="color:var(--color-gray-500);padding:1rem;text-align:center">Loading messages…</p></div>
+                    <p style="font-size:0.75rem;color:var(--color-gray-400);margin:0.75rem 0 0">Choose which alerts you get on the <a href="#" onclick="switchPageTab('alerts');return false;" style="color:var(--color-primary-500);font-weight:600">Alerts</a> tab.</p>
+                </div>
+            </div><!-- /panel-messages -->
             </div><!-- /module-content -->
             </div><!-- /module-layout -->
 
@@ -655,21 +861,74 @@
         loans:      'loadLoansTab',
         goals:      'loadGoalsTab',
         statements: 'loadStatementsTab',
-        alerts:     'loadAlertsTab'
+        alerts:     'loadAlertsTab',
+        messages:   'loadMessagesTab'
     };
 
-    function switchPageTab(name) {
-        ['dashboard', 'profile', 'banking', 'scheduled', 'creditcard', 'loans', 'goals', 'statements', 'alerts'].forEach(function(t) {
+    var BANK_TAB_NAMES = ['dashboard', 'profile', 'banking', 'scheduled', 'creditcard', 'loans', 'goals', 'statements', 'alerts', 'messages'];
+
+    // Gives each tab a real URL (#banking, #loans, ...) so refreshing,
+    // pressing Back, or sharing a link lands on the right section instead of
+    // always resetting to Dashboard. `fromHashChange` avoids re-writing the
+    // hash (and re-looping) when this run was itself triggered by the
+    // hashchange listener below.
+    function switchPageTab(name, fromHashChange) {
+        if (BANK_TAB_NAMES.indexOf(name) === -1) name = 'dashboard';
+        BANK_TAB_NAMES.forEach(function(t) {
             var panel = document.getElementById('panel-' + t);
-            var btn   = document.getElementById('tab-btn-' + t);
-            if (!panel || !btn) return;
+            if (!panel) return;
             var active = (t === name);
             panel.classList.toggle('active', active);
-            btn.classList.toggle('active', active);
+            // The sidebar button is optional — Profile no longer has one
+            // (moved to the header's person icon) but its panel/tab id and
+            // loader still work exactly like every other tab's.
+            var btn = document.getElementById('tab-btn-' + t);
+            if (btn) btn.classList.toggle('active', active);
         });
         sessionStorage.setItem('banking_tab', name);
+        if (!fromHashChange && window.location.hash.slice(1) !== name) {
+            history.replaceState(null, '', '#' + name);
+        }
         var loaderName = PAGE_TAB_LOADERS[name];
         if (loaderName && typeof window[loaderName] === 'function') window[loaderName]();
+    }
+
+    window.addEventListener('hashchange', function() {
+        var name = window.location.hash.replace('#', '');
+        if (name) switchPageTab(name, true);
+    });
+
+    function goToMoveMoney() {
+        switchPageTab('banking');
+        setTimeout(function() {
+            var card = document.getElementById('moveMoneyCard');
+            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            var inp = document.getElementById('moveAmount');
+            if (inp) inp.focus({ preventScroll: true });
+        }, 50);
+    }
+
+    /* ── Header level / XP bar ──────────────────────────────────────── */
+    // Called on load and after anything that awards XP (awardXP, challenge
+    // checks). Pass userData to skip the fetch when the caller has it.
+    function refreshHeaderProgress(userData) {
+        var p = userData ? Promise.resolve(userData) : DigifinwizDB.getUserData();
+        return p.then(function(ud) {
+            if (!ud) return;
+            var level   = ud.level || 1;
+            var points  = ud.points || 0;
+            var pToNext = ud.pointsToNextLevel != null ? ud.pointsToNextLevel : 1000;
+            var coins   = ud.coins || 0;
+            var earned  = Math.max(0, 1000 - pToNext);
+            var pct     = Math.min(100, Math.round((earned / 1000) * 100));
+            var set = function(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
+            set('bankProgressLevel', level + '/50');
+            set('bankProgressText',  pct + '% completed');
+            set('bankProgressXP',    points.toLocaleString() + ' XP');
+            set('bankProgressCoins', coins.toLocaleString());
+            var fillEl = document.getElementById('bankProgressFill');
+            if (fillEl) fillEl.style.width = pct + '%';
+        }).catch(function(){});
     }
 
     /* ── HTML escape ────────────────────────────────────────────────── */
@@ -745,13 +1004,38 @@
         if (form) form.classList.toggle('open');
     }
 
+    // Saved recipients are per banking account: the key includes the
+    // logged-in user's id, so two people sharing a browser never see each
+    // other's saved payees. (The old unscoped key can't be attributed to
+    // any one account, so it is deliberately not migrated.)
+    function customRecipientsKey() {
+        var s = (typeof DigifinwizModuleAuth !== 'undefined' && DigifinwizModuleAuth.getSession) ? DigifinwizModuleAuth.getSession() : null;
+        return s && s.userId != null ? 'digifinwiz_custom_recipients_banking_' + s.userId : null;
+    }
+    function loadCustomRecipients() {
+        var key = customRecipientsKey();
+        if (!key) return [];
+        try {
+            var v = JSON.parse(localStorage.getItem(key) || '[]');
+            return Array.isArray(v) ? v.filter(function(r) { return r && r.name && r.account; }) : [];
+        } catch (e) { return []; }
+    }
+    function storeCustomRecipients(list) {
+        var key = customRecipientsKey();
+        if (!key) return false;
+        try { localStorage.setItem(key, JSON.stringify(list)); return true; } catch (e) { return false; }
+    }
+
     function saveCustomRecipient() {
         var name = ((document.getElementById('newRecipName') || {}).value || '').trim();
         var acct = ((document.getElementById('newRecipAcct') || {}).value || '').trim();
         if (!name || !acct) { showNotification('Please enter both name and account number.', 'error'); return; }
-        var saved = JSON.parse(localStorage.getItem('digifinwiz_custom_recipients') || '[]');
+        var saved = loadCustomRecipients();
+        if (saved.some(function(r) { return r.name === name && String(r.account) === acct; })) {
+            showNotification(name + ' is already saved.', 'info'); return;
+        }
         saved.push({ name: name, account: acct });
-        localStorage.setItem('digifinwiz_custom_recipients', JSON.stringify(saved));
+        if (!storeCustomRecipients(saved)) { showNotification('Could not save recipient.', 'error'); return; }
         document.getElementById('newRecipName').value = '';
         document.getElementById('newRecipAcct').value = '';
         document.getElementById('customRecipForm').classList.remove('open');
@@ -769,15 +1053,15 @@
     ];
 
     function renderCustomRecipients() {
-        var saved = JSON.parse(localStorage.getItem('digifinwiz_custom_recipients') || '[]');
+        var saved = loadCustomRecipients();
         var wrap  = document.getElementById('customRecipientsWrap');
         if (!wrap) return;
         if (saved.length === 0) { wrap.innerHTML = ''; return; }
         wrap.innerHTML = '<div class="section-label" style="margin-top:0.75rem;margin-bottom:0.4rem">Saved Recipients</div>' +
             saved.map(function(r, i) {
-                var initials = r.name.trim().split(/\s+/).slice(0,2).map(function(w){ return (w[0]||'').toUpperCase(); }).join('') || '?';
+                var initials = escHB(String(r.name).trim().split(/\s+/).slice(0,2).map(function(w){ return (w[0]||'').toUpperCase(); }).join('') || '?');
                 var grad     = CUST_RECIP_GRADS[i % CUST_RECIP_GRADS.length];
-                var masked   = '****' + String(r.account).slice(-4);
+                var masked   = '****' + escHB(String(r.account).slice(-4));
                 return "<div class=\"saved-recip-card\" onclick='selectRecipient(" + jsAttrB(r.name) + ',' + jsAttrB(r.account) + ")'>" +
                     '<div style="width:30px;height:30px;border-radius:50%;background:' + grad + ';display:flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:700;color:#fff;flex-shrink:0">' + initials + '</div>' +
                     '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.82rem">' + escHB(r.name) + '</div>' +
@@ -788,11 +1072,40 @@
     }
 
     function removeCustomRecipient(index) {
-        var saved = JSON.parse(localStorage.getItem('digifinwiz_custom_recipients') || '[]');
+        var saved = loadCustomRecipients();
         saved.splice(index, 1);
-        localStorage.setItem('digifinwiz_custom_recipients', JSON.stringify(saved));
+        storeCustomRecipients(saved);
         renderCustomRecipients();
         showNotification('Recipient removed.', 'info');
+    }
+
+    /* ── Recent recipients (from the user's real transfer history) ─── */
+    // Most-recent distinct (name, account) pairs the user has actually sent
+    // money to. Own-account moves are not recipients.
+    function renderRecentRecipients(txs) {
+        var grid = document.getElementById('recentRecipientsGrid');
+        if (!grid) return;
+        var seen = {};
+        var recent = [];
+        (txs || []).forEach(function(t) {
+            if (recent.length >= 4 || !isExternalTransfer(t) || !t.recipient) return;
+            var key = String(t.recipient).trim().toLowerCase() + '|' + String(t.account || '').trim();
+            if (seen[key]) return;
+            seen[key] = true;
+            recent.push(t);
+        });
+        if (recent.length === 0) {
+            grid.innerHTML = '<div class="db-recip-empty">No recent recipients yet — people you send money to will show up here for one-click reuse.</div>';
+            return;
+        }
+        grid.innerHTML = recent.map(function(t) {
+            var name = String(t.recipient);
+            var acct = String(t.account || '');
+            return "<div class=\"recipient-card\" role=\"button\" tabindex=\"0\" title=\"Last sent " + escHB(t.date || '') + "\" onclick='selectRecipient(" + jsAttrB(name) + ',' + jsAttrB(acct) + ")'>" +
+                '<div class="recipient-avatar" style="background:' + avatarGradientFor(name) + '">' + escHB(initialsFor(name)) + '</div>' +
+                '<div class="recipient-info"><strong>' + escHB(name) + '</strong><span>****' + escHB(acct.slice(-4)) + '</span></div>' +
+                '</div>';
+        }).join('');
     }
 
     /* ── Amount range slider sync ───────────────────────────────────── */
@@ -903,7 +1216,8 @@
         if (typeof DigifinwizDB === 'undefined') return;
         Promise.all([DigifinwizDB.getChallenges(), DigifinwizDB.getTransactions(1000)]).then(function(res) {
             var challenges = res[0];
-            var txs = res[1];
+            // Own-account moves never count toward transfer challenges.
+            var txs = (res[1] || []).filter(isExternalTransfer);
             var banking = challenges.filter(function(c){ return c.active && c.category === 'banking'; });
             var container = document.getElementById('bankingChallengesList');
             if (!container) return;
@@ -914,26 +1228,39 @@
             var set = function(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; };
             set('chalDoneCount',    done.length + '/' + banking.length);
             set('chalPendingCount', pending.length);
-            set('chalTotalXp',      '+' + totalXp + ' XP');
-            set('chalEarnedXp',     '+' + earnXp  + ' XP');
+            // "50 of 590 XP" — earnXp is real XP already in the account;
+            // totalXp is the full reward pool if every banking challenge were
+            // completed. Framed as "X of Y" so it reads as a subset of the
+            // pool, not a second "total XP" competing with the header's.
+            set('chalEarnedOfTotalXp', earnXp + ' of ' + totalXp + ' XP');
             if (!banking.length) {
                 container.innerHTML = '<p style="color:var(--color-gray-500);font-size:0.875rem">No banking challenges yet.</p>';
                 return;
             }
             var maxAmt  = txs.reduce(function(mx,t){ return Math.max(mx, t.amount||0); }, 0);
             var totTx   = txs.reduce(function(s,t) { return s+(t.amount||0); }, 0);
-            container.innerHTML = banking.map(function(c) {
+            // Pending challenges first (they're what the user can act on),
+            // completed ones after — and only the first 2 shown by default,
+            // so this tracker doesn't push the transfer form ~2000px down
+            // the page when there are 7 of them.
+            var ordered = pending.concat(done);
+            var VISIBLE_COUNT = 2;
+            var cardsHtml = ordered.map(function(c, i) {
                 var pct=0, progressLabel='';
                 if (c.completed) { pct=100; progressLabel='Completed!'; }
                 else if (c.condition==='first_transfer') { pct=txs.length?100:0; progressLabel=txs.length?'1/1 done':'0/1 done'; }
                 else if (c.condition==='transfer_amount') { pct=Math.min(100,Math.round((maxAmt/(c.conditionValue||1))*100)); progressLabel='Best: ƒ'+maxAmt.toLocaleString('en-US',{minimumFractionDigits:2})+' / ƒ'+Number(c.conditionValue).toLocaleString(); }
                 else if (c.condition==='total_transferred') { pct=Math.min(100,Math.round((totTx/(c.conditionValue||1))*100)); progressLabel='ƒ'+totTx.toLocaleString('en-US',{maximumFractionDigits:0})+' / ƒ'+Number(c.conditionValue).toLocaleString(); }
                 else if (c.condition==='transaction_count') { pct=Math.min(100,Math.round((txs.length/(c.conditionValue||1))*100)); progressLabel=txs.length+' / '+c.conditionValue+' transfers'; }
+                else if (c.condition==='manual' && c.title==='Bank Explorer') { progressLabel='Read "How Banking Works" on the Dashboard'; }
                 else progressLabel=pct+'% complete';
+                var guideLink = (!c.completed && c.condition==='manual' && c.title==='Bank Explorer')
+                    ? '<a href="#" onclick="switchPageTab(\'dashboard\');setTimeout(function(){var g=document.getElementById(\'bankGuideCard\');if(g)g.scrollIntoView({behavior:\'smooth\'});},60);return false;" style="font-size:0.72rem;font-weight:700;color:var(--color-primary-500);text-decoration:none">Open the guide →</a>'
+                    : '';
                 var isDone    = c.completed;
                 var barColor  = isDone?'#10b981':(pct>=75?'#f59e0b':pct>=40?'#6366f1':'#94a3b8');
-                var completedOn = isDone&&c.completedAt?' · '+new Date(c.completedAt).toLocaleDateString():'';
-                return '<div style="background:'+(isDone?'#f0fdf4':'#f8fafc')+';border:1px solid '+(isDone?'#bbf7d0':'#e2e8f0')+';border-radius:10px;padding:0.875rem">'+
+                var completedOn = isDone&&c.completedAt?' · '+new Date(c.completedAt).toLocaleDateString('en-US'):'';
+                var cardHtml = '<div style="background:'+(isDone?'#f0fdf4':'#f8fafc')+';border:1px solid '+(isDone?'#bbf7d0':'#e2e8f0')+';border-radius:10px;padding:0.875rem">'+
                     '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.5rem">'+
                     '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.875rem">'+(isDone?'✅ ':'⏳ ')+escHB(c.title)+'</div>'+
                     '<div style="font-size:0.75rem;color:#64748b;margin-top:0.15rem">'+escHB(c.description||'')+'</div></div>'+
@@ -942,14 +1269,38 @@
                     '<div style="background:#e2e8f0;border-radius:4px;height:7px;overflow:hidden;margin-bottom:0.3rem">'+
                     '<div style="background:'+barColor+';width:'+pct+'%;height:100%;transition:width 0.7s ease;border-radius:4px"></div></div>'+
                     '<div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#94a3b8">'+
-                    '<span>'+escHB(progressLabel)+escHB(completedOn)+'</span><span>'+pct+'%</span></div></div>';
+                    '<span>'+escHB(progressLabel)+escHB(completedOn)+'</span><span>'+pct+'%</span></div>'+
+                    (guideLink ? '<div style="margin-top:0.35rem">'+guideLink+'</div>' : '')+'</div>';
+                // Cards beyond VISIBLE_COUNT start hidden, inside a wrapper
+                // toggled by #chalShowMoreBtn below.
+                return i < VISIBLE_COUNT ? cardHtml : '<div class="chal-extra" style="display:none">' + cardHtml + '</div>';
             }).join('');
+            var extraCount = Math.max(0, ordered.length - VISIBLE_COUNT);
+            container.innerHTML = cardsHtml + (extraCount > 0
+                ? '<button type="button" id="chalShowMoreBtn" class="btn" style="width:100%;font-size:0.8rem;padding:0.5rem" onclick="toggleExtraChallenges(this)">Show ' + extraCount + ' more challenge' + (extraCount !== 1 ? 's' : '') + ' ▾</button>'
+                : '');
         }).catch(function(){});
+    }
+
+    function toggleExtraChallenges(btn) {
+        var container = document.getElementById('bankingChallengesList');
+        if (!container) return;
+        var extras = container.querySelectorAll('.chal-extra');
+        var expand = btn.textContent.indexOf('Show') === 0;
+        extras.forEach(function(el) { el.style.display = expand ? '' : 'none'; });
+        var n = extras.length;
+        btn.textContent = expand ? ('Show fewer challenges ▴') : ('Show ' + n + ' more challenge' + (n !== 1 ? 's' : '') + ' ▾');
     }
 
     /* ── Transfer stats ─────────────────────────────────────────────── */
     function loadTransferStats() {
-        DigifinwizDB.getTransactions(1000).then(function(txs) {
+        return DigifinwizDB.getTransactions(1000).then(function(allTxs) {
+            // Every count/total/recipient below is about transfers to other
+            // people — own-account moves (type 'internal') are excluded.
+            // Filter-tab counts use the full list, since the list itself
+            // shows moves too.
+            var txs = allTxs.filter(isExternalTransfer);
+            renderRecentRecipients(txs);
             loadTodayStats(txs);
             renderSevenDayChart(txs);
             var total   = txs.reduce(function(s,t){ return s+(t.amount||0); }, 0);
@@ -963,9 +1314,14 @@
                 var el = document.getElementById(id);
                 if (el) el.textContent = count > 0 ? label + ' (' + count + ')' : label;
             };
-            updateTabLabel('txFilter-all',      'All',      txs.length);
-            updateTabLabel('txFilter-checking', 'Checking', fromChk);
-            updateTabLabel('txFilter-savings',  'Savings',  fromSav);
+            var listCount = function(acct) {
+                return allTxs.filter(function(t) {
+                    return t.fromAccount === acct || (isInternalMove(t) && t.toAccount === acct);
+                }).length;
+            };
+            updateTabLabel('txFilter-all',      'All',      allTxs.length);
+            updateTabLabel('txFilter-checking', 'Checking', listCount('checking'));
+            updateTabLabel('txFilter-savings',  'Savings',  listCount('savings'));
             var fmt      = function(n){ return 'ƒ'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
             var fmtShort = function(n){ return 'ƒ'+n.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}); };
             var set = function(id,v){ var e=document.getElementById(id); if(e) e.textContent=v; };
@@ -979,8 +1335,6 @@
             set('statTxAvg',     txs.length>0?fmt(avg):'—');
             set('statTxChecking',fromChk+(fromChk===1?' tx':' txs'));
             set('statTxSavings', fromSav+(fromSav===1?' tx':' txs'));
-            set('totalTransferred', fmtShort(total));
-            set('transferCount',    txs.length);
             var badge=document.getElementById('txCountBadge');
             if(badge) badge.textContent=txs.length+' transfer'+(txs.length!==1?'s':'');
             var badge2=document.getElementById('txCountBadge2');
@@ -994,6 +1348,11 @@
                 set('statLastXp','+'+(latest.pointsEarned||0)+' XP earned');
                 var avatarEl=document.getElementById('statLastAvatar');
                 if(avatarEl) avatarEl.textContent=initials;
+            } else {
+                set('statLastRecipient','No transfers yet');
+                set('statLastDate',''); set('statLastAmount',''); set('statLastXp','');
+                var av=document.getElementById('statLastAvatar');
+                if(av) av.textContent='?';
             }
         }).catch(function(){});
     }
@@ -1035,32 +1394,20 @@
         loadTransferStats();
         loadBalanceCards();
         updateTransactionsList(currentTxFilter);
+        if (typeof refreshMessageBadge === 'function') refreshMessageBadge();
+        refreshHeaderProgress();
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-        // Restore last active tab
-        switchPageTab(sessionStorage.getItem('banking_tab') || 'dashboard');
+        // A URL like banking.html#loans takes priority — that's the whole
+        // point of a deep link — falling back to the last-active tab, then
+        // Dashboard.
+        var initialTab = window.location.hash.replace('#', '') || sessionStorage.getItem('banking_tab') || 'dashboard';
+        switchPageTab(initialTab);
         DigifinwizDB.init().then(function() { refreshBankingPage(); });
-        // Populate DigiBank game progress bar
-        DigifinwizDB.getUserData().then(function(userData) {
-            if (!userData) return;
-            var level  = userData.level || 1;
-            var points = userData.points || 0;
-            var pToNext = userData.pointsToNextLevel != null ? userData.pointsToNextLevel : 1000;
-            var coins  = userData.coins || 0;
-            var earned = Math.max(0, 1000 - pToNext);
-            var pct    = Math.min(100, Math.round((earned / 1000) * 100));
-            var set = function(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
-            set('bankProgressLevel', level + '/50');
-            set('bankProgressText',  pct + '% completed');
-            set('bankProgressXP',    points.toLocaleString() + ' XP');
-            set('bankProgressCoins', coins.toLocaleString());
-            var fillEl = document.getElementById('bankProgressFill');
-            if (fillEl) fillEl.style.width = pct + '%';
-        }).catch(function(){});
-        document.getElementById('transferForm').addEventListener('submit', function() {
-            setTimeout(refreshBankingPage, 1400);
-        }, true);
+        // Populate DigiBank game progress bar (refreshed again after any
+        // XP award — see awardXP in banking-accounts.js).
+        refreshHeaderProgress();
         // Load saved custom recipients
         renderCustomRecipients();
         // MutationObserver: reapply search filter when transaction list refreshes
