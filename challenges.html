@@ -34,15 +34,15 @@
             </div>
             <p class="sidebar-desc">Visit any of these pages to complete new tasks such as online shopping, paying bills or banking</p>
             <nav class="sidebar-nav">
-                <a href="ecommerce.html" class="nav-item">
+                <a href="ecommerce.html" target="_blank" rel="noopener" class="nav-item">
                     <span>Ecommerce<sup class="nav-badge" id="sidebarBadgeEcommerce">5</sup></span>
                     <span class="arrow">&#8594;</span>
                 </a>
-                <a href="banking.html" class="nav-item">
+                <a href="banking.html" target="_blank" rel="noopener" class="nav-item">
                     <span>Banking<sup class="nav-badge" id="sidebarBadgeBanking" style="display:none">0</sup></span>
                     <span class="arrow">&#8594;</span>
                 </a>
-                <a href="utilities.html" class="nav-item">
+                <a href="utilities.html" target="_blank" rel="noopener" class="nav-item">
                     <span>Utilities<sup class="nav-badge" id="sidebarBadgeUtilities" style="display:none">0</sup></span>
                     <span class="arrow">&#8594;</span>
                 </a>
@@ -770,6 +770,82 @@
             renderFilteredChallenges();
         });
     }
+
+    // ── Progress from all three sections ───────────────────────────────────
+    // Banking / Ecommerce / Utilities each keep their own account and
+    // challenge records, so on their own the numbers above only cover this
+    // main account. This joins the linked module accounts in.
+    var OV_META = {
+        banking:   { label: 'Banking',   icon: '&#127970;', href: 'banking.html',   pfx: 'bank' },
+        ecommerce: { label: 'Ecommerce', icon: '&#128722;', href: 'ecommerce.html', pfx: 'eco'  },
+        utilities: { label: 'Utilities', icon: '&#9889;',   href: 'utilities.html', pfx: 'util' }
+    };
+
+    function loadOverallOnChallenges() {
+        return DigifinwizDB.getOverallProgress().then(function(o) {
+            var t = o.totals || {};
+            // Banner
+            var banner = document.getElementById('overallBanner');
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = 'overallBanner';
+                var anchor = document.getElementById('level1-requirements-panel');
+                anchor.parentNode.insertBefore(banner, anchor);
+            }
+            banner.style.cssText = 'background:linear-gradient(135deg,#eef2ff,#f5f3ff);border:1px solid #c7d2fe;border-radius:12px;padding:0.9rem 1.25rem;margin-bottom:1.25rem;display:flex;flex-wrap:wrap;gap:0.5rem 2rem;align-items:center';
+            banner.innerHTML = '<strong style="color:#4338ca">All sections combined</strong>' +
+                '<span><strong>' + t.levelsCompleted + '</strong> level' + (t.levelsCompleted === 1 ? '' : 's') + ' completed</span>' +
+                '<span><strong>' + (t.points || 0).toLocaleString() + '</strong> XP</span>' +
+                '<span><strong>' + t.challengesCompleted + ' / ' + t.challengesTotal + '</strong> challenges done</span>' +
+                '<span style="color:#64748b;font-size:0.8rem">' + t.linkedModules + ' of ' + t.totalModules + ' sections linked</span>';
+
+            // Category cards: use the linked module account's real numbers
+            (o.modules || []).forEach(function(m) {
+                var meta = OV_META[m.module];
+                if (!meta || !m.linked) return;
+                var pct = m.challengesTotal ? Math.round(m.challengesCompleted / m.challengesTotal * 100) : 0;
+                set(meta.pfx + 'ChalCount', m.challengesCompleted + ' / ' + m.challengesTotal + ' done');
+                set(meta.pfx + 'ChalXp', m.challengeXp + ' XP earned');
+                set(meta.pfx + 'ChalPct', pct + '%');
+                var barEl = document.getElementById(meta.pfx + 'ChalBar');
+                if (barEl) barEl.style.width = pct + '%';
+            });
+
+            // Per-section challenge lists
+            var host = document.getElementById('moduleChallengesSection');
+            if (!host) {
+                host = document.createElement('div');
+                host.id = 'moduleChallengesSection';
+                var grid = document.getElementById('bankChalCount').closest('div[style*="grid-template-columns"]');
+                grid.parentNode.insertBefore(host, grid.nextSibling);
+            }
+            host.innerHTML = (o.modules || []).map(function(m) {
+                var meta = OV_META[m.module];
+                if (!m.linked) {
+                    return '<div style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;padding:0.8rem 1rem;margin-bottom:0.75rem;font-size:0.85rem;color:#64748b">' +
+                        meta.icon + ' <strong>' + meta.label + '</strong> — not linked yet. Create a ' + meta.label + ' account with the same email or username to see its challenges here. ' +
+                        '<a href="' + meta.href + '" target="_blank" rel="noopener" style="font-weight:600">Open &#8599;</a></div>';
+                }
+                var rows = (m.challenges || []).slice().sort(function(a, b) { return (b.completed ? 1 : 0) - (a.completed ? 1 : 0); }).map(function(c) {
+                    return '<div style="display:flex;gap:0.6rem;align-items:center;padding:0.35rem 0;border-bottom:1px solid #f1f5f9;font-size:0.82rem">' +
+                        '<span>' + (c.completed ? '&#9989;' : '&#9711;') + '</span>' +
+                        '<span style="flex:1;' + (c.completed ? 'color:#15803d' : '') + '"><strong>' + escHtml(c.title) + '</strong> <span style="color:#94a3b8">' + escHtml(c.description || '') + '</span></span>' +
+                        '<span style="color:' + (c.completed ? '#16a34a' : '#64748b') + ';font-weight:600;white-space:nowrap">+' + c.points + ' XP</span></div>';
+                }).join('');
+                return '<details style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:0.7rem 1rem;margin-bottom:0.75rem">' +
+                    '<summary style="cursor:pointer;font-weight:700;font-size:0.9rem">' + meta.icon + ' ' + meta.label + ' account &middot; Level ' + m.level +
+                    ' &middot; ' + m.challengesCompleted + ' / ' + m.challengesTotal + ' challenges</summary><div style="margin-top:0.5rem">' + rows + '</div></details>';
+            }).join('');
+        }).catch(function(err) { console.error('overall progress:', err); });
+    }
+
+    var _loadChallengesBase = loadChallengesPage;
+    loadChallengesPage = function() { return _loadChallengesBase().then(loadOverallOnChallenges); };
+
+    // Something was completed in a module tab — pick it up right away.
+    window.addEventListener('storage', function(e) {
+        if (e.key === 'dfw_progress_ping' && (sessionStorage.getItem('challenges_tab') || 'challenges') === 'challenges') loadChallengesPage();
+    });
 
     // ── Tab switching ──────────────────────────────────────────────────────
     function switchTab(name) {

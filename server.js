@@ -317,10 +317,13 @@ function computeOrderStatus(order) {
         // on to Shipped. The always-true "Order Placed" step is added by the
         // client in front of this list, since placing the order is instant.
         trackingSteps: [
-            { key: 'processing',       label: 'Processing',       done: elapsed >= processingMs },
-            { key: 'shipped',          label: 'Shipped',          done: elapsed >= outForDeliveryMs },
-            { key: 'out_for_delivery', label: 'Out for Delivery', done: elapsed >= totalMs },
-            { key: 'delivered',        label: 'Delivered',        done: elapsed >= totalMs }
+            // expectedAt: when each stage begins (or, for Delivered, when the
+            // package arrives), so the UI can show a real date instead of a
+            // bare "Pending".
+            { key: 'processing',       label: 'Processing',       done: elapsed >= processingMs,      expectedAt: order.timestamp || 0 },
+            { key: 'shipped',          label: 'Shipped',          done: elapsed >= outForDeliveryMs,  expectedAt: (order.timestamp || 0) + processingMs },
+            { key: 'out_for_delivery', label: 'Out for Delivery', done: elapsed >= totalMs,           expectedAt: (order.timestamp || 0) + outForDeliveryMs },
+            { key: 'delivered',        label: 'Delivered',        done: elapsed >= totalMs,           expectedAt: (order.timestamp || 0) + totalMs }
         ]
     };
 }
@@ -363,9 +366,15 @@ async function maybeFireBalanceAlerts(user, account, current, next, delta, categ
     }
     if (prefs.largeTxEnabled && Math.abs(delta) >= prefs.largeTxThreshold) {
         alerts.push({
-            subject: 'Large transaction alert',
-            body: 'A ' + (delta < 0 ? 'debit' : 'credit') + ' of ƒ' + Math.abs(delta).toFixed(2) +
-                  ' hit your ' + account + ' account (alert threshold: ƒ' + Number(prefs.largeTxThreshold).toFixed(2) + ').',
+            // Named after what the user configured on their Alerts page:
+            // "Large Purchase" (store), "Large Bill Payment" (utilities),
+            // "Large Transaction" (bank).
+            subject: category === 'ecommerce' ? 'Large purchase alert'
+                   : category === 'utilities' ? 'Large bill payment alert'
+                   : 'Large transaction alert',
+            body: (category === 'ecommerce' ? 'An order' : category === 'utilities' ? 'A bill payment' : 'A ' + (delta < 0 ? 'debit' : 'credit')) +
+                  ' of ƒ' + Math.abs(delta).toFixed(2) + (category === 'ecommerce' || category === 'utilities' ? ' was charged to ' : ' hit ') + 'your ' + (/^(checking|savings)$/.test(account) ? account + ' account' : account) +
+                  ' (alert threshold: ƒ' + Number(prefs.largeTxThreshold).toFixed(2) + ').',
             type: 'warning'
         });
     }
@@ -1336,6 +1345,9 @@ app.post('/api/me/password', async (req, res) => {
     if (!currentPassword || !newPassword) {
         return res.status(400).json({ error: 'currentPassword and newPassword required' });
     }
+    if (newPassword === currentPassword) {
+        return res.status(400).json({ error: 'Your new password cannot be the same as your previous password.' });
+    }
     try {
         await withUserLock(req.userId, async () => {
             const users = await readJSON(req.userStore);
@@ -2109,6 +2121,69 @@ app.post('/api/me/reset', async (req, res) => {
 
 app.get('/api/me/challenges', async (req, res) => {
     res.json(await getChallengesForUser(req.userId, req.userRole || 'participant', req.challengeStore));
+});
+
+// ── Me: progress combined across Banking, E-Commerce and Utilities ───────────
+// The three standalone modules keep their own accounts and progress records
+// (level, XP, challenges), so the main site's own record only shows a slice.
+// This joins them: each module account is matched to the signed-in main
+// account by email or username (case-insensitive) and its level / XP /
+// challenge progress is read from that module's own stores. Main-site only.
+app.get('/api/me/overall-progress', async (req, res) => {
+    if (req.appModule) return res.status(400).json({ error: 'Main-site accounts only' });
+    const users = await readJSON(req.userStore);
+    const me = users.find(u => u.id === req.userId);
+    if (!me) return res.status(404).json({ error: 'User not found' });
+    const email = String(me.email || '').trim().toLowerCase();
+    const uname = String(me.username || '').trim().toLowerCase();
+
+    const summarize = (userData, challenges) => {
+        const ud = Object.assign({}, DEFAULT_USER_DATA, userData || {});
+        const active = challenges.filter(c => c.active !== false);
+        const done = active.filter(c => c.completed);
+        return {
+            level: ud.level || 1,
+            levelsCompleted: Math.max(0, (ud.level || 1) - 1),
+            points: ud.points || 0,
+            pointsToNextLevel: ud.pointsToNextLevel != null ? ud.pointsToNextLevel : 1000,
+            challengesCompleted: done.length,
+            challengesTotal: active.length,
+            challengeXp: done.reduce((s, c) => s + (c.points || 0), 0)
+        };
+    };
+
+    const mainChallenges = await getChallengesForUser(req.userId, 'participant', req.challengeStore);
+    const main = summarize(me.userData, mainChallenges);
+    const modules = [];
+    for (const key of Object.keys(MODULE_STORES)) {
+        const mod = MODULE_STORES[key];
+        const mUsers = await readJSON(mod.users);
+        const match = mUsers.find(u =>
+            (email && String(u.email || '').trim().toLowerCase() === email) ||
+            (uname && String(u.username || '').trim().toLowerCase() === uname));
+        if (!match) { modules.push({ module: key, linked: false }); continue; }
+        const chals = await getChallengesForUser(match.id, 'participant', mod.challenges);
+        modules.push(Object.assign({
+            module: key, linked: true, accountName: match.username,
+            challenges: chals.filter(c => c.active !== false).map(c => ({
+                title: c.title, description: c.description, points: c.points || 0,
+                completed: !!c.completed, completedAt: c.completedAt || null
+            }))
+        }, summarize(match.userData, chals)));
+    }
+    const linked = modules.filter(m => m.linked);
+    const parts = [main].concat(linked);
+    res.json({
+        main, modules,
+        totals: {
+            levelsCompleted: parts.reduce((s, p) => s + p.levelsCompleted, 0),
+            points: parts.reduce((s, p) => s + p.points, 0),
+            challengesCompleted: parts.reduce((s, p) => s + p.challengesCompleted, 0),
+            challengesTotal: parts.reduce((s, p) => s + p.challengesTotal, 0),
+            linkedModules: linked.length,
+            totalModules: modules.length
+        }
+    });
 });
 
 // Admin-only: the only caller is admin.js's data import. Participants never
@@ -3501,8 +3576,12 @@ async function attemptPayBillCycle(userId, cycleId, req, opts = {}) {
         if (uidx === -1) return { ok: false, reason: 'user_not_found' };
         const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
 
-        let account = 'checking';
-        if (totalDue > balances[account]) {
+        // A validated card (opts.card, checked by the route) pays the bill
+        // directly: no DigiPay balance is touched, only the last 4 digits
+        // and brand are recorded.
+        const card = opts.card || null;
+        let account = card ? 'card' : 'checking';
+        if (!card && totalDue > balances[account]) {
             if (totalDue <= balances.savings) account = 'savings';
             else {
                 // At most one auto-pay failure message per cycle per 24h.
@@ -3514,9 +3593,9 @@ async function attemptPayBillCycle(userId, cycleId, req, opts = {}) {
                 return { ok: false, reason: 'insufficient_funds', totalDue, notifyFailure };
             }
         }
-        const current = balances[account];
-        const next    = parseFloat((current - totalDue).toFixed(2));
-        balances[account] = next;
+        const current = card ? balances.checking : balances[account];
+        const next    = card ? current : parseFloat((current - totalDue).toFixed(2));
+        if (!card) balances[account] = next;
 
         const onTime       = !statusInfo.overdue;
         const pointsEarned = 45 + (onTime ? 15 : 0);
@@ -3555,7 +3634,7 @@ async function attemptPayBillCycle(userId, cycleId, req, opts = {}) {
         const updatedUser = Object.assign({}, users[uidx], { balances, userData });
         users[uidx] = updatedUser;
         await writeJSON(req.userStore, users);
-        await maybeFireBalanceAlerts(updatedUser, account, current, next, -totalDue, 'utilities', req.messageStore);
+        await maybeFireBalanceAlerts(updatedUser, card ? 'card ending ' + card.last4 : account, current, next, -totalDue, 'utilities', req.messageStore);
 
         cycles[idx] = Object.assign({}, cycle, { status: 'paid', paidAt: Date.now(), paidAmount: totalDue, lateFeePaid: statusInfo.lateFee });
         await writeJSON(req.billCycleStore, cycles);
@@ -3565,6 +3644,7 @@ async function attemptPayBillCycle(userId, cycleId, req, opts = {}) {
             id: nextId(payments), userId,
             type: cycle.name, amount: totalDue, accountNumber: cycle.accountNumber,
             fromAccount: account, date: new Date().toLocaleDateString(), timestamp: Date.now(),
+            paidWith: card ? 'card' : 'balance', cardBrand: card ? card.brand : null, cardLast4: card ? card.last4 : null,
             pointsEarned, lateFee: statusInfo.lateFee, usage: cycle.usage, unit: cycle.unit, autoPaid: !!req.isAutopaySweep,
             // Which bill this settled, and the reward breakdown, so history
             // can say "August 2026 bill · on time · +8 coins" without guessing.
@@ -3667,14 +3747,46 @@ app.post('/api/me/bills/autopay', async (req, res) => {
     res.json(pref);
 });
 
+// Validates simulated card details (Luhn check digit, future expiry, CVV
+// length). Returns { error } or { brand, last4 } — the full number and CVV
+// are never stored.
+function validateCardDetails(c) {
+    if (!c || typeof c !== 'object') return { error: 'Card details required' };
+    const number = String(c.number || '').replace(/\s+/g, '');
+    if (!/^\d{13,19}$/.test(number)) return { error: 'Enter a valid card number' };
+    let sum = 0, dbl = false;
+    for (let i = number.length - 1; i >= 0; i--) {
+        let d = parseInt(number[i], 10);
+        if (dbl) { d *= 2; if (d > 9) d -= 9; }
+        sum += d; dbl = !dbl;
+    }
+    if (sum % 10 !== 0) return { error: 'Enter a valid card number' };
+    if (!String(c.name || '').trim()) return { error: 'Name on card required' };
+    const m = /^(\d{2})\/(\d{2})$/.exec(String(c.exp || '').trim());
+    if (!m || +m[1] < 1 || +m[1] > 12) return { error: 'Expiry must be MM/YY' };
+    if (new Date(2000 + (+m[2]), +m[1], 1).getTime() <= Date.now()) return { error: 'That card has expired' };
+    const amex = /^3[47]/.test(number);
+    if (!(amex ? /^\d{4}$/ : /^\d{3}$/).test(String(c.cvv || '').trim())) return { error: 'Invalid security code' };
+    const brand = /^4/.test(number) ? 'Visa'
+        : (/^5[1-5]/.test(number) || /^2(2[2-9]|[3-6]\d|7[01]|720)/.test(number)) ? 'Mastercard'
+        : amex ? 'Amex' : /^6(011|5)/.test(number) ? 'Discover' : 'Card';
+    return { brand, last4: number.slice(-4) };
+}
+
 app.post('/api/me/bills/:cycleId/pay', async (req, res) => {
     const cycleId = Number(req.params.cycleId);
+    let card = null;
+    if (req.body && req.body.card) {
+        const v = validateCardDetails(req.body.card);
+        if (v.error) return res.status(400).json({ error: v.error });
+        card = v;
+    }
     // Optional expectedTotal: the amount the confirm modal showed. If the
     // live total differs (e.g. a late fee kicked in), refuse without charging.
     const rawExpected = req.body && req.body.expectedTotal;
     const expectedTotal = rawExpected == null || rawExpected === '' ? undefined : Number(rawExpected);
     if (expectedTotal !== undefined && !Number.isFinite(expectedTotal)) return res.status(400).json({ error: 'expectedTotal must be a number' });
-    const result = await attemptPayBillCycle(req.userId, cycleId, req, { expectedTotal });
+    const result = await attemptPayBillCycle(req.userId, cycleId, req, { expectedTotal, card });
     if (!result.ok) {
         if (result.reason === 'amount_changed') {
             return res.status(409).json({ error: 'The amount due has changed', currentTotal: result.currentTotal });
@@ -3904,6 +4016,9 @@ app.post('/api/me/addresses', async (req, res) => {
     if (!city)     return res.status(400).json({ error: 'City required' });
     if (!STATE_TAX_RATES.hasOwnProperty(state)) return res.status(400).json({ error: 'Valid US state required' });
     if (!zip)      return res.status(400).json({ error: 'ZIP code required' });
+    if (!/^\d{5}$/.test(zip)) return res.status(400).json({ error: 'ZIP code must be exactly 5 digits' });
+    const phoneStr = String(body.phone || '').trim();
+    if (phoneStr && !/^\d{10}$/.test(phoneStr)) return res.status(400).json({ error: 'Phone number must be exactly 10 digits' });
 
     const record = await withUserLock(req.userId, async () => {
         const all = await readJSON(req.addressStore);
@@ -3928,6 +4043,8 @@ app.put('/api/me/addresses/:id', async (req, res) => {
     ['fullName', 'phone', 'street', 'street2', 'city', 'zip'].forEach(f => {
         if (body[f] !== undefined) patch[f] = String(body[f]).trim();
     });
+    if (patch.zip !== undefined && !/^\d{5}$/.test(patch.zip)) return res.status(400).json({ error: 'ZIP code must be exactly 5 digits' });
+    if (patch.phone && !/^\d{10}$/.test(patch.phone)) return res.status(400).json({ error: 'Phone number must be exactly 10 digits' });
     if (body.state !== undefined) {
         const state = String(body.state).trim().toUpperCase();
         if (!STATE_TAX_RATES.hasOwnProperty(state)) return res.status(400).json({ error: 'Valid US state required' });

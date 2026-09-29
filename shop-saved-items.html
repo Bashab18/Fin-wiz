@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <link rel="icon" href="data:,">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>InStyl - Saved Items</title>
+    <title>InStyl - Wishlist</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="shopping-styles.css">
     <script src="config.js"></script>
@@ -37,13 +37,13 @@
                     <button class="shop-icon-btn home" onclick="window.location.href='shop-account.html'" title="Account Summary" aria-label="Account Summary">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
                     </button>
-                    <button class="shop-icon-btn user" onclick="window.location.href='shop-account.html'" title="My Account" aria-label="My Account"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg></button>
-                    <button class="shop-icon-btn bookmark" onclick="window.location.href='shop-saved-items.html'" title="Saved Items" aria-label="Saved Items">
+                    <button class="shop-icon-btn bookmark" onclick="window.location.href='shop-saved-items.html'" title="Wishlist" aria-label="Wishlist">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
                     <span class="amz-icon-badge" id="headerWishlistBadge" style="display:none">0</span>
                     </button>
                     <button class="shop-icon-btn cart" onclick="window.location.href='shop-cart.html'" title="View Cart" aria-label="View Cart"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg><span class="amz-icon-badge" id="headerCartBadge" style="display:none">0</span></button>
                 </div>
+                <a href="index.html" class="amz-header-logout" title="Back to the main site" style="margin-right:0.5rem">&larr; Main Site</a>
                 <a href="#" class="amz-header-logout" data-logout title="Logout">Logout</a>
             </div>
         </div>
@@ -60,7 +60,7 @@
                     <a href="shop-order-history.html" class="shop-nav-item">Order History</a>
                     <a href="shop-order-status.html" class="shop-nav-item">Order Status</a>
                     <a href="shop-wallet.html" class="shop-nav-item">Wallet</a>
-                    <a href="shop-saved-items.html" class="shop-nav-item active">Saved Items</a>
+                    <a href="shop-saved-items.html" class="shop-nav-item active">Wishlist</a>
                     <a href="shop-cart.html" class="shop-nav-item">Cart</a>
                     <a href="shop-alerts.html" class="shop-nav-item">Alerts</a>
                     <a href="shop-messages.html" class="shop-nav-item">Messages <span class="shop-msg-badge" style="display:none;margin-left:6px;background:#f08804;color:#fff;border-radius:999px;font-size:0.72rem;font-weight:700;padding:1px 7px;vertical-align:1px">0</span></a>
@@ -69,10 +69,28 @@
             </aside>
 
             <main class="shop-content-area">
-                <div class="shop-page-header"><h1>Saved Items</h1></div>
+                <div class="shop-page-header"><h1>My Wishlist</h1></div>
 
                 <div class="saved-items-count">
-                    <p id="savedItemsSummary">Loading your saved items&hellip;</p>
+                    <p id="savedItemsSummary">Loading your wishlist&hellip;</p>
+                </div>
+
+                <div class="wishlist-toolbar" id="wishlistToolbar" style="display:none">
+                    <label>Sort by
+                        <select id="wishSort">
+                            <option value="recent">Recently added</option>
+                            <option value="price-asc">Price: low to high</option>
+                            <option value="price-desc">Price: high to low</option>
+                            <option value="name">Name (A–Z)</option>
+                        </select>
+                    </label>
+                    <label>Category
+                        <select id="wishCategory"><option value="">All categories</option></select>
+                    </label>
+                    <span class="wishlist-toolbar-actions">
+                        <button type="button" class="btn btn-primary" id="wishAddAll">Add all in-stock to cart</button>
+                        <button type="button" class="btn btn-secondary" id="wishClear">Clear wishlist</button>
+                    </span>
                 </div>
 
                 <div class="products-grid" id="savedItemsGrid"></div>
@@ -81,6 +99,10 @@
     </div>
 
     <style>
+        .wishlist-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 20px; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; }
+        .wishlist-toolbar label { display: flex; flex-direction: column; gap: 4px; font-size: 0.78rem; font-weight: 600; color: #475569; }
+        .wishlist-toolbar select { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; background: #fff; }
+        .wishlist-toolbar-actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
         .saved-card-img { height: 170px; display: flex; align-items: center; justify-content: center; font-size: 4rem; }
         .saved-card-actions { display: flex; gap: 8px; }
         .saved-card-actions .btn { flex: 1; }
@@ -128,10 +150,34 @@
             ids.forEach(function(id) { if (!_catalog.some(function(p) { return p.id === id; })) ShopBridge.removeSaved(id); });
         }
         ShopBridge.renderSavedBadge();
-        summary.innerHTML = 'You have <strong id="savedItemsCount">' + products.length + '</strong> item' + (products.length === 1 ? '' : 's') + ' saved';
+        var totalValue = products.reduce(function(s, p) { return s + Number(p.price || 0); }, 0);
+        summary.innerHTML = 'You have <strong id="savedItemsCount">' + products.length + '</strong> item' + (products.length === 1 ? '' : 's') + ' on your wishlist' +
+            (products.length ? ' &middot; combined value <strong>ƒ' + totalValue.toFixed(2) + '</strong>' : '');
+        var toolbar = document.getElementById('wishlistToolbar');
+        toolbar.style.display = products.length ? 'flex' : 'none';
+
+        // Category filter options come from what is actually saved.
+        var catSel = document.getElementById('wishCategory');
+        var cats = []; products.forEach(function(p) { if (p.category && cats.indexOf(p.category) === -1) cats.push(p.category); });
+        var prevCat = catSel.value;
+        catSel.innerHTML = '<option value="">All categories</option>' + cats.map(function(c) { return '<option value="' + esc(c) + '">' + esc(catLabel(c)) + '</option>'; }).join('');
+        catSel.value = cats.indexOf(prevCat) !== -1 ? prevCat : '';
+
+        // Newest saves first (saved ids are stored in the order they were added).
+        products = products.slice().reverse();
+        var sort = document.getElementById('wishSort').value;
+        if (sort === 'price-asc')  products.sort(function(a, b) { return a.price - b.price; });
+        if (sort === 'price-desc') products.sort(function(a, b) { return b.price - a.price; });
+        if (sort === 'name')       products.sort(function(a, b) { return String(a.name).localeCompare(String(b.name)); });
+        if (catSel.value) products = products.filter(function(p) { return p.category === catSel.value; });
+
+        if (ids.length === 0) {
+            grid.innerHTML = '<div class="saved-empty"><strong>Your wishlist is empty</strong>' +
+                'Tap the &#9825; on any product in the <a href="ecommerce.html" style="color:#007185">store</a> to add it to your wishlist.</div>';
+            return;
+        }
         if (products.length === 0) {
-            grid.innerHTML = '<div class="saved-empty"><strong>No saved items yet</strong>' +
-                'Tap the &#9825; on any product in the <a href="ecommerce.html" style="color:#007185">store</a> to save it here for later.</div>';
+            grid.innerHTML = '<div class="saved-empty"><strong>Nothing in this category</strong>Pick a different category above to see the rest of your wishlist.</div>';
             return;
         }
         grid.innerHTML = products.map(function(p) {
@@ -140,7 +186,7 @@
                 : p.stock <= 3 ? '<p class="saved-stock low">Only ' + p.stock + ' left</p>'
                 : '<p class="saved-stock ok">In stock</p>';
             return '<div class="product-card" data-id="' + p.id + '">' +
-                '<button type="button" class="bookmark-btn active" data-action="remove" title="Remove from saved items" aria-label="Remove ' + esc(p.name) + ' from saved items">' +
+                '<button type="button" class="bookmark-btn active" data-action="remove" title="Remove from wishlist" aria-label="Remove ' + esc(p.name) + ' from saved items">' +
                     '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>' +
                 '</button>' +
                 '<div class="saved-card-img" style="background:' + GRADIENTS[p.id % GRADIENTS.length] + '" aria-hidden="true">' + esc(p.icon || '🛍️') + '</div>' +
@@ -170,7 +216,7 @@
         if (btn.dataset.action === 'remove') {
             ShopBridge.removeSaved(id);
             renderSaved();
-            showShopToast(p.name + ' removed from saved items.');
+            showShopToast(p.name + ' removed from your wishlist.');
             return;
         }
         if (btn.dataset.action === 'add') {
@@ -191,6 +237,25 @@
 
     document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('savedItemsGrid').addEventListener('click', onGridClick);
+        document.getElementById('wishSort').addEventListener('change', renderSaved);
+        document.getElementById('wishCategory').addEventListener('change', renderSaved);
+        document.getElementById('wishClear').addEventListener('click', function() {
+            if (!confirm('Remove every item from your wishlist?')) return;
+            ShopBridge.getSavedIds().forEach(function(id) { ShopBridge.removeSaved(id); });
+            renderSaved();
+            showShopToast('Wishlist cleared.');
+        });
+        document.getElementById('wishAddAll').addEventListener('click', function() {
+            var btn = this;
+            var inStock = ShopBridge.getSavedIds().map(function(id) { return _catalog.find(function(p) { return p.id === id; }); })
+                .filter(function(p) { return p && p.stock > 0; });
+            if (!inStock.length) return showShopToast('None of your wishlist items are in stock.', true);
+            btn.disabled = true;
+            inStock.reduce(function(chain, p) { return chain.then(function() { return ShopBridge.addToCart(p, 1); }); }, Promise.resolve())
+                .then(function() { showShopToast(inStock.length + ' item' + (inStock.length === 1 ? '' : 's') + ' added to your cart.'); })
+                .catch(function(err) { showShopToast((err && err.message) || 'Could not add everything to the cart.', true); })
+                .then(function() { btn.disabled = false; });
+        });
         DigifinwizDB.getProducts().then(function(products) {
             _catalog = products || [];
             renderSaved();

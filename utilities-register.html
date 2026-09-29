@@ -8,19 +8,38 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="auth-page auth-page--utilities">
-        <div class="auth-bg-decor" aria-hidden="true">
-            <div class="auth-blob auth-blob-1"></div>
-            <div class="auth-blob auth-blob-2"></div>
-            <div class="auth-blob auth-blob-3"></div>
-            <svg class="auth-motif auth-motif-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.6"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
-            <svg class="auth-motif auth-motif-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.6"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
+    <div class="auth-page auth-page--utilities auth-page--split">
+        <div class="auth-split-visual">
+            <div class="auth-bg-decor" aria-hidden="true">
+                <div class="auth-blob auth-blob-1"></div>
+                <div class="auth-blob auth-blob-2"></div>
+                <div class="auth-blob auth-blob-3"></div>
+                <svg class="auth-motif auth-motif-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.6"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
+                <svg class="auth-motif auth-motif-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.6"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
+            </div>
+            <div class="auth-split-visual-content">
+                <div class="auth-split-logo">DigiPay</div>
+                <h2>Every bill, one dashboard</h2>
+                <p>Track usage, pay on time with your balance or a card, and earn XP for staying ahead of your bills.</p>
+
+                <div class="util-bill-stack" aria-hidden="true">
+                    <div class="util-bill-card"><span class="util-bill-icon">&#9889;</span><div><strong>Electricity</strong><small>Due in 6 days</small></div><span class="util-bill-amt">&#402;84.20</span></div>
+                    <div class="util-bill-card"><span class="util-bill-icon">&#128167;</span><div><strong>Water</strong><small>Paid &middot; on time</small></div><span class="util-bill-amt util-bill-paid">&#10003; &#402;37.50</span></div>
+                    <div class="util-bill-card"><span class="util-bill-icon">&#127760;</span><div><strong>Internet</strong><small>Auto-pay on</small></div><span class="util-bill-amt">&#402;59.99</span></div>
+                </div>
+
+                <div class="auth-split-features">
+                    <div class="auth-split-feature">&#10003; Pay by balance or credit/debit card</div>
+                    <div class="auth-split-feature">&#10003; Auto-pay &amp; late-fee reminders</div>
+                    <div class="auth-split-feature">&#10003; Payment history &amp; monthly budget</div>
+                </div>
+            </div>
         </div>
 
-        <div class="auth-utilities-stack">
-            <div class="auth-solid-card">
+        <div class="auth-split-form">
+            <div class="auth-split-form-inner">
                 <div class="login-header">
-                    <h1 class="login-logo">Digifinwiz Utilities</h1>
+                    <h1 class="login-logo">Create Account</h1>
                     <p>Create your utilities account to get started</p>
                 </div>
 
@@ -41,8 +60,8 @@
                     </div>
 
                     <div class="form-group">
-                        <label>Password <span style="font-size:0.78rem;color:#94a3b8">(minimum 6 characters)</span></label>
-                        <input type="password" class="form-input" id="regPassword" placeholder="Create a password" required minlength="6" autocomplete="new-password">
+                        <label>Password <span style="font-size:0.78rem;color:#94a3b8">(8+ chars, upper, lower &amp; number)</span></label>
+                        <input type="password" class="form-input" id="regPassword" placeholder="Create a password" required minlength="8" autocomplete="new-password">
                     </div>
 
                     <div class="form-group">
@@ -57,14 +76,8 @@
                 </form>
 
                 <div class="login-footer" style="margin-top:1.5rem;text-align:center">
-                    <p>Already have a utilities account? <a href="utilities-login.html" style="color:#6366f1;font-weight:600">Login here</a></p>
+                    <p>Already have a utilities account? <a href="utilities-login.html" style="color:#0891b2;font-weight:600">Login here</a></p>
                 </div>
-            </div>
-
-            <div class="auth-chip-strip">
-                <div class="auth-chip">⚡ Electricity</div>
-                <div class="auth-chip">💧 Water</div>
-                <div class="auth-chip">🌐 Internet</div>
             </div>
         </div>
     </div>
@@ -107,7 +120,10 @@
                 return;
             }
             if (!email || email.indexOf('@') === -1) { showError('Please enter a valid email address.'); return; }
-            if (password.length < 6) { showError('Password must be at least 6 characters.'); return; }
+            if (password.length < 8)     { showError('Password must be at least 8 characters.'); return; }
+            if (!/[A-Z]/.test(password)) { showError('Password must contain an uppercase letter.'); return; }
+            if (!/[a-z]/.test(password)) { showError('Password must contain a lowercase letter.'); return; }
+            if (!/[0-9]/.test(password)) { showError('Password must contain a number.'); return; }
             if (password !== confirmPassword) { showError('Passwords do not match.'); return; }
 
             registerBtn.disabled    = true;

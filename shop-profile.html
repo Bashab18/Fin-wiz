@@ -37,13 +37,13 @@
                     <button class="shop-icon-btn home" onclick="window.location.href='shop-account.html'" title="Account Summary" aria-label="Account Summary">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
                     </button>
-                    <button class="shop-icon-btn user" onclick="window.location.href='shop-account.html'" title="My Account" aria-label="My Account"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg></button>
-                    <button class="shop-icon-btn bookmark" onclick="window.location.href='shop-saved-items.html'" title="Saved Items" aria-label="Saved Items">
+                    <button class="shop-icon-btn bookmark" onclick="window.location.href='shop-saved-items.html'" title="Wishlist" aria-label="Wishlist">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
                     <span class="amz-icon-badge" id="headerWishlistBadge" style="display:none">0</span>
                     </button>
                     <button class="shop-icon-btn cart" onclick="window.location.href='shop-cart.html'" title="View Cart" aria-label="View Cart"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg><span class="amz-icon-badge" id="headerCartBadge" style="display:none">0</span></button>
                 </div>
+                <a href="index.html" class="amz-header-logout" title="Back to the main site" style="margin-right:0.5rem">&larr; Main Site</a>
                 <a href="#" class="amz-header-logout" data-logout title="Logout">Logout</a>
             </div>
         </div>
@@ -60,7 +60,7 @@
                     <a href="shop-order-history.html" class="shop-nav-item">Order History</a>
                     <a href="shop-order-status.html" class="shop-nav-item">Order Status</a>
                     <a href="shop-wallet.html" class="shop-nav-item">Wallet</a>
-                    <a href="shop-saved-items.html" class="shop-nav-item">Saved Items</a>
+                    <a href="shop-saved-items.html" class="shop-nav-item">Wishlist</a>
                     <a href="shop-cart.html" class="shop-nav-item">Cart</a>
                     <a href="shop-alerts.html" class="shop-nav-item">Alerts</a>
                     <a href="shop-messages.html" class="shop-nav-item">Messages <span class="shop-msg-badge" style="display:none;margin-left:6px;background:#f08804;color:#fff;border-radius:999px;font-size:0.72rem;font-weight:700;padding:1px 7px;vertical-align:1px">0</span></a>
@@ -89,13 +89,15 @@
                         </div>
                         <div class="form-group">
                             <label for="phone">Phone Number</label>
-                            <input type="tel" id="phone" name="phone" placeholder="(555) 555-0123" autocomplete="tel">
+                            <input type="tel" id="phone" name="phone" placeholder="10 digits, e.g. 5555550123" autocomplete="tel" inputmode="numeric" maxlength="10" pattern="[0-9]{10}" title="Enter exactly 10 digits">
+                            <div id="phoneError" style="display:none;color:#dc2626;font-size:0.78rem;margin-top:4px">Phone number must be exactly 10 digits.</div>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label for="birthdate">Date of Birth</label>
                             <input type="date" id="birthdate" name="birthdate">
+                            <div id="birthdateError" style="display:none;color:#dc2626;font-size:0.78rem;margin-top:4px">Date of birth cannot be in the future.</div>
                         </div>
                         <div class="form-group">
                             <label for="gender">Gender</label>
@@ -134,7 +136,7 @@
             field('firstName').value = parts[0] || '';
             field('lastName').value  = parts.slice(1).join(' ');
             field('email').value     = profile.email || '';
-            field('phone').value     = profile.phone || '';
+            field('phone').value     = String(profile.phone || '').replace(/\D/g, '').slice(0, 10);
             field('birthdate').value = profile.birthdate || '';
             field('gender').value    = profile.gender || '';
         }).catch(function(err) {
@@ -142,6 +144,22 @@
         });
 
         if (!form) return;
+
+        // Digits only, max 10; the future is not a valid birth date.
+        function localToday() {
+            var d = new Date();
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+        field('birthdate').max = localToday();
+        field('phone').addEventListener('input', function() {
+            var digits = this.value.replace(/\D/g, '').slice(0, 10);
+            if (this.value !== digits) this.value = digits;
+            document.getElementById('phoneError').style.display = (digits && digits.length !== 10) ? 'block' : 'none';
+        });
+        field('birthdate').addEventListener('input', function() {
+            document.getElementById('birthdateError').style.display = (this.value && this.value > localToday()) ? 'block' : 'none';
+        });
+
         form.addEventListener('submit', function(e) {
             e.preventDefault();
             var fn = field('firstName').value.trim();
@@ -149,6 +167,17 @@
             var em = field('email').value.trim();
             if (!fn) { field('firstName').focus(); return showShopToast('Enter your first name.', true); }
             if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { field('email').focus(); return showShopToast('Enter a valid email address.', true); }
+            var ph = field('phone').value.trim();
+            if (ph && !/^\d{10}$/.test(ph)) {
+                document.getElementById('phoneError').style.display = 'block';
+                field('phone').focus();
+                return showShopToast('Phone number must be exactly 10 digits.', true);
+            }
+            if (field('birthdate').value && field('birthdate').value > localToday()) {
+                document.getElementById('birthdateError').style.display = 'block';
+                field('birthdate').focus();
+                return showShopToast('Date of birth cannot be in the future.', true);
+            }
 
             if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
             ShopBridge.saveProfile({

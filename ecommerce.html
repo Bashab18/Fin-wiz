@@ -28,7 +28,7 @@
                 <a href="#" onclick="shopNavFilter('cooking');return false;">Cooking</a>
                 <a href="#" onclick="shopNavFilter('electronics');return false;">Electronics</a>
                 <a href="#" onclick="shopNavFilter('accessories');return false;">Accessories</a>
-                <a href="shop-account.html">My Account</a>
+                <a href="shop-saved-items.html">♥ Wishlist</a>
                 <a href="shop-messages.html">Messages<span class="shop-msg-badge" style="display:none;margin-left:5px;background:#f08804;color:#fff;border-radius:999px;font-size:0.68rem;font-weight:700;padding:1px 6px">0</span></a>
             </nav>
 
@@ -54,10 +54,10 @@
                     <button type="button" class="amz-search-btn" onclick="var i=document.getElementById('headerSearchInput');document.getElementById('productSearch').value=i.value;applyFilters();document.getElementById('productsGrid').scrollIntoView({behavior:'smooth'})" aria-label="Search">🔍</button>
                 </div>
                 <div class="shop-icons">
-                    <button class="shop-icon-btn home" onclick="window.location.href='shop-account.html'" title="My Account">
+                    <button class="shop-icon-btn home" onclick="window.location.href='shop-account.html'" title="Account Summary" aria-label="Account Summary">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
                     </button>
-                    <button class="shop-icon-btn bookmark" onclick="window.location.href='shop-saved-items.html'" title="Saved Items">
+                    <button class="shop-icon-btn bookmark" onclick="window.location.href='shop-saved-items.html'" title="Wishlist">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
                         <span class="amz-icon-badge" id="headerWishlistBadge" style="display:none">0</span>
                     </button>
@@ -66,6 +66,7 @@
                         <span class="amz-icon-badge" id="headerCartBadge" style="display:none">0</span>
                     </button>
                 </div>
+                <a href="index.html" class="amz-header-logout" title="Back to the main site" style="margin-right:0.5rem">&larr; Main Site</a>
                 <a href="#" class="amz-header-logout" data-logout title="Logout">Logout</a>
             </div>
         </div>
@@ -173,12 +174,20 @@
                     </div>
                     <div class="amz-filter-group">
                         <h4 class="amz-filter-title">Price</h4>
-                        <ul class="amz-filter-list" id="amzPriceFilters">
-                            <li class="amz-filter-item active" onclick="setPriceFilter('all', this)">Any Price</li>
-                            <li class="amz-filter-item" onclick="setPriceFilter('u50', this)">Under ƒ50</li>
-                            <li class="amz-filter-item" onclick="setPriceFilter('50-150', this)">ƒ50 – ƒ150</li>
-                            <li class="amz-filter-item" onclick="setPriceFilter('o150', this)">Over ƒ150</li>
-                        </ul>
+                        <div class="price-slider" id="priceSlider">
+                            <div class="price-slider-values">
+                                <label>Min ƒ<input type="number" id="priceMinInput" min="0" step="1" aria-label="Minimum price"></label>
+                                <span>&ndash;</span>
+                                <label>Max ƒ<input type="number" id="priceMaxInput" min="0" step="1" aria-label="Maximum price"></label>
+                            </div>
+                            <div class="price-slider-track">
+                                <div class="price-slider-fill" id="priceSliderFill"></div>
+                                <input type="range" id="priceMinRange" min="0" max="100" step="1" value="0" aria-label="Minimum price slider">
+                                <input type="range" id="priceMaxRange" min="0" max="100" step="1" value="100" aria-label="Maximum price slider">
+                            </div>
+                            <div class="price-slider-bounds"><span id="priceBoundLow">ƒ0</span><span id="priceBoundHigh">ƒ100</span></div>
+                            <button type="button" class="price-slider-reset" onclick="resetPriceFilter()">Reset price</button>
+                        </div>
                     </div>
                     <div class="amz-filter-group">
                         <h4 class="amz-filter-title">Customer Rating</h4>
@@ -194,7 +203,7 @@
                     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem">
                         <span class="product-count-info" id="productCountInfo">Loading&hellip;</span>
                         <div style="display:flex;align-items:center;gap:0.75rem">
-                            <span id="wishlistCountInfo" onclick="toggleWishlistPanel(true)" style="font-size:0.78rem;color:#ec4899;font-weight:600;display:none;cursor:pointer;user-select:none" title="View saved items">♥ <span id="wishlistCount">0</span> saved ↓</span>
+                            <span id="wishlistCountInfo" onclick="toggleWishlistPanel(true)" style="font-size:0.78rem;color:#ec4899;font-weight:600;display:none;cursor:pointer;user-select:none" title="View your wishlist">♥ <span id="wishlistCount">0</span> saved ↓</span>
                             <select class="sort-select" id="productSort" onchange="applyFilters()">
                                 <option value="default">Sort: Featured</option>
                                 <option value="price-asc">Price: Low → High</option>
@@ -231,7 +240,7 @@
             <!-- Wishlist Quick Panel -->
             <div class="wishlist-panel" id="wishlistQuickPanel" style="display:none">
                 <div class="wishlist-panel-header">
-                    <div class="wishlist-panel-title">♥ Saved Items (<span id="wishlistPanelCount">0</span>)</div>
+                    <div class="wishlist-panel-title">♥ Wishlist (<span id="wishlistPanelCount">0</span>)</div>
                     <button type="button" onclick="toggleWishlistPanel(false)" style="background:none;border:none;font-size:0.78rem;color:#94a3b8;cursor:pointer;font-family:var(--font-sans)">✕ Hide</button>
                 </div>
                 <div id="wishlistPanelGrid" class="wishlist-panel-grid"></div>
@@ -361,7 +370,8 @@
 
     // ── Filter / Search / Sort ─────────────────────────────────────────────────
     var currentCategory    = 'all';
-    var currentPriceFilter = 'all';
+    var priceBounds = { min: 0, max: 100 };
+    var priceMin = 0, priceMax = 100;
     var currentMinRating   = 0;
 
     // Quantity stepper: whole numbers 1..max (max = min(99, stock)).
@@ -396,12 +406,54 @@
         applyFilters();
     }
 
-    function setPriceFilter(range, btn) {
-        currentPriceFilter = range;
-        var list = document.getElementById('amzPriceFilters');
-        if (list) list.querySelectorAll('.amz-filter-item').forEach(function(b){ b.classList.remove('active'); });
-        if (btn) btn.classList.add('active');
+    // ── Price range slider (min + max handles over the real catalog range) ──
+    function paintPriceSlider() {
+        var span = Math.max(1, priceBounds.max - priceBounds.min);
+        var lo = (priceMin - priceBounds.min) / span * 100;
+        var hi = (priceMax - priceBounds.min) / span * 100;
+        var fill = document.getElementById('priceSliderFill');
+        if (fill) { fill.style.left = lo + '%'; fill.style.width = Math.max(0, hi - lo) + '%'; }
+        document.getElementById('priceMinRange').value = priceMin;
+        document.getElementById('priceMaxRange').value = priceMax;
+        document.getElementById('priceMinInput').value = priceMin;
+        document.getElementById('priceMaxInput').value = priceMax;
+    }
+
+    function setPriceRange(min, max, from) {
+        min = Math.round(Number(min)); max = Math.round(Number(max));
+        if (isNaN(min)) min = priceBounds.min;
+        if (isNaN(max)) max = priceBounds.max;
+        min = Math.max(priceBounds.min, Math.min(min, priceBounds.max));
+        max = Math.max(priceBounds.min, Math.min(max, priceBounds.max));
+        // Handles can't cross: whichever one is being dragged pushes against the other.
+        if (min > max) { if (from === 'min') min = max; else max = min; }
+        priceMin = min; priceMax = max;
+        paintPriceSlider();
         applyFilters();
+    }
+
+    function resetPriceFilter() { setPriceRange(priceBounds.min, priceBounds.max); }
+
+    function initPriceSlider(products) {
+        var prices = (products || []).map(function(p) { return Number(p.price) || 0; });
+        if (!prices.length) return;
+        priceBounds = { min: Math.floor(Math.min.apply(null, prices)), max: Math.ceil(Math.max.apply(null, prices)) };
+        priceMin = priceBounds.min; priceMax = priceBounds.max;
+        ['priceMinRange', 'priceMaxRange'].forEach(function(id) {
+            var el = document.getElementById(id);
+            el.min = priceBounds.min; el.max = priceBounds.max;
+        });
+        ['priceMinInput', 'priceMaxInput'].forEach(function(id) {
+            var el = document.getElementById(id);
+            el.min = priceBounds.min; el.max = priceBounds.max;
+        });
+        document.getElementById('priceBoundLow').textContent  = 'ƒ' + priceBounds.min;
+        document.getElementById('priceBoundHigh').textContent = 'ƒ' + priceBounds.max;
+        document.getElementById('priceMinRange').addEventListener('input', function() { setPriceRange(this.value, priceMax, 'min'); });
+        document.getElementById('priceMaxRange').addEventListener('input', function() { setPriceRange(priceMin, this.value, 'max'); });
+        document.getElementById('priceMinInput').addEventListener('change', function() { setPriceRange(this.value, priceMax, 'min'); });
+        document.getElementById('priceMaxInput').addEventListener('change', function() { setPriceRange(priceMin, this.value, 'max'); });
+        paintPriceSlider();
     }
 
     function setRatingFilter(minStars, btn) {
@@ -434,10 +486,8 @@
             var catOk  = currentCategory === 'all' ||
                 (currentCategory === 'sale' ? card.dataset.badge === 'Sale' : card.dataset.category === currentCategory);
             var price  = parseFloat(card.dataset.price || 0);
-            var priceOk = currentPriceFilter === 'all' ||
-                (currentPriceFilter === 'u50'    && price < 50) ||
-                (currentPriceFilter === '50-150' && price >= 50 && price <= 150) ||
-                (currentPriceFilter === 'o150'   && price > 150);
+            // The top handle's rest position is the rounded-up catalog maximum, so it means "no upper limit".
+            var priceOk = price >= priceMin && (priceMax >= priceBounds.max || price <= priceMax);
             var name   = (card.dataset.name || '').toLowerCase();
             var brand  = ((card.querySelector('.product-brand') || {}).textContent || '').toLowerCase();
             var srchOk = !searchText || name.indexOf(searchText) > -1 || brand.indexOf(searchText) > -1;
@@ -601,13 +651,13 @@
         if (typeof updateBalanceLabel === 'function') updateBalanceLabel();
     }
 
-    /* ── Wishlist (Saved Items) ───────────────────────────────────────
+    /* ── Wishlist ───────────────────────────────────────
        One per-user store keyed by catalog product id (ShopBridge), shared
        with the header badge and shop-saved-items.html. */
     function paintHeart(btn, saved) {
         btn.innerHTML = saved ? '♥' : '♡';
         btn.classList.toggle('wishlisted', saved);
-        btn.title = saved ? 'Remove from saved items' : 'Save for later';
+        btn.title = saved ? 'Remove from your wishlist' : 'Add to your wishlist';
         btn.setAttribute('aria-pressed', saved ? 'true' : 'false');
     }
 
@@ -615,7 +665,7 @@
         var p = productById(id);
         var saved = ShopBridge.toggleSaved(id);
         paintHeart(btn, saved);
-        showNotification(saved ? (p ? p.name : 'Item') + ' saved ♥' : 'Removed from saved items', saved ? 'success' : 'info');
+        showNotification(saved ? (p ? p.name : 'Item') + ' added to your wishlist ♥' : 'Removed from your wishlist', saved ? 'success' : 'info');
         updateWishlistCounter();
     }
 
@@ -728,6 +778,7 @@
         // ── Fetch the catalog, render it, then wire up per-card behavior ──
         DigifinwizDB.getProducts().then(function(products) {
             ALL_PRODUCTS = products;
+            initPriceSlider(products);
             renderProductGrid(products);
             initProductCardBehaviors();
             renderRecommendations();
@@ -792,7 +843,7 @@
                     : '<span style="font-size:0.72rem;color:#dc2626;font-weight:600">Out of stock</span>') +
                 '</div>';
         }).join('') +
-        '<a href="shop-saved-items.html" style="font-size:0.78rem;color:#007185;font-weight:600;grid-column:1/-1">Manage saved items &rarr;</a>';
+        '<a href="shop-saved-items.html" style="font-size:0.78rem;color:#007185;font-weight:600;grid-column:1/-1">Open your full wishlist &rarr;</a>';
     }
 
     // ── Stock level chips ──────────────────────────────────────────────────

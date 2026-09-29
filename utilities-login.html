@@ -8,20 +8,39 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="auth-page auth-page--utilities">
-        <div class="auth-bg-decor" aria-hidden="true">
-            <div class="auth-blob auth-blob-1"></div>
-            <div class="auth-blob auth-blob-2"></div>
-            <div class="auth-blob auth-blob-3"></div>
-            <svg class="auth-motif auth-motif-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.6"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
-            <svg class="auth-motif auth-motif-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.6"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
+    <div class="auth-page auth-page--utilities auth-page--split">
+        <div class="auth-split-visual">
+            <div class="auth-bg-decor" aria-hidden="true">
+                <div class="auth-blob auth-blob-1"></div>
+                <div class="auth-blob auth-blob-2"></div>
+                <div class="auth-blob auth-blob-3"></div>
+                <svg class="auth-motif auth-motif-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.6"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
+                <svg class="auth-motif auth-motif-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.6"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
+            </div>
+            <div class="auth-split-visual-content">
+                <div class="auth-split-logo">DigiPay</div>
+                <h2>Every bill, one dashboard</h2>
+                <p>Track usage, pay on time with your balance or a card, and earn XP for staying ahead of your bills.</p>
+
+                <div class="util-bill-stack" aria-hidden="true">
+                    <div class="util-bill-card"><span class="util-bill-icon">&#9889;</span><div><strong>Electricity</strong><small>Due in 6 days</small></div><span class="util-bill-amt">&#402;84.20</span></div>
+                    <div class="util-bill-card"><span class="util-bill-icon">&#128167;</span><div><strong>Water</strong><small>Paid &middot; on time</small></div><span class="util-bill-amt util-bill-paid">&#10003; &#402;37.50</span></div>
+                    <div class="util-bill-card"><span class="util-bill-icon">&#127760;</span><div><strong>Internet</strong><small>Auto-pay on</small></div><span class="util-bill-amt">&#402;59.99</span></div>
+                </div>
+
+                <div class="auth-split-features">
+                    <div class="auth-split-feature">&#10003; Pay by balance or credit/debit card</div>
+                    <div class="auth-split-feature">&#10003; Auto-pay &amp; late-fee reminders</div>
+                    <div class="auth-split-feature">&#10003; Payment history &amp; monthly budget</div>
+                </div>
+            </div>
         </div>
 
-        <div class="auth-utilities-stack">
-            <div class="auth-solid-card">
+        <div class="auth-split-form">
+            <div class="auth-split-form-inner">
                 <div class="login-header">
-                    <h1 class="login-logo">Digifinwiz Utilities</h1>
-                    <p>Welcome back! Please login to your utilities account</p>
+                    <h1 class="login-logo">Welcome Back</h1>
+                    <p>Please login to your DigiPay utilities account</p>
                 </div>
 
                 <form id="loginForm" class="login-form">
@@ -42,19 +61,13 @@
                 </form>
 
                 <div class="login-footer" style="margin-top:1.5rem;text-align:center">
-                    <p>Don't have a utilities account? <a href="utilities-register.html" style="color:#6366f1;font-weight:600">Sign up here</a></p>
+                    <p>Don't have a utilities account? <a href="utilities-register.html" style="color:#0891b2;font-weight:600">Sign up here</a></p>
                 </div>
 
                 <!-- Dev hint -->
                 <div class="auth-dev-hint">
                     Default admin: <strong>admin</strong> / <strong>Admin1234</strong>
                 </div>
-            </div>
-
-            <div class="auth-chip-strip">
-                <div class="auth-chip">⚡ Electricity</div>
-                <div class="auth-chip">💧 Water</div>
-                <div class="auth-chip">🌐 Internet</div>
             </div>
         </div>
     </div>

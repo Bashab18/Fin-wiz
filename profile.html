@@ -62,15 +62,15 @@
             </div>
             <p class="sidebar-desc">Visit any of these pages to complete new tasks such as online shopping, paying bills or banking</p>
             <nav class="sidebar-nav">
-                <a href="ecommerce.html" class="nav-item">
+                <a href="ecommerce.html" target="_blank" rel="noopener" class="nav-item">
                     <span>Ecommerce<sup class="nav-badge" id="sidebarBadgeEcommerce">5</sup></span>
                     <span class="arrow">&#8594;</span>
                 </a>
-                <a href="banking.html" class="nav-item">
+                <a href="banking.html" target="_blank" rel="noopener" class="nav-item">
                     <span>Banking<sup class="nav-badge" id="sidebarBadgeBanking" style="display:none">0</sup></span>
                     <span class="arrow">&#8594;</span>
                 </a>
-                <a href="utilities.html" class="nav-item">
+                <a href="utilities.html" target="_blank" rel="noopener" class="nav-item">
                     <span>Utilities<sup class="nav-badge" id="sidebarBadgeUtilities" style="display:none">0</sup></span>
                     <span class="arrow">&#8594;</span>
                 </a>
@@ -592,11 +592,12 @@
             if (!cur)          { showNotification('Enter your current password.', 'error'); return; }
             if (np.length < 6) { showNotification('New password needs at least 6 characters.', 'error'); return; }
             if (np !== cf)     { showNotification('Passwords do not match.', 'error'); return; }
+            if (np === cur)    { showNotification('Your new password cannot be the same as your previous password.', 'error'); return; }
             if (session && session.userId) {
                 DigifinwizDB.changePassword(cur, np).then(function() {
                     showNotification('Password updated!', 'success'); sf.reset();
                 }).catch(function(err) {
-                    showNotification(err && err.message === 'Current password is incorrect' ? 'Current password is incorrect.' : 'Update failed.', 'error');
+                    showNotification(err && err.message ? err.message : 'Update failed.', 'error');
                 });
             } else {
                 DigifinwizDB.getProfileData().then(function(prof) {
@@ -748,7 +749,7 @@
             var billsBody = document.getElementById('infoBillsBody');
             if (billsBody) {
                 if (!bills.length) {
-                    billsBody.innerHTML = '<tr><td colspan="3">No bills yet. Visit <a href="utilities.html">Utilities</a> to see your bills.</td></tr>';
+                    billsBody.innerHTML = '<tr><td colspan="3">No bills yet. Visit <a href="utilities.html" target="_blank" rel="noopener">Utilities</a> to see your bills.</td></tr>';
                 } else {
                     billsBody.innerHTML = bills.map(function(b){
                         var due = b.dueDate ? new Date(b.dueDate).toLocaleDateString() : '\u2014';
@@ -766,7 +767,7 @@
                 // shop-order-history.html's "View Details" links already use.
                 purchases.forEach(function(p){ if(p.items&&Array.isArray(p.items)) p.items.forEach(function(it){ allItems.push({ it: it, purchaseId: p.id }); }); });
                 if (allItems.length === 0) {
-                    invContainer.innerHTML = '<p style="color:#64748b;font-size:0.875rem">No purchases yet. Visit the <a href="ecommerce.html">Ecommerce store</a> to start shopping!</p>';
+                    invContainer.innerHTML = '<p style="color:#64748b;font-size:0.875rem">No purchases yet. Visit the <a href="ecommerce.html" target="_blank" rel="noopener">Ecommerce store</a> to start shopping!</p>';
                 } else {
                     var ICONS=['\uD83D\uDC55','\uD83D\uDC54','\uD83C\uDF92','\uD83D\uDC5F','\uD83C\uDFA7','\uD83D\uDCF1','\uD83D\uDC56','\uD83D\uDC5C','\u231A','\uD83E\uDDE5','\uD83D\uDD76','\uD83C\uDFAE'];
                     var GRADS=['linear-gradient(135deg,#d4e4bc,#c8ddb0)','linear-gradient(135deg,#f4d4d4,#f0c8c8)','linear-gradient(135deg,#c4dcd4,#b8d4c8)','linear-gradient(135deg,#ffd4a3,#ffcb8e)','linear-gradient(135deg,#e0e7ff,#c7d2fe)','linear-gradient(135deg,#fce7f3,#fbcfe8)'];

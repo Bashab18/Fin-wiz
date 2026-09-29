@@ -759,9 +759,15 @@ function renderStatement(stmt) {
     // events.sort by timestamp in /api/me/statement), so accumulating
     // forward from openingBalance lands exactly on closingBalance at the
     // last row, letting you trace how one became the other.
+    // Shown newest-first (so the latest activity is at the top without
+    // scrolling), but the balance column is still accumulated oldest-first
+    // and then the rows are reversed — each row keeps its own true balance.
     var running = stmt.openingBalance;
     var rows = stmt.events.map(function(e) {
         running = Math.round((running + e.amount) * 100) / 100;
+        return { e: e, running: running };
+    }).reverse().map(function(r) {
+        var e = r.e, running = r.running;
         return '<tr>' +
             '<td>' + escBA(e.date) + '</td>' +
             '<td>' + escBA(e.label) + '</td>' +
@@ -907,6 +913,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!/[a-z]/.test(newPwd)) { showNotification('Must contain a lowercase letter.', 'error'); return; }
         if (!/[0-9]/.test(newPwd)) { showNotification('Must contain a number.', 'error'); return; }
         if (newPwd !== confirm)    { showNotification('New passwords do not match.', 'error'); return; }
+        if (newPwd === current) { showNotification('Your new password cannot be the same as your previous password.', 'error'); return; }
         withBankingActionLock(function() {
             return DigifinwizDB.changePassword(current, newPwd).then(function() {
                 passwordForm.reset();
@@ -1120,14 +1127,23 @@ function renderSchedRecentRecipients() {
         var seen = {};
         var recent = [];
         (allTxs || []).filter(isExternalTransfer).forEach(function(t) {
-            if (recent.length >= 4 || !t.recipient) return;
+            if (recent.length >= 6 || !t.recipient) return;
             var key = String(t.recipient).trim().toLowerCase() + '|' + String(t.account || '').trim();
             if (seen[key]) return;
             seen[key] = true;
             recent.push(t);
         });
+        // Recipients saved from the Transfer tab ("＋ Add New Recipient") too.
+        if (typeof loadCustomRecipients === 'function') {
+            loadCustomRecipients().forEach(function(r) {
+                var key = String(r.name).trim().toLowerCase() + '|' + String(r.account).trim();
+                if (seen[key]) return;
+                seen[key] = true;
+                recent.push({ recipient: r.name, account: r.account });
+            });
+        }
         if (recent.length === 0) {
-            grid.innerHTML = '<div class="db-recip-empty">No recent recipients yet — people you send money to will show up here for one-click reuse.</div>';
+            grid.innerHTML = '<div class="db-recip-empty">No recent or saved recipients yet — people you send money to (or save on the Transfer tab) will show up here for one-click reuse.</div>';
             return;
         }
         grid.innerHTML = recent.map(function(t) {
@@ -1266,10 +1282,16 @@ function renderSchedList(schedules) {
     }).join('');
 }
 
+var schedToggleBusy = false;
 function toggleSchedule(id, active) {
+    // Ignore repeat clicks while a Pause/Resume/Retry is still in flight —
+    // Retry on a one-time transfer sends the money, so a double-click must
+    // not be able to send it twice.
+    if (schedToggleBusy) return;
+    schedToggleBusy = true;
     DigifinwizDB.toggleScheduledTransfer(id, active).then(function() {
         showNotification(active ? 'Transfer resumed.' : 'Transfer paused.', 'info');
-        loadScheduledTab();
+        return loadScheduledTab();
     }).catch(function(err) {
         if (err && err.status === 409) {
             // e.g. a one-time transfer that already completed (maybe in
@@ -1278,8 +1300,8 @@ function toggleSchedule(id, active) {
         } else {
             showNotification(err && err.message ? err.message : 'Could not update transfer.', 'error');
         }
-        loadScheduledTab();
-    });
+        return loadScheduledTab();
+    }).then(function() { schedToggleBusy = false; }, function() { schedToggleBusy = false; });
 }
 
 function cancelSchedule(id, isCompleted) {

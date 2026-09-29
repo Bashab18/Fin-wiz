@@ -34,15 +34,15 @@
             </div>
             <p class="sidebar-desc">Visit any of these pages to complete new tasks such as online shopping, paying bills or banking</p>
             <nav class="sidebar-nav">
-                <a href="ecommerce.html" class="nav-item">
+                <a href="ecommerce.html" target="_blank" rel="noopener" class="nav-item">
                     <span>Ecommerce<sup class="nav-badge" id="sidebarBadgeEcommerce">5</sup></span>
                     <span class="arrow">&#8594;</span>
                 </a>
-                <a href="banking.html" class="nav-item">
+                <a href="banking.html" target="_blank" rel="noopener" class="nav-item">
                     <span>Banking<sup class="nav-badge" id="sidebarBadgeBanking" style="display:none">0</sup></span>
                     <span class="arrow">&#8594;</span>
                 </a>
-                <a href="utilities.html" class="nav-item">
+                <a href="utilities.html" target="_blank" rel="noopener" class="nav-item">
                     <span>Utilities<sup class="nav-badge" id="sidebarBadgeUtilities" style="display:none">0</sup></span>
                     <span class="arrow">&#8594;</span>
                 </a>
@@ -64,9 +64,9 @@
 
                 <!-- Quick Actions -->
                 <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:1.75rem;margin-top:0.5rem">
-                    <a href="ecommerce.html" class="btn btn-primary" style="font-size:0.85rem;padding:0.45rem 1rem">&#128722; Shop</a>
-                    <a href="banking.html" class="btn" style="font-size:0.85rem;padding:0.45rem 1rem;border:2px solid #667eea;color:#667eea;background:transparent">&#127970; Banking</a>
-                    <a href="utilities.html" class="btn" style="font-size:0.85rem;padding:0.45rem 1rem;border:2px solid #10b981;color:#10b981;background:transparent">&#9889; Utilities</a>
+                    <a href="ecommerce.html" target="_blank" rel="noopener" class="btn btn-primary" style="font-size:0.85rem;padding:0.45rem 1rem">&#128722; Shop</a>
+                    <a href="banking.html" target="_blank" rel="noopener" class="btn" style="font-size:0.85rem;padding:0.45rem 1rem;border:2px solid #667eea;color:#667eea;background:transparent">&#127970; Banking</a>
+                    <a href="utilities.html" target="_blank" rel="noopener" class="btn" style="font-size:0.85rem;padding:0.45rem 1rem;border:2px solid #10b981;color:#10b981;background:transparent">&#9889; Utilities</a>
                     <a href="challenges.html" class="btn" style="font-size:0.85rem;padding:0.45rem 1rem;border:2px solid #f59e0b;color:#d97706;background:transparent">&#127919; Challenges</a>
                 </div>
 
@@ -93,8 +93,32 @@
                     </div>
                 </div>
 
+                <div class="stats-section" id="overallProgressSection">
+                    <h2>Overall Progress <span style="font-size:0.8rem;font-weight:500;color:#64748b">— Banking, Ecommerce &amp; Utilities combined</span></h2>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-number" id="ovLevels">&#8212;</div>
+                            <div class="stat-label">Levels Completed</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="ovPoints">&#8212;</div>
+                            <div class="stat-label">Total XP (all sections)</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="ovChallenges">&#8212;</div>
+                            <div class="stat-label">Challenges Completed</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="ovLinked">&#8212;</div>
+                            <div class="stat-label">Sections Linked</div>
+                        </div>
+                    </div>
+                    <div id="overallModuleCards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;margin-top:1rem"></div>
+                    <p style="font-size:0.78rem;color:#94a3b8;margin-top:0.6rem">Each section keeps its own account. We link them to this one by matching your email or username, so sign up there with the same one to see its progress here.</p>
+                </div>
+
                 <div class="stats-section">
-                    <h2>Your Progress</h2>
+                    <h2>Your Progress <span style="font-size:0.8rem;font-weight:500;color:#64748b">— main account</span></h2>
                     <div class="stats-grid">
                         <div class="stat-card">
                             <div class="stat-number" id="statLevel">&#8212;</div>
@@ -169,7 +193,51 @@
             payment:     'utilities.html'
         };
 
+        var MODULE_META = {
+            banking:   { label: 'DigiBank',  icon: '&#127970;', href: 'banking.html',   color: '#667eea' },
+            ecommerce: { label: 'InStyl',    icon: '&#128722;', href: 'ecommerce.html', color: '#f59e0b' },
+            utilities: { label: 'DigiPay',   icon: '&#9889;',   href: 'utilities.html', color: '#10b981' }
+        };
+
+        // One place for the levels / XP / challenges from all three sections.
+        function loadOverallProgress() {
+            return DigifinwizDB.getOverallProgress().then(function(o) {
+                var t = o.totals || {};
+                var setT = function(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
+                setT('ovLevels', t.levelsCompleted);
+                setT('ovPoints', (t.points || 0).toLocaleString());
+                setT('ovChallenges', t.challengesCompleted + ' / ' + t.challengesTotal);
+                setT('ovLinked', t.linkedModules + ' of ' + t.totalModules);
+                var host = document.getElementById('overallModuleCards');
+                if (!host) return;
+                host.innerHTML = (o.modules || []).map(function(m) {
+                    var meta = MODULE_META[m.module] || { label: m.module, icon: '', href: '#', color: '#6366f1' };
+                    if (!m.linked) {
+                        return '<div style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;padding:0.9rem 1rem">' +
+                            '<div style="font-weight:700;margin-bottom:0.3rem">' + meta.icon + ' ' + meta.label + '</div>' +
+                            '<div style="font-size:0.8rem;color:#64748b;margin-bottom:0.5rem">Not linked yet — no ' + meta.label + ' account uses your email or username.</div>' +
+                            '<a href="' + meta.href + '" target="_blank" rel="noopener" style="font-size:0.8rem;font-weight:600;color:' + meta.color + '">Open ' + meta.label + ' &#8599;</a></div>';
+                    }
+                    var pct = m.challengesTotal ? Math.round(m.challengesCompleted / m.challengesTotal * 100) : 0;
+                    var levelPct = Math.max(0, Math.min(100, Math.round(((1000 - m.pointsToNextLevel) / 1000) * 100)));
+                    return '<div style="background:#fff;border:1px solid #e2e8f0;border-top:4px solid ' + meta.color + ';border-radius:12px;padding:0.9rem 1rem">' +
+                        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem">' +
+                            '<strong>' + meta.icon + ' ' + meta.label + '</strong><span style="font-size:0.78rem;font-weight:700;color:' + meta.color + '">Level ' + m.level + '</span></div>' +
+                        '<div style="font-size:0.8rem;color:#475569">' + m.levelsCompleted + ' level' + (m.levelsCompleted === 1 ? '' : 's') + ' completed &middot; ' + m.points.toLocaleString() + ' XP</div>' +
+                        '<div style="background:#e2e8f0;border-radius:99px;height:6px;margin:0.5rem 0 0.2rem;overflow:hidden"><div style="height:100%;width:' + levelPct + '%;background:' + meta.color + '"></div></div>' +
+                        '<div style="font-size:0.72rem;color:#94a3b8;margin-bottom:0.45rem">' + m.pointsToNextLevel + ' XP to level ' + (m.level + 1) + '</div>' +
+                        '<div style="font-size:0.8rem;color:#475569">' + m.challengesCompleted + ' / ' + m.challengesTotal + ' challenges (' + pct + '%)</div>' +
+                        '<a href="' + meta.href + '" target="_blank" rel="noopener" style="font-size:0.78rem;font-weight:600;color:' + meta.color + '">Open ' + meta.label + ' &#8599;</a></div>';
+                }).join('');
+            }).catch(function(err) { console.error('overall progress:', err); });
+        }
+
+        // Refresh when something is done in a module tab, or when returning here.
+        window.addEventListener('storage', function(e) { if (e.key === 'dfw_progress_ping') loadOverallProgress(); });
+        document.addEventListener('visibilitychange', function() { if (document.visibilityState === 'visible') loadOverallProgress(); });
+
         DigifinwizDB.init().then(function() {
+            loadOverallProgress();
             return Promise.all([DigifinwizDB.getUserData(), DigifinwizDB.getChallenges(), DigifinwizDB.getRecentActivity(6)]);
         }).then(function(results) {
             var userData   = results[0];
@@ -187,7 +255,7 @@
                     listEl.innerHTML = '<div style="display:flex;flex-direction:column;gap:0.5rem">' + activity.map(function(e) {
                         var href = ACTIVITY_MODULE_LINK[e.type] || 'profile.html';
                         var pts  = e.pointsEarned ? '<span style="color:#10b981;font-weight:600;font-size:0.8rem;margin-left:0.5rem">+' + e.pointsEarned + ' pts</span>' : '';
-                        return '<a href="' + href + '" style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.75rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;text-decoration:none;color:inherit">' +
+                        return '<a href="' + href + '"' + (href === 'profile.html' ? '' : ' target="_blank" rel="noopener"') + ' style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.75rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;text-decoration:none;color:inherit">' +
                             '<span style="font-size:1.1rem">' + (e.icon || '⭐') + '</span>' +
                             '<span style="flex:1;min-width:0">' +
                                 '<strong style="display:block;font-size:0.875rem;color:#1e293b">' + escH(e.label) + '</strong>' +

@@ -37,13 +37,13 @@
                     <button class="shop-icon-btn home" onclick="window.location.href='shop-account.html'" title="Account Summary" aria-label="Account Summary">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
                     </button>
-                    <button class="shop-icon-btn user" onclick="window.location.href='shop-account.html'" title="My Account" aria-label="My Account"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg></button>
-                    <button class="shop-icon-btn bookmark" onclick="window.location.href='shop-saved-items.html'" title="Saved Items" aria-label="Saved Items">
+                    <button class="shop-icon-btn bookmark" onclick="window.location.href='shop-saved-items.html'" title="Wishlist" aria-label="Wishlist">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
                     <span class="amz-icon-badge" id="headerWishlistBadge" style="display:none">0</span>
                     </button>
                     <button class="shop-icon-btn cart" onclick="window.location.href='shop-cart.html'" title="View Cart" aria-label="View Cart"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg><span class="amz-icon-badge" id="headerCartBadge" style="display:none">0</span></button>
                 </div>
+                <a href="index.html" class="amz-header-logout" title="Back to the main site" style="margin-right:0.5rem">&larr; Main Site</a>
                 <a href="#" class="amz-header-logout" data-logout title="Logout">Logout</a>
             </div>
         </div>
@@ -60,7 +60,7 @@
                     <a href="shop-order-history.html" class="shop-nav-item active">Order History</a>
                     <a href="shop-order-status.html" class="shop-nav-item">Order Status</a>
                     <a href="shop-wallet.html" class="shop-nav-item">Wallet</a>
-                    <a href="shop-saved-items.html" class="shop-nav-item">Saved Items</a>
+                    <a href="shop-saved-items.html" class="shop-nav-item">Wishlist</a>
                     <a href="shop-cart.html" class="shop-nav-item">Cart</a>
                     <a href="shop-alerts.html" class="shop-nav-item">Alerts</a>
                     <a href="shop-messages.html" class="shop-nav-item">Messages <span class="shop-msg-badge" style="display:none;margin-left:6px;background:#f08804;color:#fff;border-radius:999px;font-size:0.72rem;font-weight:700;padding:1px 7px;vertical-align:1px">0</span></a>
@@ -159,6 +159,7 @@
                         '<div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.15rem">' +
                             '<span style="font-weight:600;font-size:0.875rem">' + itemCount + ' item' + (itemCount !== 1 ? 's' : '') + ' purchased</span>' +
                             '<span class="order-status-badge order-status-' + status + '">' + statusIcon + ' ' + escHE(p.statusLabel || 'Processing') + '</span>' +
+                            (p.estimatedDelivery ? '<span style="font-size:0.72rem;color:#047857">' + (status === 'delivered' ? 'Delivered ' : 'Arrives ') + new Date(p.estimatedDelivery).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + '</span>' : '') +
                         '</div>' +
                         '<div style="font-size:0.75rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + itemNames + '</div>' +
                         '<div style="font-size:0.7rem;color:#94a3b8;margin-top:0.1rem">' + escHE(p.date||'') + ' · ' + escHE(orderNum) + '</div>' +
