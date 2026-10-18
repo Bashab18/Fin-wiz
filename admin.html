@@ -1171,6 +1171,13 @@
                             </button>
 
                             <div class="chal-cond-summary" id="chal-cond-summary">✋ Completion is manual — you mark it complete from the table.</div>
+                            <div class="admin-form-group" id="chal-assign-group" style="margin-bottom:var(--space-4)">
+                                <label for="chal-assign-to">Assign to</label>
+                                <select id="chal-assign-to">
+                                    <option value="all">Everyone (all approved participants)</option>
+                                </select>
+                                <div class="assign-hint" id="chal-assign-hint">New challenges go to everyone unless you pick one person.</div>
+                            </div>
                             <div class="admin-form-actions">
                                 <button type="submit" class="btn btn-primary" id="chal-submit-btn">➕ Create Challenge</button>
                             </div>
@@ -1350,6 +1357,13 @@
                             <div class="admin-form-group">
                                 <label>Grace Period (days)</label>
                                 <input type="number" id="billGraceDays" placeholder="5" min="0" max="60">
+                            </div>
+                            <div class="admin-form-group">
+                                <label for="billAssignTo">Assign to</label>
+                                <select id="billAssignTo">
+                                    <option value="all">Everyone (every DigiPay account)</option>
+                                </select>
+                                <div class="assign-hint">Pick one DigiPay account to issue this bill to only them. Bills already issued are not changed.</div>
                             </div>
                         </div>
                         <div class="admin-form-actions">
@@ -1738,6 +1752,13 @@
             </div>
             <!-- TAB: Challenges -->
             <div class="mgmt-tab-panel" id="mgmt-panel-challenges">
+                <div class="mgmt-assign-row">
+                    <select id="mgmt-assign-select" aria-label="Challenge to assign to this user" disabled>
+                        <option value="">Loading…</option>
+                    </select>
+                    <button type="button" class="btn btn-primary" id="mgmt-assign-btn" onclick="mgmtAssignChallenge()" disabled>Assign</button>
+                </div>
+                <div class="assign-hint" style="margin:calc(-1 * var(--space-2)) 0 var(--space-4)">Gives this user their own copy of the challenge. Others are not affected.</div>
                 <div id="mgmt-challenges-list">
                     <p style="color:var(--color-text-muted)">Loading challenges…</p>
                 </div>

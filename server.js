@@ -3820,8 +3820,27 @@ app.delete('/api/admin/challenges', async (req, res) => {
     res.json({ ok: true });
 });
 
+const isApprovedParticipant = u => u.role === 'participant' && u.status === 'approved';
+
+// Who an admin action is aimed at: null = everyone, a positive integer = that one
+// user id, undefined = not a valid choice.
+function parseAssignee(raw) {
+    if (raw === undefined || raw === null || raw === '' || raw === 'all') return null;
+    const id = typeof raw === 'number' ? raw : (typeof raw === 'string' && /^\d+$/.test(raw) ? Number(raw) : NaN);
+    return Number.isSafeInteger(id) && id > 0 ? id : undefined;
+}
+
+// A challenge row without its owner or progress: the definition that can be
+// handed to another user.
+function challengeDefinition(row) {
+    const def = Object.assign({}, row);
+    ['id', 'userId', 'completed', 'completedAt', 'createdAt'].forEach(k => delete def[k]);
+    return def;
+}
+
 // POST /api/admin/challenges — create a new challenge definition and push a
-// live instance of it to every approved participant. Challenges are stored
+// live instance of it to every approved participant, or, with `assignTo` (a
+// user id), to that one participant only. Challenges are stored
 // per-user (not as shared templates), so a challenge the admin "creates"
 // here must be seeded out the same way ALL_DEFAULT_CHALLENGES are —
 // otherwise it would only ever exist under the admin's own account.
@@ -3830,14 +3849,24 @@ app.post('/api/admin/challenges', async (req, res) => {
     const {
         title, description, category, active, points, florins,
         condition, conditionValue, customField, customOperator,
-        extraConditions, conditionLogic
+        extraConditions, conditionLogic, assignTo
     } = req.body || {};
     if (!title) return res.status(400).json({ error: 'title required' });
+    const target = parseAssignee(assignTo);
+    if (target === undefined) return res.status(400).json({ error: 'assignTo must be a user id or "all"' });
 
     const created = await withUserLock(req.userId, async () => {
         const users        = await readJSON(req.userStore);
-        const participants = users.filter(u => u.role === 'participant' && u.status === 'approved');
+        let participants   = users.filter(isApprovedParticipant);
         const challenges   = await readJSON(req.challengeStore);
+        if (target !== null) {
+            const user = participants.find(u => u.id === target);
+            if (!user) throw httpError(404, 'That user is not an approved participant');
+            if (challenges.some(c => c.userId === target && c.title === title)) {
+                throw httpError(409, (user.fullName || user.username) + ' already has the challenge "' + title + '"');
+            }
+            participants = [user];
+        }
         let id      = nextId(challenges);
         const now   = Date.now();
         const made = participants.map(u => ({
@@ -3862,6 +3891,70 @@ app.post('/api/admin/challenges', async (req, res) => {
         return made;
     });
     res.status(201).json(created);
+});
+
+// POST /api/admin/challenges/:id/assign — give one approved participant their own
+// copy of an existing challenge: a fresh, incomplete row with the same
+// definition. 409 when they already hold a challenge with that title.
+app.post('/api/admin/challenges/:id/assign', async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const id     = Number(req.params.id);
+    const target = parseAssignee(req.body && req.body.userId);
+    if (!Number.isInteger(id) || !target) return res.status(400).json({ error: 'A challenge id and a userId are required' });
+    const created = await withUserLock(req.userId, async () => {
+        const users = await readJSON(req.userStore);
+        const all   = await readJSON(req.challengeStore);
+        const user  = users.find(u => u.id === target && isApprovedParticipant(u));
+        if (!user) throw httpError(404, 'That user is not an approved participant');
+        const source = all.find(c => c.id === id);
+        if (!source) throw httpError(404, 'Challenge not found');
+        if (all.some(c => c.userId === target && c.title === source.title)) {
+            throw httpError(409, (user.fullName || user.username) + ' already has the challenge "' + source.title + '"');
+        }
+        const copy = Object.assign(challengeDefinition(source), { id: nextId(all), userId: target, createdAt: Date.now(), completed: false });
+        await writeJSON(req.challengeStore, all.concat([copy]));
+        return copy;
+    });
+    res.status(201).json(created);
+});
+
+// DELETE /api/users/:id/challenges/:challengeId — take a challenge away from this
+// one user (every copy of that title they hold). Everyone else keeps theirs, and
+// XP the user already earned stays with them.
+app.delete('/api/users/:id/challenges/:challengeId', async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const userId      = Number(req.params.id);
+    const challengeId = Number(req.params.challengeId);
+    const removed = await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.challengeStore);
+        const row = all.find(c => c.id === challengeId && c.userId === userId);
+        if (!row) return 0;
+        const rest = all.filter(c => !(c.userId === userId && c.title === row.title));
+        await writeJSON(req.challengeStore, rest);
+        return all.length - rest.length;
+    });
+    if (!removed) return res.status(404).json({ error: 'Challenge not found for this user' });
+    res.json({ ok: true, removed });
+});
+
+// GET /api/admin/challenges/assignments — which approved participants hold each
+// challenge, so the admin list can tell one given to everyone from one given to a
+// few. `participants` is how many approved participants there are.
+app.get('/api/admin/challenges/assignments', async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const users = await readJSON(req.userStore);
+    const all   = await readJSON(req.challengeStore);
+    const participantIds = new Set(users.filter(isApprovedParticipant).map(u => u.id));
+    const byTitle = new Map();
+    all.forEach(c => {
+        if (!participantIds.has(c.userId)) return;
+        if (!byTitle.has(c.title)) byTitle.set(c.title, new Set());
+        byTitle.get(c.title).add(c.userId);
+    });
+    res.json({
+        participants: participantIds.size,
+        challenges: Array.from(byTitle, ([title, ids]) => ({ title, userIds: Array.from(ids) }))
+    });
 });
 
 // POST /api/admin/challenges/seed — seed default challenges for every approved participant
@@ -3978,18 +4071,42 @@ async function seedDefaultBills() {
     }
 }
 
-// GET /api/bills — public
-app.get('/api/bills', async (_req, res) => {
-    const bills = await readJSON('bills');
-    res.json(bills.filter(b => b.active !== false));
+// A catalogue bill goes to every account unless the admin assigned it to one
+// DigiPay account (`assignedTo: { site: 'utilities', userId }`). Ids repeat across
+// the sites' account lists, so the site is part of the assignment. Existing bill
+// cycles are never touched by a (re)assignment; it decides who is issued new ones.
+const BILL_ASSIGNABLE_SITE = 'utilities';
+
+function billIsFor(bill, site, userId) {
+    return !bill.assignedTo || (bill.assignedTo.site === site && bill.assignedTo.userId === userId);
+}
+
+// null = everyone; otherwise the validated { site, userId } of an existing DigiPay account.
+async function parseBillAssignment(raw) {
+    if (raw === undefined || raw === null || raw === '' || raw === 'all') return null;
+    const userId = raw && typeof raw === 'object' ? parseAssignee(raw.userId) : undefined;
+    if (!raw || raw.site !== BILL_ASSIGNABLE_SITE || !userId) {
+        throw httpError(400, 'assignedTo must be null or { site: "' + BILL_ASSIGNABLE_SITE + '", userId }');
+    }
+    const account = (await readJSON(MODULE_STORES[BILL_ASSIGNABLE_SITE].users)).find(u => u.id === userId);
+    if (!account) throw httpError(404, 'That DigiPay account does not exist');
+    return { site: BILL_ASSIGNABLE_SITE, userId };
+}
+
+// GET /api/bills — public. A bill assigned to one account is only listed to an admin.
+app.get('/api/bills', async (req, res) => {
+    const bills = (await readJSON('bills')).filter(b => b.active !== false);
+    res.json(req.userRole === 'admin' ? bills : bills.filter(b => !b.assignedTo));
 });
 
-// POST /api/bills — admin only
+// POST /api/bills — admin only. `assignedTo` (see above) is optional.
 app.post('/api/bills', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const bill = await withUserLock(req.userId, async () => {
+        const assignedTo = await parseBillAssignment(req.body && req.body.assignedTo);
         const bills = await readJSON('bills');
         const rec   = Object.assign({ active: true }, req.body, { id: nextId(bills) });
+        if (assignedTo) rec.assignedTo = assignedTo; else delete rec.assignedTo;
         bills.push(rec);
         await writeJSON('bills', bills);
         return rec;
@@ -3997,14 +4114,19 @@ app.post('/api/bills', async (req, res) => {
     res.status(201).json(bill);
 });
 
-// PUT /api/bills/:id — admin only
+// PUT /api/bills/:id — admin only. Sending `assignedTo` (null for everyone) changes
+// who is issued new cycles; leaving it out keeps the current assignment.
 app.put('/api/bills/:id', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const updated = await withUserLock(req.userId, async () => {
+        const body = req.body || {};
+        const reassigns  = Object.prototype.hasOwnProperty.call(body, 'assignedTo');
+        const assignedTo = reassigns ? await parseBillAssignment(body.assignedTo) : null;
         const bills = await readJSON('bills');
         const idx   = bills.findIndex(b => String(b.id) === String(req.params.id));
         if (idx === -1) return null;
-        bills[idx] = Object.assign({}, bills[idx], req.body, { id: bills[idx].id });
+        bills[idx] = Object.assign({}, bills[idx], body, { id: bills[idx].id });
+        if (reassigns) { if (assignedTo) bills[idx].assignedTo = assignedTo; else delete bills[idx].assignedTo; }
         await writeJSON('bills', bills);
         return bills[idx];
     });
@@ -4069,12 +4191,13 @@ const MAX_BILL_BACKLOG_MONTHS = 12;
 // template's latest cycle through the current month (capped at 12), paid or
 // not; a template with no cycles yet only gets the current month. Only
 // caller is GET /api/me/bills, outside any other lock.
-async function ensureCurrentBillCycles(userId, customBillStore = 'customBills', billCycleStore = 'billCycles') {
+async function ensureCurrentBillCycles(userId, customBillStore = 'customBills', billCycleStore = 'billCycles', site = 'main') {
     return withUserLock(userId, async () => {
         const [templates, customBills, cycles] = await Promise.all([
             readJSON('bills'), readJSON(customBillStore), readJSON(billCycleStore)
         ]);
-        const defs = templates.filter(b => b.active !== false).map(b => Object.assign({ defKey: 'catalog:' + b.id }, b))
+        // A bill the admin assigned to one DigiPay account is only issued to that account.
+        const defs = templates.filter(b => b.active !== false && billIsFor(b, site, userId)).map(b => Object.assign({ defKey: 'catalog:' + b.id }, b))
             .concat(customBills.filter(b => b.userId === userId && b.active !== false).map(b => Object.assign({ defKey: 'custom:' + b.id }, b)));
 
         const month = currentCycleMonth();
@@ -4318,7 +4441,7 @@ async function runDueAutopays(userId, req) {
 }
 
 app.get('/api/me/bills', async (req, res) => {
-    await ensureCurrentBillCycles(req.userId, req.customBillStore, req.billCycleStore);
+    await ensureCurrentBillCycles(req.userId, req.customBillStore, req.billCycleStore, req.appModule || 'main');
     await runDueAutopays(req.userId, req);
     // Re-read fresh: both calls above may have changed cycles on disk
     // (a new cycle created, or one just auto-paid), and the response must

@@ -97,9 +97,9 @@ A one-time migration at boot (recorded in `app_store` under `_migrations`) broug
 - **Transactions** — view all transfer activity
 - **Purchases** — view store purchase history
 - **Payments** — view bill payment history
-- **Challenges** — view challenge completion status per user
+- **Challenges** — create, edit and delete challenges, and view completion status per user. A new challenge goes to every approved participant, or to one person chosen under **Assign to**. A user's **Challenges** tab (Users → Manage) can also give them any challenge they don't have yet, or take one away from them alone.
 - **Messages** — broadcast messages to participants
-- **Bills** — create, edit, and delete bill types shown on the Utilities page
+- **Bills** — create, edit, and delete bill types shown on the Utilities page, for every DigiPay account or for one chosen account (**Assign to**)
 
 ## Bills Management
 
@@ -109,6 +109,7 @@ Admins can manage bills via the **Bills** tab in the admin panel:
 - Add a new bill (name, icon, amount, account number, gradient colour, due date)
 - Edit any existing bill
 - Delete a bill
+- Assign a bill to one DigiPay account: only that account is issued it each month (the default, **Everyone**, issues it to every account). Changing the assignment only affects bills issued from then on; bills already issued stay with whoever has them.
 
 The Utilities page fetches `/api/bills` on load and renders bill cards dynamically.
 

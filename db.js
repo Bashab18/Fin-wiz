@@ -445,8 +445,24 @@ const DigifinwizDB = (() => {
     // Admin-scoped variant — creates a new challenge and pushes a live
     // instance of it to every approved participant, rather than writing it
     // under the admin's own account like addChallenge()/POST /api/me/challenges would.
+    // Pass `assignTo: <userId>` in `c` to give it to that one participant instead.
     function adminCreateChallenge(c) {
         return _api('POST', '/api/admin/challenges', c);
+    }
+
+    // Admin: give one participant their own fresh copy of an existing challenge.
+    function adminAssignChallenge(challengeId, userId) {
+        return _api('POST', '/api/admin/challenges/' + challengeId + '/assign', { userId: userId });
+    }
+
+    // Admin: take a challenge away from this one user (others keep theirs).
+    function adminRemoveUserChallenge(userId, challengeId) {
+        return _api('DELETE', '/api/users/' + userId + '/challenges/' + challengeId);
+    }
+
+    // Admin: { participants, challenges: [{ title, userIds }] } — who holds each challenge.
+    function getChallengeAssignments() {
+        return _api('GET', '/api/admin/challenges/assignments');
     }
 
     // Dispatches to the right self-scoped bulk-delete route per store name.
@@ -845,6 +861,9 @@ const DigifinwizDB = (() => {
         deleteChallenge,
         adminDeleteChallenge,
         adminCreateChallenge,
+        adminAssignChallenge,
+        adminRemoveUserChallenge,
+        getChallengeAssignments,
         clearStore,
         seedDefaultChallenges,
         reseedMissingChallenges,

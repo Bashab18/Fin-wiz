@@ -3920,7 +3920,19 @@ body {
 .mgmt-chal-title   { font-size: var(--text-sm); font-weight: 600; color: var(--color-text);
                      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mgmt-chal-meta    { margin-top: 2px; display: flex; align-items: center; gap: var(--space-2); }
-.mgmt-chal-actions { flex-shrink: 0; }
+.mgmt-chal-actions { flex-shrink: 0; display: flex; gap: var(--space-2); }
+
+/* Admin "assign to a specific user" controls */
+.assign-hint       { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: var(--space-1); }
+.mgmt-assign-row   { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
+.mgmt-assign-row select {
+    flex: 1; min-width: 0; padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--color-border); border-radius: var(--radius-md);
+    font-size: var(--text-sm); color: var(--color-text); background: var(--color-surface);
+}
+.mgmt-assign-row .btn:disabled,
+.mgmt-assign-row select:disabled { opacity: 0.55; cursor: not-allowed; }
+.assign-pill       { display: inline-block; margin-top: 3px; font-size: 0.65rem; }
 
 /* ============================================
    SHARED PAGE-TAB SYSTEM
