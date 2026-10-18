@@ -981,7 +981,6 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         }
         reloadChallengesTable();
-        loadChallengeAssignees();
     }
 
     let chalCategoryFilter  = '';
@@ -1007,23 +1006,25 @@ document.addEventListener('DOMContentLoaded', function () {
             ids.length + ' of ' + chalParticipantCount + ' users</span></div>';
     }
 
-    // Fills the Create Challenge form's "Assign to" choices with the approved participants.
-    function loadChallengeAssignees() {
+    // Fills the Create Challenge form's "Assign to" choices with the approved participants
+    // (from GET /api/admin/challenges/assignments: names only, no avatars).
+    function fillChallengeAssignees(people) {
         const select = document.getElementById('chal-assign-to');
         if (!select) return;
-        DigifinwizDB.getAllUsers().then(users => {
-            const keep = select.value;
-            while (select.options.length > 1) select.remove(1);
-            users.filter(u => u.role === 'participant' && u.status === 'approved')
-                .sort((a, b) => (a.fullName || a.username).localeCompare(b.fullName || b.username))
-                .forEach(u => {
-                    const opt = document.createElement('option');
-                    opt.value = String(u.id);
-                    opt.textContent = (u.fullName || u.username) + ' (@' + u.username + ')';
-                    select.appendChild(opt);
-                });
-            select.value = Array.from(select.options).some(o => o.value === keep) ? keep : 'all';
-        }).catch(err => console.error('loadChallengeAssignees:', err));
+        const keep = select.value;
+        while (select.options.length > 1) select.remove(1);
+        people.slice()
+            .sort((a, b) => (a.fullName || a.username).localeCompare(b.fullName || b.username))
+            .forEach(u => {
+                const opt = document.createElement('option');
+                opt.value = String(u.id);
+                opt.textContent = (u.fullName || u.username) + ' (@' + u.username + ')';
+                select.appendChild(opt);
+            });
+        const stillThere = Array.from(select.options).some(o => o.value === keep);
+        select.value = stillThere ? keep : 'all';
+        // Never fall back to Everyone silently: that is the choice that reaches the most people.
+        if (!stillThere && keep && keep !== 'all') showToast('The person you chose is no longer an approved participant, so Assign to is back on Everyone.', 'info');
     }
 
     // An existing challenge is edited for everyone who holds it, so its "Assign to"
@@ -1040,12 +1041,12 @@ document.addEventListener('DOMContentLoaded', function () {
     function reloadChallengesTable() {
         Promise.all([
             DigifinwizDB.getChallenges(),
-            DigifinwizDB.getChallengeAssignments().catch(() => null),   // only decorates the list
-            DigifinwizDB.getAllUsers().catch(() => [])
-        ]).then(([list, assignments, users]) => {
+            DigifinwizDB.getChallengeAssignments().catch(() => null)   // only decorates the list and fills Assign to
+        ]).then(([list, assignments]) => {
             chalHolders = new Map(((assignments && assignments.challenges) || []).map(a => [a.title, a.userIds]));
             chalParticipantCount = (assignments && assignments.participants) || 0;
-            chalPeople = new Map(users.map(u => [u.id, u]));
+            chalPeople = new Map(((assignments && assignments.people) || []).map(u => [u.id, u]));
+            if (assignments) fillChallengeAssignees(assignments.people || []);
             let filtered = list;
             if (chalCategoryFilter) filtered = filtered.filter(c => c.category === chalCategoryFilter);
             if (chalStatusFilter !== '') {
@@ -1111,7 +1112,15 @@ document.addEventListener('DOMContentLoaded', function () {
         DigifinwizDB.getChallenges().then(list => {
             const c = list.find(ch => ch.id === id);
             if (!c) return;
+            // The copy goes to whoever holds the original: one person stays one person. A group
+            // that is not everyone can't be expressed, so that case asks before going to everyone.
+            const holders = chalHolders.get(c.title) || [];
+            let assignTo = 'all';
+            if (chalParticipantCount && holders.length === 1) assignTo = String(holders[0]);
+            else if (chalParticipantCount && holders.length > 1 && holders.length < chalParticipantCount &&
+                     !confirm('This challenge is held by ' + holders.length + ' of ' + chalParticipantCount + ' users. The copy will go to everyone. Continue?')) return;
             const copy = {
+                assignTo,
                 title:           c.title + ' (Copy)',
                 description:     c.description || '',
                 category:        c.category || 'general',
@@ -1127,7 +1136,7 @@ document.addEventListener('DOMContentLoaded', function () {
             };
             DigifinwizDB.adminCreateChallenge(copy)
                 .then(() => { showToast('Challenge duplicated!', 'success'); reloadChallengesTable(); })
-                .catch(() => showToast('Duplicate failed.', 'error'));
+                .catch(err => showToast('Duplicate failed' + (err && err.message ? ': ' + err.message : '.'), 'error'));
         });
     };
 
@@ -1329,7 +1338,14 @@ document.addEventListener('DOMContentLoaded', function () {
             const chosen   = document.getElementById('chal-assign-to').selectedOptions[0];
             const who      = assignTo === 'all' || !chosen ? null : chosen.textContent;
             DigifinwizDB.adminCreateChallenge(Object.assign({ assignTo }, payload))
-                .then(() => { showToast(who ? 'Challenge assigned to ' + who + '!' : 'Challenge created!', 'success'); resetChallengeForm(); reloadChallengesTable(); })
+                .then(created => {
+                    // For everyone, anyone who already held the title is skipped; say how many were.
+                    const made    = Array.isArray(created) ? created.length : 0;
+                    const skipped = who ? 0 : Math.max(0, chalParticipantCount - made);
+                    showToast(who ? 'Challenge assigned to ' + who + '!'
+                        : 'Challenge created' + (skipped ? ' for ' + made + ' participant' + (made === 1 ? '' : 's') + ' (' + skipped + ' already had it)' : '') + '!', 'success');
+                    resetChallengeForm(); reloadChallengesTable();
+                })
                 .catch(err => showToast('Create failed' + (err && err.message ? ': ' + err.message : '.'), 'error'));
         }
     });
@@ -2068,6 +2084,8 @@ document.addEventListener('DOMContentLoaded', function () {
     window.adminManageUser = function(id) {
         mgmtUserId = id;
         DigifinwizDB.getUserById(id).then(function(user) {
+            // The drawer was closed, or another user opened, while this was loading: the answer is stale.
+            if (mgmtUserId !== id) return;
             if (!user) { showToast('User not found.', 'error'); return; }
             var titleEl    = document.getElementById('mgmtDrawerTitle');
             var subtitleEl = document.getElementById('mgmtDrawerSubtitle');
@@ -2087,7 +2105,7 @@ document.addEventListener('DOMContentLoaded', function () {
             switchMgmtTab('xp');
             document.getElementById('userMgmtDrawer').classList.add('open');
             loadMgmtChallenges(id);
-        }).catch(function(err) { console.error(err); showToast('Could not load user.', 'error'); });
+        }).catch(function(err) { console.error(err); if (mgmtUserId === id) showToast('Could not load user.', 'error'); });
     };
 
     window.closeUserMgmt = function() {
@@ -2113,9 +2131,14 @@ document.addEventListener('DOMContentLoaded', function () {
         var container = document.getElementById('mgmt-challenges-list');
         if (!container) return;
         container.innerHTML = '<p style="color:var(--color-text-muted)">Loading…</p>';
-        Promise.all([DigifinwizDB.getChallengesForUser(userId), DigifinwizDB.getChallenges()]).then(function(res) {
+        Promise.all([
+            DigifinwizDB.getChallengesForUser(userId),
+            DigifinwizDB.getChallenges(),
+            DigifinwizDB.getChallengeAssignments().catch(function() { return null; })   // only to warn about a last copy
+        ]).then(function(res) {
             var challenges = res[0];
             if (mgmtUserId !== userId) return;   // the drawer has moved on to someone else
+            var holders = new Map(((res[2] && res[2].challenges) || []).map(function(a) { return [a.title, a.userIds]; }));
             fillMgmtAssignSelect(challenges, res[1]);
             if (challenges.length === 0) {
                 container.innerHTML = '<p style="color:var(--color-text-muted)">No challenges for this user.</p>';
@@ -2145,6 +2168,7 @@ document.addEventListener('DOMContentLoaded', function () {
                               'onclick="mgmtMarkChalIncomplete(' + c.id + ')">↺ Reset</button>') +
                         '<button class="btn btn-danger" style="padding:2px 8px;font-size:var(--text-xs)" title="Remove this challenge from this user only" ' +
                             'data-title="' + escHtml(c.title) + '"' + (MGMT_LEVEL1_CONDITIONS.indexOf(c.condition) !== -1 ? ' data-level1="1"' : '') +
+                            (holders.has(c.title) && holders.get(c.title).length === 1 && holders.get(c.title)[0] === userId ? ' data-sole="1"' : '') +
                             ' onclick="mgmtRemoveChallenge(' + c.id + ', this)">✕ Remove</button>' +
                     '</div>' +
                     '</div>';
@@ -2198,8 +2222,12 @@ document.addEventListener('DOMContentLoaded', function () {
         var title  = btn ? btn.getAttribute('data-title') : 'this challenge';
         var level1 = btn && btn.getAttribute('data-level1')
             ? '\n\nThis is one of the three Level 1 requirements: without it this user cannot reach Level 2 until it is assigned again and completed.' : '';
-        if (!confirm('Remove "' + title + '" from this user?' + level1 + '\n\nEveryone else keeps it, and XP already earned stays. ' +
-                     '"Add Missing Default Challenges" would add a default challenge back.')) return;
+        // A challenge only exists as its holders' copies: taking the last one away deletes it.
+        var sole   = btn && btn.getAttribute('data-sole');
+        var keeps  = sole
+            ? '\n\nThis user is the only one who has it, so this deletes the challenge itself: it cannot be assigned to anyone again. XP already earned stays.'
+            : '\n\nEveryone else keeps it, and XP already earned stays. "Add Missing Default Challenges" would add a default challenge back.';
+        if (!confirm('Remove "' + title + '" from this user?' + level1 + keeps)) return;
         var userId = mgmtUserId;
         DigifinwizDB.adminRemoveUserChallenge(userId, chalId).then(function() {
             showToast('Challenge removed from this user.', 'info');

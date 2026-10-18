@@ -961,7 +961,15 @@ async function checkAndCompleteChallengesForUser(userId, context, challengeStore
     // ledger lives on the user record (not userData, which the client can
     // overwrite via PUT /api/me/data); only a full /api/me/reset clears it.
     const alreadyRewarded = new Set(Array.isArray(user.rewardedChallenges) ? user.rewardedChallenges : []);
-    const rewardable   = completed.filter(c => !alreadyRewarded.has(c.title || String(c.id)));
+    // Two copies of one title completing in the same pass (duplicates an older
+    // create-for-everyone left behind) pay once, not twice.
+    const rewardKeys = new Set(alreadyRewarded);
+    const rewardable = completed.filter(c => {
+        const key = c.title || String(c.id);
+        if (rewardKeys.has(key)) return false;
+        rewardKeys.add(key);
+        return true;
+    });
     const bonusXP      = rewardable.reduce((s, c) => s + (c.points || 0), 0);
     const bonusFlorins = rewardable.reduce((s, c) => s + (c.florins || 0), 0);
     rewardable.forEach(c => alreadyRewarded.add(c.title || String(c.id)));
@@ -1529,6 +1537,14 @@ app.delete('/api/users/:id', async (req, res) => {
         ]) {
             const rows = await readJSON(store);
             await writeJSON(store, rows.filter(r => r.userId !== id));
+        }
+
+        // A bill assigned to this DigiPay account goes with it. Ids are reused after a
+        // delete, so it would otherwise be issued to whoever registers next with this id.
+        if (req.appModule === BILL_ASSIGNABLE_SITE) {
+            const bills = await readJSON('bills');
+            const rest  = bills.filter(b => !(b.assignedTo && b.assignedTo.site === BILL_ASSIGNABLE_SITE && b.assignedTo.userId === id));
+            if (rest.length !== bills.length) await writeJSON('bills', rest);
         }
 
         // Messages: delete direct, scrub readBy from broadcasts
@@ -3857,15 +3873,24 @@ app.post('/api/admin/challenges', async (req, res) => {
 
     const created = await withUserLock(req.userId, async () => {
         const users        = await readJSON(req.userStore);
-        let participants   = users.filter(isApprovedParticipant);
+        const approved     = users.filter(isApprovedParticipant);
+        let participants   = approved;
         const challenges   = await readJSON(req.challengeStore);
         if (target !== null) {
-            const user = participants.find(u => u.id === target);
+            const user = approved.find(u => u.id === target);
             if (!user) throw httpError(404, 'That user is not an approved participant');
             if (challenges.some(c => c.userId === target && c.title === title)) {
                 throw httpError(409, (user.fullName || user.username) + ' already has the challenge "' + title + '"');
             }
             participants = [user];
+        } else {
+            // Everyone, but never a second copy for someone who already holds the title: two
+            // copies of one title are two rows to edit and to reward.
+            const holders = new Set(challenges.filter(c => c.title === title).map(c => c.userId));
+            participants = approved.filter(u => !holders.has(u.id));
+            if (approved.length > 0 && participants.length === 0) {
+                throw httpError(409, 'Every participant already has the challenge "' + title + '"');
+            }
         }
         let id      = nextId(challenges);
         const now   = Date.now();
@@ -3939,12 +3964,15 @@ app.delete('/api/users/:id/challenges/:challengeId', async (req, res) => {
 
 // GET /api/admin/challenges/assignments — which approved participants hold each
 // challenge, so the admin list can tell one given to everyone from one given to a
-// few. `participants` is how many approved participants there are.
+// few. `participants` is how many approved participants there are, and `people`
+// names them (id, fullName, username only: the admin pages use it instead of
+// loading every account with its avatar).
 app.get('/api/admin/challenges/assignments', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const users = await readJSON(req.userStore);
     const all   = await readJSON(req.challengeStore);
-    const participantIds = new Set(users.filter(isApprovedParticipant).map(u => u.id));
+    const people = users.filter(isApprovedParticipant).map(u => ({ id: u.id, fullName: u.fullName, username: u.username }));
+    const participantIds = new Set(people.map(p => p.id));
     const byTitle = new Map();
     all.forEach(c => {
         if (!participantIds.has(c.userId)) return;
@@ -3953,6 +3981,7 @@ app.get('/api/admin/challenges/assignments', async (req, res) => {
     });
     res.json({
         participants: participantIds.size,
+        people,
         challenges: Array.from(byTitle, ([title, ids]) => ({ title, userIds: Array.from(ids) }))
     });
 });
@@ -4081,6 +4110,13 @@ function billIsFor(bill, site, userId) {
     return !bill.assignedTo || (bill.assignedTo.site === site && bill.assignedTo.userId === userId);
 }
 
+// Whether `raw` (an `assignedTo` from a request) names the audience the bill already has.
+function sameBillAssignment(current, raw) {
+    const everyone = raw === undefined || raw === null || raw === '' || raw === 'all';
+    if (!current) return everyone;
+    return !everyone && typeof raw === 'object' && raw.site === current.site && parseAssignee(raw.userId) === current.userId;
+}
+
 // null = everyone; otherwise the validated { site, userId } of an existing DigiPay account.
 async function parseBillAssignment(raw) {
     if (raw === undefined || raw === null || raw === '' || raw === 'all') return null;
@@ -4103,10 +4139,11 @@ app.get('/api/bills', async (req, res) => {
 app.post('/api/bills', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const bill = await withUserLock(req.userId, async () => {
-        const assignedTo = await parseBillAssignment(req.body && req.body.assignedTo);
+        const { assignmentSince: _ignored, ...body } = req.body || {};
+        const assignedTo = await parseBillAssignment(body.assignedTo);
         const bills = await readJSON('bills');
-        const rec   = Object.assign({ active: true }, req.body, { id: nextId(bills) });
-        if (assignedTo) rec.assignedTo = assignedTo; else delete rec.assignedTo;
+        const rec   = Object.assign({ active: true }, body, { id: nextId(bills) });
+        if (assignedTo) { rec.assignedTo = assignedTo; rec.assignmentSince = currentCycleMonth(); } else delete rec.assignedTo;
         bills.push(rec);
         await writeJSON('bills', bills);
         return rec;
@@ -4115,20 +4152,29 @@ app.post('/api/bills', async (req, res) => {
 });
 
 // PUT /api/bills/:id — admin only. Sending `assignedTo` (null for everyone) changes
-// who is issued new cycles; leaving it out keeps the current assignment.
+// who is issued new cycles; leaving it out, or sending the assignment the bill
+// already has, keeps it as it is (so a bill whose account is gone can still be edited).
+// A change stamps `assignmentSince` (the cycle month), and nobody is issued cycles
+// for months before it: putting a bill back to everyone must not bill the others for
+// the months it was somebody else's.
 app.put('/api/bills/:id', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const updated = await withUserLock(req.userId, async () => {
-        const body = req.body || {};
-        const reassigns  = Object.prototype.hasOwnProperty.call(body, 'assignedTo');
-        const assignedTo = reassigns ? await parseBillAssignment(body.assignedTo) : null;
+        const { assignmentSince: _ignored, ...body } = req.body || {};
         const bills = await readJSON('bills');
         const idx   = bills.findIndex(b => String(b.id) === String(req.params.id));
         if (idx === -1) return null;
-        bills[idx] = Object.assign({}, bills[idx], body, { id: bills[idx].id });
-        if (reassigns) { if (assignedTo) bills[idx].assignedTo = assignedTo; else delete bills[idx].assignedTo; }
+        const current   = bills[idx].assignedTo || null;
+        const reassigns = Object.prototype.hasOwnProperty.call(body, 'assignedTo') && !sameBillAssignment(current, body.assignedTo);
+        const assignedTo = reassigns ? await parseBillAssignment(body.assignedTo) : null;
+        const rec = Object.assign({}, bills[idx], body, { id: bills[idx].id });
+        if (reassigns) {
+            if (assignedTo) rec.assignedTo = assignedTo; else delete rec.assignedTo;
+            rec.assignmentSince = currentCycleMonth();
+        } else if (current) rec.assignedTo = current; else delete rec.assignedTo;
+        bills[idx] = rec;
         await writeJSON('bills', bills);
-        return bills[idx];
+        return rec;
     });
     if (!updated) return res.status(404).json({ error: 'Not found' });
     res.json(updated);
@@ -4210,7 +4256,11 @@ async function ensureCurrentBillCycles(userId, customBillStore = 'customBills', 
             const months = [];
             if (!latest) months.push(month);
             else if (latest.cycleMonth) {
-                for (let mo = addCycleMonths(latest.cycleMonth, 1); mo <= month; mo = addCycleMonths(mo, 1)) months.push(mo);
+                // A bill whose audience changed (assigned, reassigned, put back to everyone) is only
+                // issued for the months since the change: nobody is billed for months it was not theirs.
+                let from = addCycleMonths(latest.cycleMonth, 1);
+                if (def.assignmentSince && def.assignmentSince > from) from = def.assignmentSince;
+                for (let mo = from; mo <= month; mo = addCycleMonths(mo, 1)) months.push(mo);
             }
             for (const mo of months.slice(-MAX_BILL_BACKLOG_MONTHS)) {
                 const { usage, amount } = computeBillAmount(def);
