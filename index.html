@@ -236,6 +236,7 @@
         window.addEventListener('storage', function(e) { if (e.key === 'dfw_progress_ping') loadOverallProgress(); });
         document.addEventListener('visibilitychange', function() { if (document.visibilityState === 'visible') loadOverallProgress(); });
 
+        var feedFailed = false;   // the sub-site data could not be read: say so instead of "No activity yet"
         DigifinwizDB.init().then(function() {
             loadOverallProgress();
             // Activity happens in Banking / Ecommerce / Utilities, so the feed is the
@@ -243,7 +244,8 @@
             // this account's own.
             var ownActivity = function() { return DigifinwizDB.getRecentActivity(6); };
             var feed = DigifinwizDB.getHub
-                ? DigifinwizDB.getHub().then(function(h) { return h && h.linkedCount > 0 ? h.activity.slice(0, 6) : ownActivity(); }).catch(ownActivity)
+                ? DigifinwizDB.getHub().then(function(h) { return h && h.linkedCount > 0 ? h.activity.slice(0, 6) : ownActivity(); })
+                    .catch(function() { feedFailed = true; return ownActivity(); })
                 : ownActivity();
             return Promise.all([DigifinwizDB.getUserData(), DigifinwizDB.getChallenges(), feed]);
         }).then(function(results) {
@@ -255,9 +257,10 @@
             // timeline already relies on for this endpoint (icon/label/detail/
             // date/pointsEarned), rendered here as a compact linked list.
             var listEl = document.getElementById('recentActivityList');
+            var failedNote = feedFailed ? '<p style="color:#b91c1c;font-size:0.8rem;margin:0.5rem 0 0">We couldn\u2019t load activity from Banking, Ecommerce and Utilities right now. Reload to try again.</p>' : '';
             if (listEl) {
                 if (activity.length === 0) {
-                    listEl.innerHTML = '<p style="color:#64748b;font-size:0.875rem">No activity yet. Visit Banking, Ecommerce or Utilities to get started!</p>';
+                    listEl.innerHTML = feedFailed ? failedNote : '<p style="color:#64748b;font-size:0.875rem">No activity yet. Visit Banking, Ecommerce or Utilities to get started!</p>';
                 } else {
                     listEl.innerHTML = '<div style="display:flex;flex-direction:column;gap:0.5rem">' + activity.map(function(e) {
                         var site = MODULE_META[e.module];
@@ -272,7 +275,7 @@
                             '</span>' +
                             '<span style="font-size:0.75rem;color:#94a3b8;white-space:nowrap">' + escH(e.date || '') + '</span>' +
                         '</a>';
-                    }).join('') + '</div>';
+                    }).join('') + '</div>' + failedNote;
                 }
             }
 

@@ -564,8 +564,12 @@ const DigifinwizDB = (() => {
 
     // Main Site only: the linked Banking / Ecommerce / Utilities accounts'
     // balances, records and progress in one read-only call (see GET /api/me/hub).
-    // Cached briefly so the several panels of one page share a single request.
+    // Cached briefly so the several panels of one page share a single request, and
+    // dropped as soon as another tab reports that something was done.
     var _hubCache = null;
+    try {
+        window.addEventListener('storage', function(e) { if (e.key === 'dfw_progress_ping') _hubCache = null; });
+    } catch (e) { /* no window events: the 5 s memo is all there is */ }
     function getHub() {
         var now = Date.now();
         if (_hubCache && now - _hubCache.at < 5000) return _hubCache.promise;
@@ -576,28 +580,29 @@ const DigifinwizDB = (() => {
     }
 
     // Same shape as getStats(), but on the Main Site the counts, totals and
-    // skills cover the linked sub-site accounts' activity, since that is where
-    // transfers, purchases and bill payments actually happen. Without any linked
-    // account (or on a sub-site page) it is just getStats().
+    // skills add the linked sub-site accounts' activity to this account's own,
+    // since that is where transfers, purchases and bill payments now happen.
+    // Without any linked account (or on a sub-site page) it is just getStats().
     function getCombinedStats() {
         if (window.APP_MODULE) return getStats();
-        return Promise.all([getStats(), getHub().catch(function() { return null; })]).then(function(res) {
+        return Promise.all([getStats(), getHub().catch(function() { return { failed: true }; })]).then(function(res) {
             var stats = res[0], hub = res[1];
+            if (hub && hub.failed) return Object.assign({}, stats, { hubFailed: true });   // the sub-site data could not be read
             if (!hub || !hub.linkedCount) return stats;
             var linked = ['banking', 'ecommerce', 'utilities'].map(function(k) { return hub.modules[k]; }).filter(function(m) { return m && m.linked; });
-            var sum = function(field) { return linked.reduce(function(n, m) { return n + (Number(m.stats[field]) || 0); }, 0); };
             var out = Object.assign({}, stats);
             ['txCount', 'payCount', 'purchCount', 'totalSpentEcommerce', 'totalSpentBills', 'totalTransferred', 'txPts', 'payPts', 'purchPts', 'totalPts']
-                .forEach(function(f) { out[f] = sum(f); });
-            var skill = function(k, f) { return hub.modules[k] && hub.modules[k].linked ? hub.modules[k].stats[f] : 0; };
-            out.bankingSkill   = skill('banking', 'bankingSkill');
-            out.ecommerceSkill = skill('ecommerce', 'ecommerceSkill');
-            out.billSkill      = skill('utilities', 'billSkill');
-            out.planningSkill  = Math.min(100, Math.round(((out.txCount + out.payCount + out.purchCount) / 30) * 100));
+                .forEach(function(f) { out[f] = (Number(stats[f]) || 0) + linked.reduce(function(n, m) { return n + (Number(m.stats[f]) || 0); }, 0); });
+            // Skills use the same formulas as the server, over the combined counts.
+            var pct = function(n, per) { return Math.min(100, Math.round((n / per) * 100)); };
+            out.bankingSkill   = pct(out.txCount, 10);
+            out.ecommerceSkill = pct(out.purchCount, 10);
+            out.billSkill      = pct(out.payCount, 10);
+            out.planningSkill  = pct(out.txCount + out.payCount + out.purchCount, 30);
             // Badges and the level skill look at the highest level reached on any site.
             var top = linked.reduce(function(n, m) { return Math.max(n, Number(m.userData.level) || 1); }, Number(stats.user && stats.user.level) || 1);
             out.topLevel  = top;
-            out.mgmtSkill = Math.min(100, Math.round((top / 20) * 100));
+            out.mgmtSkill = pct(top, 20);
             return out;
         });
     }

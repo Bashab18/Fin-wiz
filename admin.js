@@ -1370,8 +1370,9 @@ document.addEventListener('DOMContentLoaded', function () {
         var money = function(n) { return '\u0192' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
         tbody.innerHTML = rows.map(function(a) {
             var last = a.lastLogin ? new Date(a.lastLogin).toLocaleDateString() : '\u2014';
-            var main = a.mainAccount
-                ? '<span class="pill pill-green">' + escHtml(a.mainAccount.username) + '</span>'
+            var owners = a.mainAccounts && a.mainAccounts.length ? a.mainAccounts : (a.mainAccount ? [a.mainAccount] : []);
+            var main = owners.length
+                ? owners.map(function(o) { return '<span class="pill pill-green">' + escHtml(o.username) + '</span>'; }).join(' ')
                 : '<span class="pill pill-amber">not linked</span>';
             return '<tr>' +
                 '<td><span class="pill pill-blue">' + escHtml(SUBSITE_LABEL[a.site] || a.site) + '</span></td>' +

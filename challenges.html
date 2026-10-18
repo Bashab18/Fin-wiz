@@ -562,13 +562,16 @@
         return hubP.then(function(hub) {
             if (hub && hub.linkedCount > 0) {
                 var sites = ['banking', 'ecommerce', 'utilities'].map(function(k) { return hub.modules[k]; }).filter(function(m) { return m.linked; });
-                var all = function(field) { return sites.reduce(function(rows, m) { return rows.concat(m[field] || []); }, []); };
+                var own = hub.own || { transactions: [], payments: [], purchases: [] };
+                var all = function(field) { return sites.reduce(function(rows, m) { return rows.concat(m[field] || []); }, own[field] || []); };
                 var bk = hub.modules.banking;
                 return DigifinwizDB.getCombinedStats().then(function(stats) {
-                    return {
-                        stats: stats, txs: all('transactions'), pays: all('payments'), purchs: all('purchases'),
-                        balances: bk.linked ? [{ account: 'checking', amount: bk.balances.checking }, { account: 'savings', amount: bk.balances.savings }] : []
-                    };
+                    // Balance-based conditions follow DigiBank; without a DigiBank account, this account's own.
+                    var balances = bk.linked ? Promise.resolve([{ account: 'checking', amount: bk.balances.checking }, { account: 'savings', amount: bk.balances.savings }])
+                                             : DigifinwizDB.getAllBalances();
+                    return balances.then(function(b) {
+                        return { stats: stats, txs: all('transactions'), pays: all('payments'), purchs: all('purchases'), balances: b || [] };
+                    });
                 });
             }
             return Promise.all([

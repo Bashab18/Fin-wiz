@@ -81,7 +81,7 @@ The full list with record counts is under **Admin → Settings → Database Info
 
 Banking, E-Commerce and Utilities keep their own accounts, so what someone does there never touches their main-site account. A main-site account is **linked** to a sub-site account when the two share an email or a username (case-insensitive; an email match outranks a username match). Nothing is copied between them: the Main Site reads the linked accounts' own records, read-only, through `GET /api/me/hub` (main-site accounts only).
 
-- **Profile** — Information (DigiBank cards, Utilities bills, Ecommerce purchases, activity from every site), Account Balances (the total across all sites plus a per-site breakdown) and Progress (skills, badges, health score) follow the linked accounts.
+- **Profile** — Information (DigiBank cards, Utilities bills, Ecommerce purchases, activity from every site), Account Balances (the total across all sites plus a per-site breakdown) and Progress (skills, badges, health score) follow the linked accounts. The main account's own older records are kept in the counts, lists and spend totals; only its own starting wallet is left out of the balance total. If the sub-site data cannot be loaded the page says so and offers to retry.
 - **Home** — Recent Activity merges every site's events, each tagged with its site, next to the combined progress.
 - **Challenges** — the main-site copy of a sub-site challenge shows as done when the linked sub-site account has completed the same-titled one (display only; the XP stays on the sub-site account). The Level 1 requirements, progress bars and badges follow the sub-sites.
 - **Messages** — the linked accounts' messages and alerts appear in the main inbox, named by site, and can be marked read there.
@@ -89,7 +89,7 @@ Banking, E-Commerce and Utilities keep their own accounts, so what someone does 
 
 With no linked sub-site account these pages show the main account's own records, as before.
 
-A one-time migration at boot (recorded in `app_store` under `_migrations`) brought existing accounts in line with the default challenge list: it adds a missing "Video Learner" and refreshes one outdated description. It never touches an admin's edits and never re-adds a challenge an admin deleted.
+A one-time migration at boot (recorded in `app_store` under `_migrations`) brought existing accounts in line with the default challenge list. It adds "Video Learner" only to accounts created before that challenge existed (before 2026-09-17), and refreshes the "Bank Explorer" description only where it still has the exact old text. A missing "Video Learner" on a later account means someone deleted it, so it stays deleted, and an admin's own edits are never touched.
 
 ## Admin Panel Features
 

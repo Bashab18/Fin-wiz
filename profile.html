@@ -637,30 +637,49 @@
         }
 
         // ── Information tab ───────────────────────────────────────────────
-        // Banking, Ecommerce and Utilities keep their own accounts, so the main
-        // account's own records are empty: the numbers on these tabs come from the
-        // linked sub-site accounts (GET /api/me/hub). With none linked they fall
-        // back to this account's own records, as before.
+        // Banking, Ecommerce and Utilities keep their own accounts, so most of what
+        // this page shows comes from the linked sub-site accounts (GET /api/me/hub),
+        // together with this account's own records (older activity). With none
+        // linked it shows this account's own records, as before. A failed call is
+        // reported as such rather than being mistaken for "nothing linked".
         var SITE_META = {
             banking:   { label: 'DigiBank', icon: '&#127970;', href: 'banking.html',   color: '#667eea' },
             ecommerce: { label: 'InStyl',   icon: '&#128722;', href: 'ecommerce.html', color: '#f59e0b' },
             utilities: { label: 'DigiPay',  icon: '&#9889;',   href: 'utilities.html', color: '#10b981' }
         };
         function loadHub() {
-            return (DigifinwizDB.getHub ? DigifinwizDB.getHub() : Promise.resolve(null)).catch(function() { return null; });
+            return (DigifinwizDB.getHub ? DigifinwizDB.getHub() : Promise.resolve(null)).catch(function() { return { failed: true }; });
         }
+        function showHubNotice(failed) {
+            ['tab-information', 'tab-balances', 'tab-progress'].forEach(function(id) {
+                var panel = document.getElementById(id), old = document.getElementById('hubNotice-' + id);
+                if (old) old.remove();
+                if (!panel || !failed) return;
+                var n = document.createElement('div');
+                n.id = 'hubNotice-' + id;
+                n.setAttribute('role', 'alert');
+                n.style.cssText = 'background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:10px;padding:0.75rem 1rem;margin-bottom:1rem;font-size:0.875rem';
+                n.innerHTML = 'We couldn\u2019t load your Banking, Ecommerce and Utilities data right now, so the numbers below are not shown. <a href="#" onclick="location.reload();return false" style="color:#b91c1c;font-weight:700">Try again</a>';
+                panel.insertBefore(n, panel.firstChild);
+            });
+        }
+        var byTime = function(a, b) { return (b.timestamp || 0) - (a.timestamp || 0); };
         DigifinwizDB.init().then(function() {
             return loadHub();
         }).then(function(hub) {
+            if (hub && hub.failed) {
+                return [null, null, [], [], [], [], { active:false }, { active:false, paidOff:false }, [], [], hub];
+            }
             if (hub && hub.linkedCount > 0) {
                 var bk = hub.modules.banking, ec = hub.modules.ecommerce, ut = hub.modules.utilities;
+                var own = hub.own || { purchases: [], payments: [], transactions: [] };
                 return [
                     bk.linked ? bk.balances.checking : null,
                     bk.linked ? bk.balances.savings : null,
-                    ec.linked ? ec.purchases : [],
+                    (ec.linked ? ec.purchases : []).concat(own.purchases).sort(byTime),
                     hub.activity.slice(0, 8),
-                    bk.linked ? bk.transactions : [],
-                    ut.linked ? ut.payments : [],
+                    (bk.linked ? bk.transactions : []).concat(own.transactions).sort(byTime),
+                    (ut.linked ? ut.payments : []).concat(own.payments).sort(byTime),
                     bk.linked ? (bk.creditCard || { active:false }) : { active:false },
                     bk.linked ? (bk.loan || { active:false, paidOff:false }) : { active:false, paidOff:false },
                     bk.linked ? bk.savingsGoals : [],
@@ -685,7 +704,9 @@
             var txns = r[4]||[], payments = r[5]||[];
             var creditCard = r[6] || { active:false }, loan = r[7] || { active:false, paidOff:false };
             var savingsGoals = r[8]||[], bills = r[9]||[];
+            var hubFailed = !!(r[10] && r[10].failed);
             var hub = r[10] && r[10].linkedCount > 0 ? r[10] : null;   // null: nothing linked, showing this account's own records
+            showHubNotice(hubFailed);
             var fmt = function(n){ return '\u0192' + Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
             var fmtOpt = function(n){ return n == null ? '\u2014' : fmt(n); };   // no DigiBank account linked: no balance to show
 
@@ -703,13 +724,20 @@
             if (hub) { assets = hub.totals.assets; liabilities = hub.totals.liabilities; }
             var netTotal = assets - liabilities;
             var balTotal = document.getElementById('balTotalAmount');
-            if (balTotal) balTotal.textContent = (netTotal<0?'-':'') + '\u0192' + Math.round(Math.abs(netTotal)).toLocaleString();
+            if (balTotal) balTotal.textContent = hubFailed ? '\u2014' : (netTotal<0?'-':'') + '\u0192' + Math.round(Math.abs(netTotal)).toLocaleString();
             var balNote = document.getElementById('balTotalNote');
             if (balNote) {
-                balNote.textContent = liabilities > 0
-                    ? 'Checking + savings, minus \u0192' + Math.round(liabilities).toLocaleString() + ' in card/loan debt'
-                    : 'Across all accounts';
-                balNote.style.color = netTotal < 0 ? '#dc2626' : '';
+                var debtNote = liabilities > 0 ? ', minus \u0192' + Math.round(liabilities).toLocaleString() + ' in card/loan debt' : '';
+                if (hubFailed) balNote.textContent = 'Not available right now';
+                else if (hub) balNote.textContent = 'Checking + savings on ' + Object.keys(SITE_META).filter(function(k) { return hub.modules[k].linked; }).map(function(k) { return SITE_META[k].label; }).join(', ') + debtNote;
+                else balNote.textContent = liabilities > 0 ? 'Checking + savings' + debtNote : 'Across all accounts';
+                balNote.style.color = !hubFailed && netTotal < 0 ? '#dc2626' : '';
+            }
+            // The two account tiles are the DigiBank accounts; say so when that is what they show.
+            var tileTitles = document.querySelectorAll('#tab-balances .account-detail-card .account-header h3');
+            if (hub && tileTitles.length >= 2) {
+                tileTitles[0].textContent = 'Checking \u2014 DigiBank';
+                tileTitles[1].textContent = 'Savings \u2014 DigiBank';
             }
             var bc = document.getElementById('balChecking'), bs = document.getElementById('balSavings');
             if (bc) bc.textContent = fmtOpt(checking);
@@ -720,6 +748,11 @@
             if (siteHost) {
                 siteHost.innerHTML = Object.keys(SITE_META).map(function(key) {
                     var meta = SITE_META[key], site = hub ? hub.modules[key] : null;
+                    if (hubFailed) {
+                        return '<div style="background:#fef2f2;border:1px dashed #fecaca;border-radius:12px;padding:0.8rem 1rem">' +
+                            '<div style="font-weight:700;margin-bottom:0.25rem">' + meta.icon + ' ' + meta.label + '</div>' +
+                            '<div style="font-size:0.78rem;color:#b91c1c">Couldn\u2019t load right now.</div></div>';
+                    }
                     if (!site || !site.linked) {
                         return '<div style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;padding:0.8rem 1rem">' +
                             '<div style="font-weight:700;margin-bottom:0.25rem">' + meta.icon + ' ' + meta.label + '</div>' +
@@ -791,8 +824,8 @@
                     var GRADS=['linear-gradient(135deg,#d4e4bc,#c8ddb0)','linear-gradient(135deg,#f4d4d4,#f0c8c8)','linear-gradient(135deg,#c4dcd4,#b8d4c8)','linear-gradient(135deg,#ffd4a3,#ffcb8e)','linear-gradient(135deg,#e0e7ff,#c7d2fe)','linear-gradient(135deg,#fce7f3,#fbcfe8)'];
                     invContainer.innerHTML = '<div class="inventory-grid">' + allItems.slice(0,8).map(function(entry,i){
                         var it = entry.it;
-                        var href = 'shop-order-detail.html?id=' + encodeURIComponent(entry.purchaseId);
-                        return '<a class="inventory-item" href="'+href+'" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;display:block"><div class="inventory-image" style="background:'+GRADS[i%GRADS.length]+'"><div class="placeholder-product" style="font-size:2rem">'+ICONS[i%ICONS.length]+'</div></div><h4>'+escP(it.name||it.title||'Item')+'</h4><p class="price">\u0192'+Number(it.price||0).toFixed(2)+'</p></a>';
+                        // No per-order link: the order page needs the shop's own sign-in, which the main site doesn't have.
+                        return '<div class="inventory-item" style="display:block"><div class="inventory-image" style="background:'+GRADS[i%GRADS.length]+'"><div class="placeholder-product" style="font-size:2rem">'+ICONS[i%ICONS.length]+'</div></div><h4>'+escP(it.name||it.title||'Item')+'</h4><p class="price">\u0192'+Number(it.price||0).toFixed(2)+'</p></div>';
                     }).join('') + '</div>';
                 }
             }
@@ -834,6 +867,7 @@
             if (!user) return;
             var topLevel = stats.topLevel || user.level;
             var levelUser = Object.assign({}, user, { level: topLevel });
+            showHubNotice(!!stats.hubFailed);
             var lvlEl = document.querySelector('#tab-progress .level-number');
             if (lvlEl) lvlEl.textContent = user.level;
             var upEl = document.getElementById('userPoints');    if (upEl) upEl.textContent = user.points.toLocaleString();
@@ -1001,7 +1035,7 @@
     });
 
     function resetProgress() {
-        if (!confirm('Reset ALL progress? This clears transactions, bills, challenges, and resets balances.')) return;
+        if (!confirm('Reset ALL progress on this Main Site account? This clears its own transactions, bills and challenges and resets its balances.\n\nYour Banking, Ecommerce and Utilities accounts keep their own progress; reset those inside each site.')) return;
         // Single self-scoped server request — atomic from the client's point of
         // view, and can't accidentally touch another user's data (unlike the
         // old client-side sequence, which also referenced a DEFAULT_BALANCES
@@ -1009,13 +1043,13 @@
         DigifinwizDB.init().then(function() {
             return DigifinwizDB.resetMyProgress();
         }).then(function() {
-            showNotification('Progress reset! Challenges have been refreshed.', 'success');
+            showNotification('Main Site progress reset! Challenges have been refreshed. (Banking, Ecommerce and Utilities were not changed.)', 'success');
             setTimeout(function(){ window.location.href='index.html'; }, 1500);
         }).catch(function() { showNotification('Reset failed.', 'error'); });
     }
 
     function resetChallengesOnly() {
-        if (!confirm('Reset all challenges back to incomplete? Your transactions and XP will be kept.')) return;
+        if (!confirm('Reset this Main Site account\u2019s challenges back to incomplete? Its transactions and XP will be kept.\n\nChallenges inside Banking, Ecommerce and Utilities are not changed.')) return;
         // Self-scoped: only resets the current user's own challenges. The old
         // clearStore('challenges') call mapped to the admin-only bulk-delete
         // route, so this either 403'd for participants or wiped every user's
@@ -1023,7 +1057,7 @@
         DigifinwizDB.init().then(function() {
             return DigifinwizDB.resetMyChallenges();
         }).then(function() {
-            showNotification('Challenges reset! All challenges are now active again.', 'success');
+            showNotification('Main Site challenges reset! They are all active again. (Banking, Ecommerce and Utilities were not changed.)', 'success');
         }).catch(function() { showNotification('Challenge reset failed.', 'error'); });
     }
     </script>
