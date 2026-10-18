@@ -48,11 +48,14 @@ That default is public (it is in this file), so change it on anything shared or 
 
 With `DATABASE_URL` set, PostgreSQL is the **only** store. The server never falls back to the local files (a hosted disk is wiped on every restart, so accounts would seem to vanish and new writes would be thrown away):
 
-- a failed query is retried a few times (dropped connections are routine), then the request fails with `503 Storage is temporarily unavailable` and nothing is half-saved;
+- a failed query is retried a few times (dropped connections are routine), then the request fails with `503 Storage is temporarily unavailable`. A request's writes are saved together in one transaction, so a `503` (or any error part-way through a request) saves nothing and the client can simply try again;
+- if the database hangs instead of refusing, requests answer `503` straight away for a few seconds rather than each waiting out its own timeout;
 - the app recovers on its own when the database returns — no restart needed;
-- at boot the server retries the connection `DB_BOOT_ATTEMPTS` times and then exits, so a bad deploy shows up as a failed deploy instead of serving an empty app.
+- at boot the server retries the connection `DB_BOOT_ATTEMPTS` times and then exits, so a bad deploy shows up as a failed deploy instead of serving an empty app;
+- a hosted deploy (`RENDER` or `NODE_ENV=production`) with no `DATABASE_URL` refuses to start; set `ALLOW_LOCAL_DATA=1` to run on local files there anyway;
+- if the `app_store` table disappears while the app is running, the server exits so the next boot recreates and seeds it, instead of carrying on as an empty app.
 
-Writes rewrite a whole store, so every mutating route runs inside one application-wide lock (`withUserLock`, re-entrant) to stop two simultaneous requests from overwriting each other.
+Writes rewrite a whole store, so every mutating route runs inside one application-wide lock (`withUserLock`, re-entrant) to stop two simultaneous requests from overwriting each other. Each locked section commits all of its writes in a single transaction, or none of them if it fails.
 
 ### Environment variables
 
@@ -64,6 +67,7 @@ Writes rewrite a whole store, so every mutating route runs inside one applicatio
 | `ALLOWED_ORIGIN` | CORS origin of a separately hosted frontend | `*` |
 | `DB_BOOT_ATTEMPTS` | Connection attempts at boot before the server exits | `5` |
 | `DB_BOOT_DELAY_MS` | Base wait between those attempts (grows with each attempt) | `2000` |
+| `ALLOW_LOCAL_DATA` | Set to `1` to let a hosted deploy run on local files when `DATABASE_URL` is missing | unset |
 
 ### Stores
 

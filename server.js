@@ -29,9 +29,16 @@ const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
 // silent switch would make every existing account "disappear" and send new
 // writes somewhere that is thrown away. Instead a failing query is retried
 // (connection blips are routine), and if the database really is unreachable
-// the request fails with 503 until it comes back — nothing is half-saved and
-// nothing needs a restart to recover.
+// the request fails with 503 until it comes back, with no restart needed. A
+// hosted deploy (RENDER / NODE_ENV=production) with no DATABASE_URL refuses to
+// boot for the same reason.
+//
+// Writes made while a request holds the lock (see withUserLock) are buffered
+// and saved in ONE database transaction when that locked section ends. A
+// request that fails part-way saves nothing, and so does a 503, so the client
+// can always safely try again.
 const DATABASE_URL = process.env.DATABASE_URL;
+const HOSTED = process.env.RENDER === 'true' || process.env.NODE_ENV === 'production';
 const pool = DATABASE_URL
     ? new Pool({
         connectionString: DATABASE_URL,
@@ -54,8 +61,10 @@ if (pool) {
     });
 }
 
-const STORAGE_MAX_ATTEMPTS  = 3;
+const STORAGE_MAX_ATTEMPTS    = 3;
 const STORAGE_RETRY_BUDGET_MS = 12000;
+const SLOW_FAILURE_MS = 3000;   // a failure that took this long is not a blip, so retrying it would only double the wait
+const FAIL_FAST_MS    = 5000;   // after the database stopped answering, reply 503 at once for this long instead of queueing more timeouts
 const BOOT_ATTEMPTS  = Number(process.env.DB_BOOT_ATTEMPTS)  || 5;
 const BOOT_DELAY_MS  = Number(process.env.DB_BOOT_DELAY_MS)  || 2000;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -78,8 +87,8 @@ function isTransientPgError(err) {
 
 // Outcome of the most recent database call, so /api/health can report an
 // outage as soon as real traffic runs into it instead of waiting for its own ping.
-const dbState = { ok: true, at: 0 };
-function noteDbResult(ok) { dbState.ok = ok; dbState.at = Date.now(); }
+const dbState = { ok: true, at: 0, hung: false };
+function noteDbResult(ok, hung) { dbState.ok = ok; dbState.at = Date.now(); dbState.hung = !!hung; }
 
 let lastStorageLogAt = 0;
 function logStorageProblem(err) {
@@ -98,36 +107,86 @@ function createStoreTable() {
     `);
 }
 
-// pool.query with retries for transient failures. Throws an Error carrying an
-// HTTP status (503 = storage unavailable, 500 = unexpected query error) with a
-// generic message, so no driver/SQL detail ever reaches a client.
-async function pgQuery(text, params) {
+const UPSERT_SQL = `INSERT INTO app_store (name, data) VALUES ($1, $2::jsonb)
+                    ON CONFLICT (name) DO UPDATE SET data = EXCLUDED.data`;
+
+function storageUnavailable(cause) {
+    const e = httpError(503, 'Storage is temporarily unavailable. Please try again in a moment.');
+    if (cause) e.cause = cause;
+    return e;
+}
+
+// The table vanishing while the app runs means the database was reset or
+// dropped under us. Recreating it empty would leave an app that looks healthy
+// but has no accounts, bills or products (the seeds only run at boot), so
+// exit instead: the next boot recreates the table and seeds it properly.
+let exitScheduled = false;
+function storageTableMissing(cause) {
+    if (!exitScheduled) {
+        exitScheduled = true;
+        console.error('DigifinwizDB: FATAL — the app_store table no longer exists (database reset or dropped?). Exiting so the next boot recreates and re-seeds it.');
+        setTimeout(() => process.exit(1), 500);
+    }
+    noteDbResult(false, true);
+    const e = httpError(503, 'The service is restarting. Please try again in a minute.');
+    e.cause = cause;
+    return e;
+}
+
+// Runs one storage operation (a query, or a whole transaction) with retries for
+// transient failures. Throws an Error carrying an HTTP status (503 = storage
+// unavailable, 500 = unexpected query error) with a generic message, so no
+// driver/SQL detail ever reaches a client.
+async function withStorageRetry(attemptFn) {
+    // The database just hung: don't make every queued request wait out its own timeout.
+    if (!dbState.ok && dbState.hung && Date.now() - dbState.at < FAIL_FAST_MS) throw storageUnavailable();
     const deadline = Date.now() + STORAGE_RETRY_BUDGET_MS;
-    let repairedTable = false;
     for (let attempt = 1; ; attempt++) {
+        const started = Date.now();
         try {
-            const result = await pool.query(text, params);
+            const out = await attemptFn();
             noteDbResult(true);
-            return result;
+            return out;
         } catch (err) {
-            if (err && err.code === '42P01' && !repairedTable) {   // table dropped under us: recreate once, retry
-                repairedTable = true;
-                try { await createStoreTable(); continue; } catch (e) { /* fall through to the error below */ }
-            }
+            if (err && err.code === '42P01') throw storageTableMissing(err);
             const transient = isTransientPgError(err);
-            if (transient && attempt < STORAGE_MAX_ATTEMPTS && Date.now() < deadline) {
+            const slow = Date.now() - started >= SLOW_FAILURE_MS;
+            if (transient && !slow && attempt < STORAGE_MAX_ATTEMPTS && Date.now() < deadline) {
                 await sleep(100 * attempt * attempt);
                 continue;
             }
             logStorageProblem(err);
-            if (transient) noteDbResult(false);
-            const out = transient
-                ? httpError(503, 'Storage is temporarily unavailable. Please try again in a moment.')
-                : httpError(500, 'Storage error');
+            // A cancelled statement (57014) proves the server is alive, so only
+            // a failure where it never answered at all counts as "hung".
+            if (transient) noteDbResult(false, slow && err.code !== '57014');
+            const out = transient ? storageUnavailable(err) : httpError(500, 'Storage error');
             out.cause = err;
             throw out;
         }
     }
+}
+
+function pgQuery(text, params) {
+    return withStorageRetry(() => pool.query(text, params));
+}
+
+// Saves several stores atomically: all of them, or none.
+function pgCommit(entries) {
+    return withStorageRetry(async () => {
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            for (const [name, json] of entries) await client.query(UPSERT_SQL, [name, json]);
+            await client.query('COMMIT');
+            client.release();
+        } catch (err) {
+            // A healthy connection can roll back; a broken one is simply dropped
+            // (the server rolls the transaction back when the socket closes).
+            if (!isTransientPgError(err)) { try { await client.query('ROLLBACK'); } catch (e) { /* already gone */ } }
+            client.release(true);
+            throw err;
+        }
+    });
 }
 
 // Every store the app can touch. Derived (not hand-listed) so it can never
@@ -150,6 +209,9 @@ function ensureLocalDataFiles() {
 
 async function initStorage() {
     if (!pool) {
+        if (HOSTED && process.env.ALLOW_LOCAL_DATA !== '1') {
+            throw new Error('DATABASE_URL is not set on a hosted deploy — refusing to start on a disk that is wiped on every restart. Set DATABASE_URL (or ALLOW_LOCAL_DATA=1 to run on local files anyway).');
+        }
         ensureLocalDataFiles();
         console.log('DigifinwizDB: no DATABASE_URL set — using local JSON files in data/.');
         return;
@@ -172,7 +234,61 @@ async function initStorage() {
     throw new Error('DATABASE_URL is set but Postgres is unreachable — refusing to start on a temporary disk. Last error: ' + lastErr.message);
 }
 
+// Serializes all money-mutating work application-wide (not just per user).
+// The JSON-file stores (users, products, purchases, ...) are shared arrays
+// that get fully read, mutated, and rewritten on every request — a per-user
+// lock alone still lets two DIFFERENT users' requests interleave on the same
+// shared array (e.g. both read stock 1, both pass the check, both decrement
+// it) and lose one write. A single global chain makes every withUserLock
+// call run one at a time, which is the only way to guarantee no lost writes
+// against a full-array-rewrite store.
+//
+// Each locked call is also one "section": its writeJSON calls are held in
+// memory (and read back by its own readJSON calls) and saved together, in one
+// transaction, only if the section finishes. If it throws, nothing it wrote is
+// saved.
+//
+// Re-entrant: work that already holds the lock (a route calling a helper that
+// takes it too) just runs inline in the same section instead of queueing
+// behind itself forever, which would freeze every write in the app.
+// AsyncLocalStorage marks "this async call chain is inside a section"; a
+// section that has ended no longer counts, so a stray promise that outlives it
+// takes the lock like any other caller.
+const lockHolder = new AsyncLocalStorage();
+let globalLock = Promise.resolve();
+
+async function commitSection(section) {
+    if (!section.writes.size) return;
+    const entries = Array.from(section.writes.entries());
+    if (pool) { await pgCommit(entries); return; }
+    entries.forEach(([name, json]) => writeLocalFile(name, json));
+}
+
+function withUserLock(userId, fn) {
+    const held = lockHolder.getStore();
+    if (held && !held.closed) return Promise.resolve().then(fn);
+    const run = async () => {
+        const section = { writes: new Map(), closed: false };
+        try {
+            const result = await lockHolder.run(section, fn);
+            await commitSection(section);
+            return result;
+        } finally {
+            section.closed = true;
+        }
+    };
+    const next = globalLock.then(run, run);
+    globalLock = next;
+    return next;
+}
+
+function writeLocalFile(name, json) {
+    fs.writeFileSync(path.join(DATA_DIR, name + '.json'), JSON.stringify(JSON.parse(json), null, 2), 'utf8');
+}
+
 async function readJSON(name) {
+    const section = lockHolder.getStore();
+    if (section && !section.closed && section.writes.has(name)) return JSON.parse(section.writes.get(name));
     if (pool) {
         const { rows } = await pgQuery('SELECT data FROM app_store WHERE name = $1', [name]);
         return rows.length ? rows[0].data : [];
@@ -186,15 +302,14 @@ async function readJSON(name) {
 }
 
 async function writeJSON(name, data) {
-    if (pool) {
-        await pgQuery(
-            `INSERT INTO app_store (name, data) VALUES ($1, $2::jsonb)
-             ON CONFLICT (name) DO UPDATE SET data = EXCLUDED.data`,
-            [name, JSON.stringify(data)]
-        );
-        return;
+    const json = JSON.stringify(data);   // snapshot now: later changes to `data` are not part of this write
+    const section = lockHolder.getStore();
+    if (section) {
+        if (!section.closed) { section.writes.set(name, json); return; }
+        console.warn('DigifinwizDB: "' + name + '" was written after its locked section ended; saving it directly.');
     }
-    fs.writeFileSync(path.join(DATA_DIR, name + '.json'), JSON.stringify(data, null, 2), 'utf8');
+    if (pool) { await pgQuery(UPSERT_SQL, [name, json]); return; }
+    writeLocalFile(name, json);
 }
 
 function nextId(arr) {
@@ -290,29 +405,6 @@ async function buildChallengeContext(userId, stores) {
         checkingBalance:      Number(balances.checking) || 0,
         savingsBalance:       Number(balances.savings) || 0
     };
-}
-
-// Serializes all money-mutating work application-wide (not just per user).
-// The JSON-file stores (users, products, purchases, ...) are shared arrays
-// that get fully read, mutated, and rewritten on every request — a per-user
-// lock alone still lets two DIFFERENT users' requests interleave on the same
-// shared array (e.g. both read stock 1, both pass the check, both decrement
-// it) and lose one write. A single global chain makes every withUserLock
-// call run one at a time, which is the only way to guarantee no lost writes
-// against a full-array-rewrite store without a real database transaction.
-//
-// Re-entrant: work that already holds the lock (a route calling a helper that
-// takes it too) just runs inline instead of queueing behind itself forever,
-// which would freeze every write in the app. AsyncLocalStorage marks "this
-// async call chain holds the lock".
-const lockHolder = new AsyncLocalStorage();
-let globalLock = Promise.resolve();
-function withUserLock(userId, fn) {
-    if (lockHolder.getStore()) return Promise.resolve().then(fn);
-    const run = () => lockHolder.run(true, fn);
-    const next = globalLock.then(run, run);
-    globalLock = next;
-    return next;
 }
 
 // ── Password hashing (prototype-level djb2 XOR, not cryptographic) ────────────
@@ -1051,7 +1143,6 @@ function parseProfileFields(body) {
     const patch = {};
     if (fullName !== undefined) {
         if (typeof fullName !== 'string' || !fullName.trim()) return { error: 'Full name is required' };
-        if (fullName.trim().length > 100) return { error: 'Full name must be 100 characters or fewer' };
         patch.fullName = fullName.trim();
     }
     // Lowercased to match login's lowercase comparison — otherwise saving
@@ -1073,10 +1164,13 @@ function parseProfileFields(body) {
     return { patch };
 }
 
-// Format rules only apply to a value that's actually changing, so an
-// avatar-only save that echoes back a legacy username/email which predates
-// these rules still succeeds.
+// Format rules only apply to a value that's actually changing, so a save that
+// echoes back a legacy name/username/email/phone/address which predates these
+// rules (the profile form always sends every field) still succeeds.
 function assertProfileFormat(patch, existing) {
+    if (patch.fullName !== undefined && patch.fullName !== String(existing.fullName || '').trim() && patch.fullName.length > 100) {
+        throw httpError(400, 'Full name must be 100 characters or fewer');
+    }
     if (patch.username !== undefined && patch.username !== existing.username && !USERNAME_RE.test(patch.username)) {
         throw httpError(400, 'Username must be 3-30 characters: letters, numbers, or underscores');
     }
@@ -1120,6 +1214,13 @@ app.post('/api/auth/login', async (req, res) => {
     res.json({ success: true, user: publicUser(Object.assign({}, user, { lastLogin: now })) });
 });
 
+// The first way a sign-up collides with an existing account, or null.
+function identityConflict(users, uLower, eLower) {
+    if (users.some(u => u.username === uLower)) return 'Username already taken';
+    if (users.some(u => u.email === eLower))    return 'Email already registered';
+    return null;
+}
+
 app.post('/api/auth/register', async (req, res) => {
     const { fullName, username, email, password } = req.body || {};
     if (![fullName, username, email, password].every(isNonEmptyString)) {
@@ -1127,13 +1228,18 @@ app.post('/api/auth/register', async (req, res) => {
     }
     const uLower = username.toLowerCase();
     const eLower = email.toLowerCase();
+    // Cheap check first, so repeated attempts at a taken name never queue for
+    // the lock behind real money writes. It is repeated inside the lock, where
+    // it is the check that counts.
+    const early = identityConflict(await readJSON('users'), uLower, eLower);
+    if (early) return res.status(409).json({ error: early });
     // Locked: the duplicate check and the append must be one step, or two
     // simultaneous sign-ups can both pass the check (same username twice) or
     // overwrite each other's row.
     const outcome = await withUserLock(0, async () => {
         const users = await readJSON('users');
-        if (users.some(u => u.username === uLower)) return { status: 409, error: 'Username already taken' };
-        if (users.some(u => u.email === eLower))    return { status: 409, error: 'Email already registered' };
+        const conflict = identityConflict(users, uLower, eLower);
+        if (conflict) return { status: 409, error: conflict };
         const id = nextId(users);
         users.push({
             id,
@@ -1156,29 +1262,46 @@ app.post('/api/auth/register', async (req, res) => {
     res.status(201).json({ id: outcome.id });
 });
 
+// Tells the admins a new sign-up is waiting for approval. The page calls it
+// right after registering, so it only acts for an account that really is
+// pending and hasn't been announced yet, and takes the details from that
+// account rather than from the request. Anything else is a quiet no-op, so
+// repeated or invented calls can't fill the admins' inboxes (or the lock).
 app.post('/api/auth/notify-admins', async (req, res) => {
-    const { username, fullName } = req.body || {};
-    await withUserLock(0, async () => {
-        const users    = await readJSON(req.userStore);
-        const messages = await readJSON(req.messageStore);
-        const admins   = users.filter(u => u.role === 'admin');
-        const now      = Date.now();
-        admins.forEach(admin => {
-            messages.push({
-                id:          nextId(messages),
-                senderId:    0,
-                senderName:  'System',
-                senderEmail: null,
-                recipientId: admin.id,
-                subject:     'New Registration: @' + username,
-                body:        (fullName || username) + ' (@' + username + ') has registered and is awaiting approval. Go to Admin → Users to approve or reject.',
-                type:        'info',
-                sentAt:      now,
-                readBy:      []
+    const raw      = req.body && req.body.username;
+    const username = isNonEmptyString(raw) ? raw.trim().toLowerCase() : '';
+    if (username) {
+        const subject = 'New Registration: @' + username;
+        const pendingSignup = async () => {
+            const [users, messages] = await Promise.all([readJSON(req.userStore), readJSON(req.messageStore)]);
+            const user = users.find(u => u.username === username && u.status === 'pending');
+            const announced = messages.some(m => m.senderId === 0 && m.subject === subject);
+            return user && !announced ? { user, users, messages } : null;
+        };
+        if (await pendingSignup()) {            // cheap, unlocked; repeated inside the lock
+            await withUserLock(0, async () => {
+                const found = await pendingSignup();
+                if (!found) return;
+                const { user, users, messages } = found;
+                const now = Date.now();
+                users.filter(u => u.role === 'admin').forEach(admin => {
+                    messages.push({
+                        id:          nextId(messages),
+                        senderId:    0,
+                        senderName:  'System',
+                        senderEmail: null,
+                        recipientId: admin.id,
+                        subject,
+                        body:        (user.fullName || username) + ' (@' + username + ') has registered and is awaiting approval. Go to Admin → Users to approve or reject.',
+                        type:        'info',
+                        sentAt:      now,
+                        readBy:      []
+                    });
+                });
+                await writeJSON(req.messageStore, messages);
             });
-        });
-        await writeJSON(req.messageStore, messages);
-    });
+        }
+    }
     res.json({ ok: true });
 });
 
@@ -1195,10 +1318,12 @@ function moduleRegisterHandler(userStore, challengeStore, category) {
         }
         const uLower = username.toLowerCase();
         const eLower = email.toLowerCase();
+        const early = identityConflict(await readJSON(userStore), uLower, eLower);   // cheap, unlocked; rechecked below
+        if (early) return res.status(409).json({ error: early });
         const outcome = await withUserLock(0, async () => {
             const users = await readJSON(userStore);
-            if (users.some(u => u.username === uLower)) return { status: 409, error: 'Username already taken' };
-            if (users.some(u => u.email === eLower))    return { status: 409, error: 'Email already registered' };
+            const conflict = identityConflict(users, uLower, eLower);
+            if (conflict) return { status: 409, error: conflict };
             const user = {
                 id:           nextId(users),
                 fullName,
@@ -1290,7 +1415,7 @@ app.put('/api/users/:id', async (req, res) => {
                 assertProfileFormat(patch, users[idx]);
                 ['prefs', 'phone', 'address'].forEach(f => { if (body[f] !== undefined) patch[f] = body[f]; });
                 ['phone', 'address'].forEach(f => {
-                    if (patch[f] !== undefined && (typeof patch[f] !== 'string' || patch[f].length > 500)) {
+                    if (patch[f] !== undefined && patch[f] !== users[idx][f] && (typeof patch[f] !== 'string' || patch[f].length > 500)) {
                         throw httpError(400, 'Invalid ' + f);
                     }
                 });
@@ -2554,8 +2679,8 @@ app.post('/api/me/credit-card/payment', async (req, res) => {
 
             const activity = await readJSON(req.creditActivityStore);
             // fromAccount is stored so the statement can put the debit on the
-            // account that actually paid (rows from before this field existed
-            // were always paid from checking).
+            // account that actually paid. Rows saved before this field existed
+            // carry no account (see the statement route for how they're read).
             const record = {
                 id: nextId(activity), userId: req.userId, type: 'payment', fromAccount,
                 amount: payAmt, description: fromAccount === 'savings' ? 'Card payment from savings' : 'Card payment',
@@ -3052,8 +3177,10 @@ app.get('/api/me/statement', async (req, res) => {
     pays.filter(p => p.userId === req.userId && p.fromAccount === account).forEach(p => {
         events.push({ timestamp: p.timestamp || 0, amount: -(p.amount || 0), label: (p.type || 'Bill') + ' bill payment' });
     });
-    // A card payment debits whichever account it was paid from (older rows
-    // have no fromAccount and were always paid from checking).
+    // A card payment debits whichever account it was paid from. Rows saved
+    // before fromAccount was recorded don't say; they are read as checking,
+    // which is wrong for any that were actually paid from savings (that choice
+    // existed before the account was stored, and can't be recovered).
     creditActivity.filter(a => a.userId === req.userId && a.type === 'payment' && (a.fromAccount || 'checking') === account).forEach(a => {
         events.push({ timestamp: a.timestamp || 0, amount: -(a.amount || 0), label: 'Credit card payment' });
     });
@@ -3707,9 +3834,9 @@ async function notifyOverdueBillsForUser(userId, cycles, messageStore = 'message
 // Core bill-payment logic shared by the manual "Pay Now" route and the
 // auto-pay sweep below. Locks internally (like executeOneScheduledTransfer)
 // rather than throwing, so callers that loop over several cycles — the
-// auto-pay sweep — call this directly per cycle instead of nesting it
-// inside their own withUserLock, which would deadlock against the single
-// global lock chain (see withUserLock's comment above).
+// auto-pay sweep — call this directly per cycle instead of wrapping the whole
+// loop in one withUserLock. Each cycle is then its own locked section (its own
+// transaction), so one cycle failing cannot undo the payments already made.
 // opts: { viaAutopay, autopayEnabledAt } from the sweep — a cycle auto-paid
 // by a pref enabled on/before its due date (or a legacy pref with no
 // enabledAt) is settled as of the due date: no late fee, on-time bonus.
@@ -3827,9 +3954,9 @@ const AUTOPAY_ERROR_STATUS = {
 
 // Auto-pay sweep: charges any due-or-overdue cycle whose bill has auto-pay
 // enabled, the same lazy-execution-on-read pattern used for scheduled
-// transfers. Each cycle gets its own attemptPayBillCycle call (its own lock
-// acquisition) rather than one call wrapping the whole loop, since nesting
-// a second withUserLock inside an already-held one would deadlock.
+// transfers. Each cycle gets its own attemptPayBillCycle call (its own locked
+// section) rather than one lock wrapping the whole loop, so a failure on one
+// cycle can't roll back the cycles already paid.
 async function runDueAutopays(userId, req) {
     const prefs = (await readJSON(req.autopayStore)).filter(p => p.userId === userId && p.enabled);
     if (prefs.length === 0) return;
@@ -3907,6 +4034,9 @@ app.post('/api/me/bills/autopay', async (req, res) => {
 
 // Card checks shared by every simulated-card path (the wallet and bill pay), so
 // the two can't disagree about what a valid card is.
+function validCardNumber(number) {
+    return /^\d{13,19}$/.test(number) && passesLuhn(number);
+}
 function passesLuhn(number) {
     let sum = 0, dbl = false;
     for (let i = number.length - 1; i >= 0; i--) {
@@ -3927,7 +4057,7 @@ function cardNotExpired(month, year) {
 function validateCardDetails(c) {
     if (!c || typeof c !== 'object') return { error: 'Card details required' };
     const number = String(c.number || '').replace(/\s+/g, '');
-    if (!/^\d{13,19}$/.test(number) || !passesLuhn(number)) return { error: 'Enter a valid card number' };
+    if (!validCardNumber(number)) return { error: 'Enter a valid card number' };
     if (!String(c.name || '').trim()) return { error: 'Name on card required' };
     const m = /^(\d{2})\/(\d{2})$/.exec(String(c.exp || '').trim());
     if (!m || +m[1] < 1 || +m[1] > 12) return { error: 'Expiry must be MM/YY' };
@@ -4283,7 +4413,7 @@ app.post('/api/me/payment-methods', async (req, res) => {
     const cardholderName = String(body.cardholderName || '').trim();
     const expMonth = Number(body.expMonth);
     const expYear  = Number(body.expYear);
-    if (number.length < 12 || number.length > 19 || !passesLuhn(number)) return res.status(400).json({ error: 'Enter a valid card number' });
+    if (!validCardNumber(number)) return res.status(400).json({ error: 'Enter a valid card number' });
     if (!cardholderName) return res.status(400).json({ error: 'Cardholder name required' });
     if (!Number.isInteger(expMonth) || expMonth < 1 || expMonth > 12) return res.status(400).json({ error: 'Valid expiration month required' });
     if (!Number.isInteger(expYear) || expYear < 2000 || expYear > 2100) return res.status(400).json({ error: 'Valid expiration year required' });
@@ -4404,7 +4534,11 @@ async function start() {
     await seedDefaultProducts();
     await warnIfDefaultAdminPassword().catch(err => console.error('Admin password check skipped:', err.message));
     startScheduledTransferSweep();
-    app.listen(PORT, () => {
+    app.listen(PORT, err => {
+        if (err) {   // e.g. the port is already in use: don't linger as a server that isn't listening
+            console.error('Failed to listen on port ' + PORT + ':', err.message);
+            process.exit(1);
+        }
         console.log('DigiFinWiz server running on http://localhost:' + PORT);
     });
 }
