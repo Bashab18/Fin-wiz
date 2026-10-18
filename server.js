@@ -5,6 +5,7 @@ const cors     = require('cors');
 const fs       = require('fs');
 const path     = require('path');
 const { Pool } = require('pg');
+const { AsyncLocalStorage } = require('async_hooks');
 
 const app      = express();
 const PORT     = process.env.PORT || 3000;
@@ -18,93 +19,163 @@ const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
 // ── Storage backend ────────────────────────────────────────────────────────────
 // If DATABASE_URL is set (e.g. a Render Postgres instance), every named
 // "store" (users, transactions, ...) is persisted as one row of JSONB in a
-// real database — durable across redeploys/restarts. Otherwise this falls
-// back to the original flat JSON files under data/, so local development
-// needs no database setup at all. Both paths expose the exact same
+// real database — durable across redeploys/restarts. Otherwise the original
+// flat JSON files under data/ are used, so local development needs no
+// database setup at all. Both paths expose the exact same
 // readJSON(name) / writeJSON(name, data) contract the rest of this file uses.
+//
+// When DATABASE_URL IS set, Postgres is the ONLY store. It never degrades to
+// the local files: those sit on a disk that is wiped on every restart, so a
+// silent switch would make every existing account "disappear" and send new
+// writes somewhere that is thrown away. Instead a failing query is retried
+// (connection blips are routine), and if the database really is unreachable
+// the request fails with 503 until it comes back — nothing is half-saved and
+// nothing needs a restart to recover.
 const DATABASE_URL = process.env.DATABASE_URL;
 const pool = DATABASE_URL
     ? new Pool({
         connectionString: DATABASE_URL,
         ssl: { rejectUnauthorized: false },
-        // Without this, an unreachable database (expired free-tier instance,
-        // network partition, etc.) hangs the connection attempt forever —
-        // and since initStorage() awaits it before app.listen(), the whole
-        // server never comes up. Fail fast instead so boot can fall back.
-        connectionTimeoutMillis: 8000
+        // An unreachable database (expired instance, network partition, ...)
+        // must fail a request, not hang it: every write runs inside one global
+        // lock, so a query that never returns would freeze all writes.
+        connectionTimeoutMillis: 8000,
+        statement_timeout: 8000,   // the server cancels a statement running this long...
+        query_timeout: 10000,      // ...and the driver gives up on a silently dead socket
+        keepAlive: true
     })
     : null;
-// True once Postgres is confirmed reachable; flipped false (permanently
-// falling back to local JSON files) if it never connects or later errors out.
-let dbUsable = !!pool;
 
 if (pool) {
+    // An idle client dropped by the server (restart, failover, network blip)
+    // is discarded by the pool and replaced on the next query — just log it.
     pool.on('error', err => {
-        console.error('DigifinwizDB: unexpected Postgres pool error, falling back to local JSON files:', err.message);
-        dbUsable = false;
+        console.error('DigifinwizDB: idle Postgres connection error (the pool will reconnect):', err.message);
     });
+}
+
+const STORAGE_MAX_ATTEMPTS  = 3;
+const STORAGE_RETRY_BUDGET_MS = 12000;
+const BOOT_ATTEMPTS  = Number(process.env.DB_BOOT_ATTEMPTS)  || 5;
+const BOOT_DELAY_MS  = Number(process.env.DB_BOOT_DELAY_MS)  || 2000;
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+// Errors that mean "could not reach / lost the database" (worth retrying and,
+// failing that, a 503) as opposed to "this query is wrong" (a bug: 500).
+const TRANSIENT_PG_CODES = new Set([
+    'ECONNRESET', 'ECONNREFUSED', 'ECONNABORTED', 'ETIMEDOUT', 'EPIPE', 'ENOTFOUND', 'EAI_AGAIN',
+    '57P01', '57P02', '57P03', '57014',            // admin/crash shutdown, cannot connect now, statement timeout
+    '08000', '08001', '08003', '08004', '08006', '08007',   // connection exceptions
+    '53300', '40001', '40P01'                      // too many connections, serialization failure, deadlock
+]);
+function isTransientPgError(err) {
+    if (!err) return false;
+    if (TRANSIENT_PG_CODES.has(err.code)) return true;
+    if (typeof err.code === 'string' && err.code.startsWith('ERR_SSL_')) return true;   // TLS stream broke mid-query
+    return /Connection terminated|timeout exceeded when trying to connect|connection timeout|Query read timeout|Client has encountered a connection error|server closed the connection|terminating connection|read ECONN|write EPIPE/i
+        .test(err.message || '');
+}
+
+// Outcome of the most recent database call, so /api/health can report an
+// outage as soon as real traffic runs into it instead of waiting for its own ping.
+const dbState = { ok: true, at: 0 };
+function noteDbResult(ok) { dbState.ok = ok; dbState.at = Date.now(); }
+
+let lastStorageLogAt = 0;
+function logStorageProblem(err) {
+    // One line per few seconds, not one per request, while the database is down.
+    if (Date.now() - lastStorageLogAt < 5000) return;
+    lastStorageLogAt = Date.now();
+    console.error('DigifinwizDB: Postgres query failed:', err && (err.code ? err.code + ' ' : '') + (err && err.message));
+}
+
+function createStoreTable() {
+    return pool.query(`
+        CREATE TABLE IF NOT EXISTS app_store (
+            name TEXT PRIMARY KEY,
+            data JSONB NOT NULL DEFAULT '[]'::jsonb
+        )
+    `);
+}
+
+// pool.query with retries for transient failures. Throws an Error carrying an
+// HTTP status (503 = storage unavailable, 500 = unexpected query error) with a
+// generic message, so no driver/SQL detail ever reaches a client.
+async function pgQuery(text, params) {
+    const deadline = Date.now() + STORAGE_RETRY_BUDGET_MS;
+    let repairedTable = false;
+    for (let attempt = 1; ; attempt++) {
+        try {
+            const result = await pool.query(text, params);
+            noteDbResult(true);
+            return result;
+        } catch (err) {
+            if (err && err.code === '42P01' && !repairedTable) {   // table dropped under us: recreate once, retry
+                repairedTable = true;
+                try { await createStoreTable(); continue; } catch (e) { /* fall through to the error below */ }
+            }
+            const transient = isTransientPgError(err);
+            if (transient && attempt < STORAGE_MAX_ATTEMPTS && Date.now() < deadline) {
+                await sleep(100 * attempt * attempt);
+                continue;
+            }
+            logStorageProblem(err);
+            if (transient) noteDbResult(false);
+            const out = transient
+                ? httpError(503, 'Storage is temporarily unavailable. Please try again in a moment.')
+                : httpError(500, 'Storage error');
+            out.cause = err;
+            throw out;
+        }
+    }
+}
+
+// Every store the app can touch. Derived (not hand-listed) so it can never
+// drift from the maps the routes actually use: the shared catalogs, each
+// per-user store's main-site name, and every module's own copy of it.
+function allStoreNames() {
+    const names = new Set(['bills', 'products']);
+    Object.keys(PER_USER_STORE_PROPS).forEach(n => names.add(n));
+    Object.values(MODULE_STORES).forEach(mod => Object.values(mod).forEach(n => names.add(n)));
+    return Array.from(names);
 }
 
 function ensureLocalDataFiles() {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    STORE_NAMES.forEach(name => {
+    allStoreNames().forEach(name => {
         const fp = path.join(DATA_DIR, name + '.json');
         if (!fs.existsSync(fp)) fs.writeFileSync(fp, '[]', 'utf8');
     });
 }
 
-const STORE_NAMES = [
-    'users', 'transactions', 'payments', 'purchases', 'challenges', 'messages', 'cart', 'bills',
-    'creditCards', 'creditActivity', 'loans', 'loanPayments', 'savingsGoals', 'savingsGoalActivity',
-    'scheduledTransfers', 'products', 'addresses', 'paymentMethods', 'billCycles', 'customBills',
-    // Standalone per-module accounts (Banking/E-Commerce/Utilities each fully separate from the
-    // shared 'users'/'challenges'/'messages' stores above — see the X-App middleware below).
-    'bankingUsers', 'ecommerceUsers', 'utilitiesUsers',
-    'bankingChallenges', 'ecommerceChallenges', 'utilitiesChallenges',
-    'bankingMessages', 'ecommerceMessages', 'utilitiesMessages',
-    // Every other per-user store a module actually writes to — each module has
-    // its own independent id sequence (its first user is always id 1), so
-    // these need their own store too, or two accounts in different modules
-    // that happen to share a numeric id would see and even delete each
-    // other's transactions/credit cards/loans/orders/addresses/bills.
-    'bankingTransactions', 'bankingCreditCards', 'bankingCreditActivity', 'bankingLoans',
-    'bankingLoanPayments', 'bankingSavingsGoals', 'bankingSavingsGoalActivity', 'bankingScheduledTransfers',
-    'ecommercePurchases', 'ecommerceCart', 'ecommerceAddresses', 'ecommercePaymentMethods',
-    'utilitiesPayments', 'utilitiesBillCycles', 'utilitiesCustomBills'
-];
-
 async function initStorage() {
-    if (pool) {
+    if (!pool) {
+        ensureLocalDataFiles();
+        console.log('DigifinwizDB: no DATABASE_URL set — using local JSON files in data/.');
+        return;
+    }
+    // A database that is still waking up should not fail the whole deploy, but
+    // one that stays unreachable must: starting anyway would serve an empty
+    // app. Exiting leaves the previous deploy running and shows up loudly.
+    let lastErr;
+    for (let attempt = 1; attempt <= BOOT_ATTEMPTS; attempt++) {
         try {
-            await pool.query(`
-                CREATE TABLE IF NOT EXISTS app_store (
-                    name TEXT PRIMARY KEY,
-                    data JSONB NOT NULL DEFAULT '[]'::jsonb
-                )
-            `);
-            dbUsable = true;
+            await createStoreTable();
             console.log('DigifinwizDB: connected to Postgres.');
             return;
         } catch (err) {
-            dbUsable = false;
-            console.error('DigifinwizDB: Postgres unreachable at boot, falling back to local JSON files:', err.message);
+            lastErr = err;
+            console.error('DigifinwizDB: Postgres not reachable at boot (attempt ' + attempt + '/' + BOOT_ATTEMPTS + '): ' + err.message);
+            if (attempt < BOOT_ATTEMPTS) await sleep(BOOT_DELAY_MS * attempt);
         }
     }
-    // Local JSON-file fallback — ensure data directory + files exist.
-    ensureLocalDataFiles();
-    if (!pool) console.log('DigifinwizDB: no DATABASE_URL set — using local JSON files in data/.');
+    throw new Error('DATABASE_URL is set but Postgres is unreachable — refusing to start on a temporary disk. Last error: ' + lastErr.message);
 }
 
 async function readJSON(name) {
-    if (pool && dbUsable) {
-        try {
-            const { rows } = await pool.query('SELECT data FROM app_store WHERE name = $1', [name]);
-            return rows.length ? rows[0].data : [];
-        } catch (err) {
-            dbUsable = false;
-            ensureLocalDataFiles();
-            console.error('DigifinwizDB: Postgres read failed, falling back to local JSON files:', err.message);
-        }
+    if (pool) {
+        const { rows } = await pgQuery('SELECT data FROM app_store WHERE name = $1', [name]);
+        return rows.length ? rows[0].data : [];
     }
     try {
         const raw = fs.readFileSync(path.join(DATA_DIR, name + '.json'), 'utf8');
@@ -115,19 +186,13 @@ async function readJSON(name) {
 }
 
 async function writeJSON(name, data) {
-    if (pool && dbUsable) {
-        try {
-            await pool.query(
-                `INSERT INTO app_store (name, data) VALUES ($1, $2::jsonb)
-                 ON CONFLICT (name) DO UPDATE SET data = EXCLUDED.data`,
-                [name, JSON.stringify(data)]
-            );
-            return;
-        } catch (err) {
-            dbUsable = false;
-            ensureLocalDataFiles();
-            console.error('DigifinwizDB: Postgres write failed, falling back to local JSON files:', err.message);
-        }
+    if (pool) {
+        await pgQuery(
+            `INSERT INTO app_store (name, data) VALUES ($1, $2::jsonb)
+             ON CONFLICT (name) DO UPDATE SET data = EXCLUDED.data`,
+            [name, JSON.stringify(data)]
+        );
+        return;
     }
     fs.writeFileSync(path.join(DATA_DIR, name + '.json'), JSON.stringify(data, null, 2), 'utf8');
 }
@@ -235,9 +300,17 @@ async function buildChallengeContext(userId, stores) {
 // it) and lose one write. A single global chain makes every withUserLock
 // call run one at a time, which is the only way to guarantee no lost writes
 // against a full-array-rewrite store without a real database transaction.
+//
+// Re-entrant: work that already holds the lock (a route calling a helper that
+// takes it too) just runs inline instead of queueing behind itself forever,
+// which would freeze every write in the app. AsyncLocalStorage marks "this
+// async call chain holds the lock".
+const lockHolder = new AsyncLocalStorage();
 let globalLock = Promise.resolve();
 function withUserLock(userId, fn) {
-    const next = globalLock.then(fn, fn);
+    if (lockHolder.getStore()) return Promise.resolve().then(fn);
+    const run = () => lockHolder.run(true, fn);
+    const next = globalLock.then(run, run);
     globalLock = next;
     return next;
 }
@@ -250,6 +323,12 @@ function simpleHash(str) {
     }
     return (h >>> 0).toString(16).padStart(8, '0');
 }
+
+// The seeded admin accounts' starting password. The default is public (it is
+// printed in the readme), so a real deployment should set ADMIN_PASSWORD before
+// the first boot; it only affects accounts created at seed time.
+const DEFAULT_ADMIN_PASSWORD = 'Admin1234';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || DEFAULT_ADMIN_PASSWORD;
 
 // ── Default data shapes ───────────────────────────────────────────────────────
 const DEFAULT_BALANCES     = { checking: 88674.00, savings: 18074.00 };
@@ -333,15 +412,20 @@ function computeOrderStatus(order) {
 // bill overdue notices, order status changes, security notices). `category`
 // drives the per-module unread badges in the sidebar nav.
 async function pushSystemMessage(userId, { subject, body, type, category }, messageStore = 'messages') {
-    const messages = await readJSON(messageStore);
-    const msg = {
-        id: nextId(messages), senderId: 0, senderName: 'System', senderEmail: null,
-        recipientId: userId, subject, body, type: type || 'info', category: category || 'system',
-        sentAt: Date.now(), readBy: []
-    };
-    messages.push(msg);
-    await writeJSON(messageStore, messages);
-    return msg;
+    // Takes the lock itself (re-entrant, so a no-op inside a locked route):
+    // it rewrites the whole messages array, and some callers — the auto-pay
+    // notices — hold no lock of their own.
+    return withUserLock(userId, async () => {
+        const messages = await readJSON(messageStore);
+        const msg = {
+            id: nextId(messages), senderId: 0, senderName: 'System', senderEmail: null,
+            recipientId: userId, subject, body, type: type || 'info', category: category || 'system',
+            sentAt: Date.now(), readBy: []
+        };
+        messages.push(msg);
+        await writeJSON(messageStore, messages);
+        return msg;
+    });
 }
 
 // Pushes a system message into the user's own Messages inbox when a balance
@@ -558,7 +642,7 @@ async function seedDefaultAdmin() {
         fullName:     'Administrator',
         username:     'admin',
         email:        'admin@digifinwiz.local',
-        passwordHash: simpleHash('Admin1234'),
+        passwordHash: simpleHash(ADMIN_PASSWORD),
         role:         'admin',
         status:       'approved',
         createdAt:    Date.now(),
@@ -568,11 +652,11 @@ async function seedDefaultAdmin() {
         balances:     Object.assign({}, DEFAULT_BALANCES)
     });
     await writeJSON('users', users);
-    console.log('DigifinwizDB: default admin created (admin / Admin1234)');
+    console.log('DigifinwizDB: default admin created (username: admin' +
+        (ADMIN_PASSWORD === DEFAULT_ADMIN_PASSWORD ? ', DEFAULT password — change it)' : ', password from ADMIN_PASSWORD)'));
 }
 
-// Seeds a default 'admin' login (admin / Admin1234) into one of the
-// standalone module user stores. Unlike seedDefaultAdmin() above, this is
+// Seeds a default 'admin' login into one of the standalone module user stores. Unlike seedDefaultAdmin() above, this is
 // just an ordinary account with that username/password — module accounts
 // have no role/status/approval concept at all, so there's nothing
 // privileged about it beyond being a memorable, pre-existing credential
@@ -585,7 +669,7 @@ async function seedDefaultModuleAdmin(userStore, challengeStore, category) {
         fullName:     'Administrator',
         username:     'admin',
         email:        'admin@digifinwiz.local',
-        passwordHash: simpleHash('Admin1234'),
+        passwordHash: simpleHash(ADMIN_PASSWORD),
         createdAt:    Date.now(),
         lastLogin:    null,
         userData:     Object.assign({}, DEFAULT_USER_DATA),
@@ -594,7 +678,23 @@ async function seedDefaultModuleAdmin(userStore, challengeStore, category) {
     users.push(user);
     await writeJSON(userStore, users);
     await seedChallengesForUser(user.id, challengeStore, category);
-    console.log('DigifinwizDB: default admin created for ' + userStore + ' (admin / Admin1234)');
+    console.log('DigifinwizDB: default admin created for ' + userStore + ' (username: admin' +
+        (ADMIN_PASSWORD === DEFAULT_ADMIN_PASSWORD ? ', DEFAULT password — change it)' : ', password from ADMIN_PASSWORD)'));
+}
+
+// Boot-time nudge: logs which user stores still have an admin account on the
+// publicly documented default password.
+async function warnIfDefaultAdminPassword() {
+    const defaultHash = simpleHash(DEFAULT_ADMIN_PASSWORD);
+    const exposed = [];
+    for (const store of ['users', 'bankingUsers', 'ecommerceUsers', 'utilitiesUsers']) {
+        const users = await readJSON(store);
+        if (users.some(u => u.username === 'admin' && u.passwordHash === defaultHash)) exposed.push(store);
+    }
+    if (exposed.length) {
+        console.warn('SECURITY: the default admin password (from the readme) is still active in: ' + exposed.join(', ') +
+            '. Anyone can sign in as admin there — change the password.');
+    }
 }
 
 // ── Challenge helpers ─────────────────────────────────────────────────────────
@@ -628,24 +728,27 @@ async function getChallengesForUser(userId, role, challengeStore = 'challenges')
 // self-contained and included regardless of category, since they don't
 // depend on activity in another module.
 async function seedChallengesForUser(userId, challengeStore = 'challenges', category = null) {
-    const challenges = await readJSON(challengeStore);
-    const existing   = challenges.filter(c => c.userId === userId);
-    if (existing.length > 0) return;
-    const now = Date.now();
-    let id    = nextId(challenges);
-    const defs = category
-        ? ALL_DEFAULT_CHALLENGES.filter(c => c.category === category || c.category === 'general')
-        : ALL_DEFAULT_CHALLENGES;
-    defs.forEach(c => {
-        challenges.push(Object.assign({}, c, {
-            id:        id++,
-            userId:    userId,
-            createdAt: now,
-            active:    true,
-            completed: false
-        }));
+    // Locked (re-entrant): a whole-array read-modify-write of the challenges store.
+    return withUserLock(userId, async () => {
+        const challenges = await readJSON(challengeStore);
+        const existing   = challenges.filter(c => c.userId === userId);
+        if (existing.length > 0) return;
+        const now = Date.now();
+        let id    = nextId(challenges);
+        const defs = category
+            ? ALL_DEFAULT_CHALLENGES.filter(c => c.category === category || c.category === 'general')
+            : ALL_DEFAULT_CHALLENGES;
+        defs.forEach(c => {
+            challenges.push(Object.assign({}, c, {
+                id:        id++,
+                userId:    userId,
+                createdAt: now,
+                active:    true,
+                completed: false
+            }));
+        });
+        await writeJSON(challengeStore, challenges);
     });
-    await writeJSON(challengeStore, challenges);
 }
 
 // Context fields a "custom" condition is allowed to read — never eval
@@ -872,8 +975,14 @@ Object.keys(MODULE_STORES).forEach(moduleKey => {
 });
 
 app.use((req, res, next) => {
-    const mod = MODULE_STORES[req.headers['x-app']];
-    req.appModule = mod ? req.headers['x-app'] : null;
+    // Own-key check, not a plain lookup: 'constructor' or '__proto__' would
+    // otherwise resolve to Object.prototype members, switch on module-only
+    // behaviour, and still read the main site's stores.
+    const appHeader = req.headers['x-app'];
+    const known = typeof appHeader === 'string' && Object.prototype.hasOwnProperty.call(MODULE_STORES, appHeader);
+    if (appHeader !== undefined && !known) return res.status(400).json({ error: 'Unknown X-App value' });
+    const mod = known ? MODULE_STORES[appHeader] : null;
+    req.appModule = known ? appHeader : null;
     for (const literalName in PER_USER_STORE_PROPS) {
         const prop = PER_USER_STORE_PROPS[literalName];
         req[prop] = (mod && mod[literalName]) ? mod[literalName] : literalName;
@@ -882,14 +991,121 @@ app.use((req, res, next) => {
 });
 
 // ── Health ────────────────────────────────────────────────────────────────────
-app.get('/api/health', (_req, res) => {
-    res.json({ ok: true });
+// Reports the database's state instead of always answering "ok". The answer is
+// whatever the latest database call (any request's, or this endpoint's own
+// ping) saw; it pings only when that is more than a few seconds old, so page
+// loads that call this can't turn into a query storm.
+app.get('/api/health', async (_req, res) => {
+    if (!pool) return res.json({ ok: true, backend: 'json-files' });
+    if (Date.now() - dbState.at > 3000) {
+        let timer;
+        try {
+            await Promise.race([
+                pool.query('SELECT 1'),
+                new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('health check timed out')), 3000); })
+            ]);
+            noteDbResult(true);
+        } catch (err) {
+            noteDbResult(false);
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+    if (!dbState.ok) return res.status(503).json({ ok: false, backend: 'postgres', error: 'Database unavailable' });
+    res.json({ ok: true, backend: 'postgres' });
 });
 
+// ── Profile / identity helpers ────────────────────────────────────────────────
+// A user record as sent to a client: never the password hash.
+function publicUser(u) {
+    if (!u || typeof u !== 'object') return u;
+    const { passwordHash, ...rest } = u;
+    return rest;
+}
+
+const isNonEmptyString = v => typeof v === 'string' && v.trim().length > 0;
+
+// Same username rule the registration pages enforce client-side
+// (register.html / *-register.html USERNAME_RE).
+const USERNAME_RE = /^[a-z0-9_]{3,30}$/;
+const EMAIL_RE    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Throws 409 if another user in `users` (excluding selfId) already owns the
+// given (already-lowercased) username or email — login matches the first
+// record with that username/email, so a duplicate would lock the real
+// owner out of their account.
+function assertIdentityUnique(users, selfId, username, email) {
+    if (username !== undefined && users.some(u => u.id !== selfId && u.username === username)) {
+        throw httpError(409, 'Username already taken');
+    }
+    if (email !== undefined && users.some(u => u.id !== selfId && u.email === email)) {
+        throw httpError(409, 'Email already registered');
+    }
+}
+
+// The editable identity fields shared by PUT /api/me/profile and the
+// self-service branch of PUT /api/users/:id, so both enforce one set of rules.
+// Returns { patch } or { error }.
+function parseProfileFields(body) {
+    const { fullName, username, email, avatarDataUri } = body || {};
+    const patch = {};
+    if (fullName !== undefined) {
+        if (typeof fullName !== 'string' || !fullName.trim()) return { error: 'Full name is required' };
+        if (fullName.trim().length > 100) return { error: 'Full name must be 100 characters or fewer' };
+        patch.fullName = fullName.trim();
+    }
+    // Lowercased to match login's lowercase comparison — otherwise saving
+    // "Jane@Email.com" would make email login stop matching.
+    if (username !== undefined) {
+        if (typeof username !== 'string') return { error: 'Invalid username' };
+        patch.username = username.trim().toLowerCase();
+    }
+    if (email !== undefined) {
+        if (typeof email !== 'string') return { error: 'Invalid email' };
+        patch.email = email.trim().toLowerCase();
+    }
+    if (avatarDataUri !== undefined) {
+        if (avatarDataUri !== null && (typeof avatarDataUri !== 'string' || !avatarDataUri.startsWith('data:image/') || avatarDataUri.length > 400000)) {
+            return { error: 'Invalid avatar image' };
+        }
+        patch.avatarDataUri = avatarDataUri;
+    }
+    return { patch };
+}
+
+// Format rules only apply to a value that's actually changing, so an
+// avatar-only save that echoes back a legacy username/email which predates
+// these rules still succeeds.
+function assertProfileFormat(patch, existing) {
+    if (patch.username !== undefined && patch.username !== existing.username && !USERNAME_RE.test(patch.username)) {
+        throw httpError(400, 'Username must be 3-30 characters: letters, numbers, or underscores');
+    }
+    if (patch.email !== undefined && patch.email !== existing.email && !EMAIL_RE.test(patch.email)) {
+        throw httpError(400, 'Enter a valid email address');
+    }
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
+// Records a successful login. The password check happens first and without the
+// lock (a wrong password never touches storage); only the lastLogin write is a
+// read-modify-write of the whole users array, so it takes the lock and re-reads
+// fresh state. Writing back the snapshot the password check used would
+// overwrite any balance change another request committed in between.
+async function recordLogin(userStore, userId) {
+    const now = Date.now();
+    await withUserLock(userId, async () => {
+        const users = await readJSON(userStore);
+        const idx   = users.findIndex(u => u.id === userId);
+        if (idx === -1) return;
+        users[idx] = Object.assign({}, users[idx], { lastLogin: now });
+        await writeJSON(userStore, users);
+    });
+    return now;
+}
+
 app.post('/api/auth/login', async (req, res) => {
     const { usernameOrEmail, password } = req.body || {};
-    if (!usernameOrEmail || !password) {
+    if (!isNonEmptyString(usernameOrEmail) || typeof password !== 'string' || !password) {
         return res.status(400).json({ success: false, reason: 'missing_fields' });
     }
     const val   = usernameOrEmail.toLowerCase();
@@ -900,223 +1116,138 @@ app.post('/api/auth/login', async (req, res) => {
     if (user.status === 'pending')  return res.json({ success: false, reason: 'pending' });
     if (user.status === 'rejected') return res.json({ success: false, reason: 'rejected' });
 
-    // Update lastLogin
-    const now     = Date.now();
-    const updated = users.map(u => u.id === user.id ? Object.assign({}, u, { lastLogin: now }) : u);
-    await writeJSON('users', updated);
-    res.json({ success: true, user: Object.assign({}, user, { lastLogin: now }) });
+    const now = await recordLogin('users', user.id);
+    res.json({ success: true, user: publicUser(Object.assign({}, user, { lastLogin: now })) });
 });
 
 app.post('/api/auth/register', async (req, res) => {
     const { fullName, username, email, password } = req.body || {};
-    if (!fullName || !username || !email || !password) {
+    if (![fullName, username, email, password].every(isNonEmptyString)) {
         return res.status(400).json({ error: 'Missing required fields' });
     }
-    const users  = await readJSON('users');
     const uLower = username.toLowerCase();
     const eLower = email.toLowerCase();
-    if (users.some(u => u.username === uLower)) {
-        return res.status(409).json({ error: 'Username already taken' });
-    }
-    if (users.some(u => u.email === eLower)) {
-        return res.status(409).json({ error: 'Email already registered' });
-    }
-    const id = nextId(users);
-    users.push({
-        id,
-        fullName,
-        username:     uLower,
-        email:        eLower,
-        passwordHash: simpleHash(password),
-        role:         'participant',
-        status:       'pending',
-        createdAt:    Date.now(),
-        approvedAt:   null,
-        lastLogin:    null,
-        userData:     Object.assign({}, DEFAULT_USER_DATA),
-        balances:     Object.assign({}, DEFAULT_BALANCES)
+    // Locked: the duplicate check and the append must be one step, or two
+    // simultaneous sign-ups can both pass the check (same username twice) or
+    // overwrite each other's row.
+    const outcome = await withUserLock(0, async () => {
+        const users = await readJSON('users');
+        if (users.some(u => u.username === uLower)) return { status: 409, error: 'Username already taken' };
+        if (users.some(u => u.email === eLower))    return { status: 409, error: 'Email already registered' };
+        const id = nextId(users);
+        users.push({
+            id,
+            fullName,
+            username:     uLower,
+            email:        eLower,
+            passwordHash: simpleHash(password),
+            role:         'participant',
+            status:       'pending',
+            createdAt:    Date.now(),
+            approvedAt:   null,
+            lastLogin:    null,
+            userData:     Object.assign({}, DEFAULT_USER_DATA),
+            balances:     Object.assign({}, DEFAULT_BALANCES)
+        });
+        await writeJSON('users', users);
+        return { id };
     });
-    await writeJSON('users', users);
-    res.status(201).json({ id });
+    if (outcome.error) return res.status(outcome.status).json({ error: outcome.error });
+    res.status(201).json({ id: outcome.id });
 });
 
 app.post('/api/auth/notify-admins', async (req, res) => {
     const { username, fullName } = req.body || {};
-    const users    = await readJSON(req.userStore);
-    const messages = await readJSON(req.messageStore);
-    const admins   = users.filter(u => u.role === 'admin');
-    const now      = Date.now();
-    admins.forEach(admin => {
-        messages.push({
-            id:          nextId(messages),
-            senderId:    0,
-            senderName:  'System',
-            senderEmail: null,
-            recipientId: admin.id,
-            subject:     'New Registration: @' + username,
-            body:        (fullName || username) + ' (@' + username + ') has registered and is awaiting approval. Go to Admin \u2192 Users to approve or reject.',
-            type:        'info',
-            sentAt:      now,
-            readBy:      []
+    await withUserLock(0, async () => {
+        const users    = await readJSON(req.userStore);
+        const messages = await readJSON(req.messageStore);
+        const admins   = users.filter(u => u.role === 'admin');
+        const now      = Date.now();
+        admins.forEach(admin => {
+            messages.push({
+                id:          nextId(messages),
+                senderId:    0,
+                senderName:  'System',
+                senderEmail: null,
+                recipientId: admin.id,
+                subject:     'New Registration: @' + username,
+                body:        (fullName || username) + ' (@' + username + ') has registered and is awaiting approval. Go to Admin → Users to approve or reject.',
+                type:        'info',
+                sentAt:      now,
+                readBy:      []
+            });
         });
+        await writeJSON(req.messageStore, messages);
     });
-    await writeJSON(req.messageStore, messages);
     res.json({ ok: true });
 });
 
 // ── Module auth (Banking / E-Commerce / Utilities standalone accounts) ─────────
 // Each module has its own separate account space, decoupled from the shared
 // 'users' store above — no role/status/approval gate, accounts are usable
-// immediately after registration.
-app.post('/api/banking/auth/register', async (req, res) => {
-    const { fullName, username, email, password } = req.body || {};
-    if (!fullName || !username || !email || !password) {
-        return res.status(400).json({ error: 'Missing required fields' });
-    }
-    const users  = await readJSON('bankingUsers');
-    const uLower = username.toLowerCase();
-    const eLower = email.toLowerCase();
-    if (users.some(u => u.username === uLower)) {
-        return res.status(409).json({ error: 'Username already taken' });
-    }
-    if (users.some(u => u.email === eLower)) {
-        return res.status(409).json({ error: 'Email already registered' });
-    }
-    const user = {
-        id:           nextId(users),
-        fullName,
-        username:     uLower,
-        email:        eLower,
-        passwordHash: simpleHash(password),
-        createdAt:    Date.now(),
-        lastLogin:    Date.now(),
-        userData:     Object.assign({}, DEFAULT_USER_DATA),
-        balances:     Object.assign({}, DEFAULT_BALANCES)
+// immediately after registration. The three modules differ only in which
+// stores they use, so one handler pair serves all of them.
+function moduleRegisterHandler(userStore, challengeStore, category) {
+    return async (req, res) => {
+        const { fullName, username, email, password } = req.body || {};
+        if (![fullName, username, email, password].every(isNonEmptyString)) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+        const uLower = username.toLowerCase();
+        const eLower = email.toLowerCase();
+        const outcome = await withUserLock(0, async () => {
+            const users = await readJSON(userStore);
+            if (users.some(u => u.username === uLower)) return { status: 409, error: 'Username already taken' };
+            if (users.some(u => u.email === eLower))    return { status: 409, error: 'Email already registered' };
+            const user = {
+                id:           nextId(users),
+                fullName,
+                username:     uLower,
+                email:        eLower,
+                passwordHash: simpleHash(password),
+                createdAt:    Date.now(),
+                lastLogin:    Date.now(),
+                userData:     Object.assign({}, DEFAULT_USER_DATA),
+                balances:     Object.assign({}, DEFAULT_BALANCES)
+            };
+            users.push(user);
+            await writeJSON(userStore, users);
+            await seedChallengesForUser(user.id, challengeStore, category);
+            return { user };
+        });
+        if (outcome.error) return res.status(outcome.status).json({ error: outcome.error });
+        res.status(201).json({ user: publicUser(outcome.user) });
     };
-    users.push(user);
-    await writeJSON('bankingUsers', users);
-    await seedChallengesForUser(user.id, 'bankingChallenges', 'banking');
-    const { passwordHash, ...safeUser } = user;
-    res.status(201).json({ user: safeUser });
-});
+}
 
-app.post('/api/banking/auth/login', async (req, res) => {
-    const { usernameOrEmail, password } = req.body || {};
-    if (!usernameOrEmail || !password) {
-        return res.status(400).json({ success: false, reason: 'missing_fields' });
-    }
-    const val   = usernameOrEmail.toLowerCase();
-    const users = await readJSON('bankingUsers');
-    const user  = users.find(u => u.username === val || u.email === val);
-    if (!user) return res.json({ success: false, reason: 'not_found' });
-    if (user.passwordHash !== simpleHash(password)) return res.json({ success: false, reason: 'wrong_password' });
-    const now = Date.now();
-    await writeJSON('bankingUsers', users.map(u => u.id === user.id ? Object.assign({}, u, { lastLogin: now }) : u));
-    const { passwordHash, ...safeUser } = user;
-    res.json({ success: true, user: Object.assign({}, safeUser, { lastLogin: now }) });
-});
-
-app.post('/api/ecommerce/auth/register', async (req, res) => {
-    const { fullName, username, email, password } = req.body || {};
-    if (!fullName || !username || !email || !password) {
-        return res.status(400).json({ error: 'Missing required fields' });
-    }
-    const users  = await readJSON('ecommerceUsers');
-    const uLower = username.toLowerCase();
-    const eLower = email.toLowerCase();
-    if (users.some(u => u.username === uLower)) {
-        return res.status(409).json({ error: 'Username already taken' });
-    }
-    if (users.some(u => u.email === eLower)) {
-        return res.status(409).json({ error: 'Email already registered' });
-    }
-    const user = {
-        id:           nextId(users),
-        fullName,
-        username:     uLower,
-        email:        eLower,
-        passwordHash: simpleHash(password),
-        createdAt:    Date.now(),
-        lastLogin:    Date.now(),
-        userData:     Object.assign({}, DEFAULT_USER_DATA),
-        balances:     Object.assign({}, DEFAULT_BALANCES)
+function moduleLoginHandler(userStore) {
+    return async (req, res) => {
+        const { usernameOrEmail, password } = req.body || {};
+        if (!isNonEmptyString(usernameOrEmail) || typeof password !== 'string' || !password) {
+            return res.status(400).json({ success: false, reason: 'missing_fields' });
+        }
+        const val   = usernameOrEmail.toLowerCase();
+        const users = await readJSON(userStore);
+        const user  = users.find(u => u.username === val || u.email === val);
+        if (!user) return res.json({ success: false, reason: 'not_found' });
+        if (user.passwordHash !== simpleHash(password)) return res.json({ success: false, reason: 'wrong_password' });
+        const now = await recordLogin(userStore, user.id);
+        res.json({ success: true, user: Object.assign({}, publicUser(user), { lastLogin: now }) });
     };
-    users.push(user);
-    await writeJSON('ecommerceUsers', users);
-    await seedChallengesForUser(user.id, 'ecommerceChallenges', 'ecommerce');
-    const { passwordHash, ...safeUser } = user;
-    res.status(201).json({ user: safeUser });
-});
+}
 
-app.post('/api/ecommerce/auth/login', async (req, res) => {
-    const { usernameOrEmail, password } = req.body || {};
-    if (!usernameOrEmail || !password) {
-        return res.status(400).json({ success: false, reason: 'missing_fields' });
-    }
-    const val   = usernameOrEmail.toLowerCase();
-    const users = await readJSON('ecommerceUsers');
-    const user  = users.find(u => u.username === val || u.email === val);
-    if (!user) return res.json({ success: false, reason: 'not_found' });
-    if (user.passwordHash !== simpleHash(password)) return res.json({ success: false, reason: 'wrong_password' });
-    const now = Date.now();
-    await writeJSON('ecommerceUsers', users.map(u => u.id === user.id ? Object.assign({}, u, { lastLogin: now }) : u));
-    const { passwordHash, ...safeUser } = user;
-    res.json({ success: true, user: Object.assign({}, safeUser, { lastLogin: now }) });
-});
-
-app.post('/api/utilities/auth/register', async (req, res) => {
-    const { fullName, username, email, password } = req.body || {};
-    if (!fullName || !username || !email || !password) {
-        return res.status(400).json({ error: 'Missing required fields' });
-    }
-    const users  = await readJSON('utilitiesUsers');
-    const uLower = username.toLowerCase();
-    const eLower = email.toLowerCase();
-    if (users.some(u => u.username === uLower)) {
-        return res.status(409).json({ error: 'Username already taken' });
-    }
-    if (users.some(u => u.email === eLower)) {
-        return res.status(409).json({ error: 'Email already registered' });
-    }
-    const user = {
-        id:           nextId(users),
-        fullName,
-        username:     uLower,
-        email:        eLower,
-        passwordHash: simpleHash(password),
-        createdAt:    Date.now(),
-        lastLogin:    Date.now(),
-        userData:     Object.assign({}, DEFAULT_USER_DATA),
-        balances:     Object.assign({}, DEFAULT_BALANCES)
-    };
-    users.push(user);
-    await writeJSON('utilitiesUsers', users);
-    await seedChallengesForUser(user.id, 'utilitiesChallenges', 'utilities');
-    const { passwordHash, ...safeUser } = user;
-    res.status(201).json({ user: safeUser });
-});
-
-app.post('/api/utilities/auth/login', async (req, res) => {
-    const { usernameOrEmail, password } = req.body || {};
-    if (!usernameOrEmail || !password) {
-        return res.status(400).json({ success: false, reason: 'missing_fields' });
-    }
-    const val   = usernameOrEmail.toLowerCase();
-    const users = await readJSON('utilitiesUsers');
-    const user  = users.find(u => u.username === val || u.email === val);
-    if (!user) return res.json({ success: false, reason: 'not_found' });
-    if (user.passwordHash !== simpleHash(password)) return res.json({ success: false, reason: 'wrong_password' });
-    const now = Date.now();
-    await writeJSON('utilitiesUsers', users.map(u => u.id === user.id ? Object.assign({}, u, { lastLogin: now }) : u));
-    const { passwordHash, ...safeUser } = user;
-    res.json({ success: true, user: Object.assign({}, safeUser, { lastLogin: now }) });
-});
+app.post('/api/banking/auth/register',   moduleRegisterHandler('bankingUsers',   'bankingChallenges',   'banking'));
+app.post('/api/banking/auth/login',      moduleLoginHandler('bankingUsers'));
+app.post('/api/ecommerce/auth/register', moduleRegisterHandler('ecommerceUsers', 'ecommerceChallenges', 'ecommerce'));
+app.post('/api/ecommerce/auth/login',    moduleLoginHandler('ecommerceUsers'));
+app.post('/api/utilities/auth/register', moduleRegisterHandler('utilitiesUsers', 'utilitiesChallenges', 'utilities'));
+app.post('/api/utilities/auth/login',    moduleLoginHandler('utilitiesUsers'));
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 app.get('/api/users', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const users = await readJSON(req.userStore);
-    res.json(users.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+    res.json(users.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(publicUser));
 });
 
 app.get('/api/users/:id', async (req, res) => {
@@ -1127,14 +1258,13 @@ app.get('/api/users/:id', async (req, res) => {
     if (req.userRole !== 'admin' && req.userId !== id) {
         return res.status(403).json({ error: 'Forbidden' });
     }
-    res.json(user);
+    res.json(publicUser(user));
 });
 
 // Non-admin callers may only touch their own record, and only the
 // profile-level fields listed here — never role, status, balances, or
 // passwordHash. Admins may patch any field on any user (this is how the
 // admin panel edits userData/balances).
-const SELF_EDITABLE_USER_FIELDS = ['fullName', 'email', 'username', 'prefs', 'avatarDataUri', 'phone', 'address'];
 app.put('/api/users/:id', async (req, res) => {
     const id      = Number(req.params.id);
     const isAdmin = req.userRole === 'admin';
@@ -1148,22 +1278,32 @@ app.put('/api/users/:id', async (req, res) => {
             const patch = {};
             if (isAdmin) {
                 Object.assign(patch, body);
+                // Lowercased to match login's lowercase comparison — otherwise saving
+                // "Jane@Email.com" here would make email/username login stop matching.
+                if (patch.email    !== undefined) patch.email    = String(patch.email).toLowerCase();
+                if (patch.username !== undefined) patch.username = String(patch.username).toLowerCase();
             } else {
-                SELF_EDITABLE_USER_FIELDS.forEach(f => { if (body[f] !== undefined) patch[f] = body[f]; });
+                // Same rules as PUT /api/me/profile for the identity fields.
+                const parsed = parseProfileFields(body);
+                if (parsed.error) throw httpError(400, parsed.error);
+                Object.assign(patch, parsed.patch);
+                assertProfileFormat(patch, users[idx]);
+                ['prefs', 'phone', 'address'].forEach(f => { if (body[f] !== undefined) patch[f] = body[f]; });
+                ['phone', 'address'].forEach(f => {
+                    if (patch[f] !== undefined && (typeof patch[f] !== 'string' || patch[f].length > 500)) {
+                        throw httpError(400, 'Invalid ' + f);
+                    }
+                });
+                // A participant may not claim a username/email another account
+                // already owns (login matches the first record, which would lock
+                // the real owner out). Admin edits are left as before.
+                assertIdentityUnique(users, id, patch.username, patch.email);
             }
-            // Lowercased to match login's lowercase comparison — otherwise saving
-            // "Jane@Email.com" here would make email/username login stop matching.
-            if (patch.email    !== undefined) patch.email    = String(patch.email).toLowerCase();
-            if (patch.username !== undefined) patch.username = String(patch.username).toLowerCase();
-            // A participant may not claim a username/email another account
-            // already owns (login matches the first record, which would lock
-            // the real owner out). Admin edits are left as before.
-            if (!isAdmin) assertIdentityUnique(users, id, patch.username, patch.email);
             users[idx] = Object.assign({}, users[idx], patch, { id });
             await writeJSON(req.userStore, users);
             return users[idx];
         });
-        res.json(result);
+        res.json(publicUser(result));
     } catch (err) {
         res.status(err.status || 500).json({ error: err.message || 'Server error' });
     }
@@ -1173,55 +1313,67 @@ app.delete('/api/users/:id', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const id = Number(req.params.id);
 
-    // Remove from all per-user stores
-    for (const store of [
-        req.transactionStore, req.paymentStore, req.purchaseStore, req.challengeStore,
-        req.creditCardStore, req.creditActivityStore, req.loanStore, req.loanPaymentStore,
-        req.savingsGoalStore, req.savingsGoalActivityStore,
-        req.scheduledTransferStore, req.addressStore, req.paymentMethodStore, req.billCycleStore, req.customBillStore, req.autopayStore
-    ]) {
-        const rows = await readJSON(store);
-        await writeJSON(store, rows.filter(r => r.userId !== id));
-    }
+    // One locked section: this rewrites a dozen stores, and must not
+    // interleave with the user's own in-flight writes.
+    await withUserLock(0, async () => {
+        // Remove from all per-user stores
+        for (const store of [
+            req.transactionStore, req.paymentStore, req.purchaseStore, req.challengeStore,
+            req.creditCardStore, req.creditActivityStore, req.loanStore, req.loanPaymentStore,
+            req.savingsGoalStore, req.savingsGoalActivityStore,
+            req.scheduledTransferStore, req.addressStore, req.paymentMethodStore, req.billCycleStore, req.customBillStore, req.autopayStore
+        ]) {
+            const rows = await readJSON(store);
+            await writeJSON(store, rows.filter(r => r.userId !== id));
+        }
 
-    // Messages: delete direct, scrub readBy from broadcasts
-    const messages = await readJSON(req.messageStore);
-    await writeJSON(req.messageStore, messages
-        .filter(m => m.recipientId !== id)
-        .map(m => {
-            if (m.recipientId === 'all') {
-                return Object.assign({}, m, { readBy: (m.readBy || []).filter(uid => uid !== id) });
-            }
-            return m;
-        })
-    );
+        // Messages: delete direct, scrub readBy from broadcasts
+        const messages = await readJSON(req.messageStore);
+        await writeJSON(req.messageStore, messages
+            .filter(m => m.recipientId !== id)
+            .map(m => {
+                if (m.recipientId === 'all') {
+                    return Object.assign({}, m, { readBy: (m.readBy || []).filter(uid => uid !== id) });
+                }
+                return m;
+            })
+        );
 
-    const users = await readJSON(req.userStore);
-    await writeJSON(req.userStore, users.filter(u => u.id !== id));
+        const users = await readJSON(req.userStore);
+        await writeJSON(req.userStore, users.filter(u => u.id !== id));
+    });
     res.json({ ok: true });
 });
 
 app.post('/api/users/:id/approve', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const id    = Number(req.params.id);
-    const users = await readJSON(req.userStore);
-    const idx   = users.findIndex(u => u.id === id);
-    if (idx === -1) return res.status(404).json({ error: 'User not found' });
-    users[idx] = Object.assign({}, users[idx], { status: 'approved', approvedAt: Date.now() });
-    await writeJSON(req.userStore, users);
-    await seedChallengesForUser(id);
-    res.json(users[idx]);
+    const id = Number(req.params.id);
+    const approved = await withUserLock(0, async () => {
+        const users = await readJSON(req.userStore);
+        const idx   = users.findIndex(u => u.id === id);
+        if (idx === -1) return null;
+        users[idx] = Object.assign({}, users[idx], { status: 'approved', approvedAt: Date.now() });
+        await writeJSON(req.userStore, users);
+        await seedChallengesForUser(id);
+        return users[idx];
+    });
+    if (!approved) return res.status(404).json({ error: 'User not found' });
+    res.json(publicUser(approved));
 });
 
 app.post('/api/users/:id/reject', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const id    = Number(req.params.id);
-    const users = await readJSON(req.userStore);
-    const idx   = users.findIndex(u => u.id === id);
-    if (idx === -1) return res.status(404).json({ error: 'User not found' });
-    users[idx] = Object.assign({}, users[idx], { status: 'rejected' });
-    await writeJSON(req.userStore, users);
-    res.json(users[idx]);
+    const id = Number(req.params.id);
+    const rejected = await withUserLock(0, async () => {
+        const users = await readJSON(req.userStore);
+        const idx   = users.findIndex(u => u.id === id);
+        if (idx === -1) return null;
+        users[idx] = Object.assign({}, users[idx], { status: 'rejected' });
+        await writeJSON(req.userStore, users);
+        return users[idx];
+    });
+    if (!rejected) return res.status(404).json({ error: 'User not found' });
+    res.json(publicUser(rejected));
 });
 
 app.get('/api/users/:id/challenges', async (req, res) => {
@@ -1271,62 +1423,17 @@ app.get('/api/me/profile', async (req, res) => {
     res.json({ fullName: user.fullName, username: user.username, email: user.email, avatarDataUri: user.avatarDataUri || null });
 });
 
-// Same username rule the registration pages enforce client-side
-// (register.html / *-register.html USERNAME_RE).
-const USERNAME_RE = /^[a-z0-9_]{3,30}$/;
-const EMAIL_RE    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-// Throws 409 if another user in `users` (excluding selfId) already owns the
-// given (already-lowercased) username or email — login matches the first
-// record with that username/email, so a duplicate would lock the real
-// owner out of their account.
-function assertIdentityUnique(users, selfId, username, email) {
-    if (username !== undefined && users.some(u => u.id !== selfId && u.username === username)) {
-        throw httpError(409, 'Username already taken');
-    }
-    if (email !== undefined && users.some(u => u.id !== selfId && u.email === email)) {
-        throw httpError(409, 'Email already registered');
-    }
-}
 
 app.put('/api/me/profile', async (req, res) => {
-    const { fullName, username, email, avatarDataUri } = req.body || {};
-    const patch = {};
-    if (fullName !== undefined) {
-        if (typeof fullName !== 'string' || !fullName.trim()) return res.status(400).json({ error: 'Full name is required' });
-        if (fullName.trim().length > 100) return res.status(400).json({ error: 'Full name must be 100 characters or fewer' });
-        patch.fullName = fullName.trim();
-    }
-    // Lowercased to match login's lowercase comparison (server.js login handler) —
-    // otherwise saving "Jane@Email.com" here would make email login stop matching.
-    if (username !== undefined) {
-        if (typeof username !== 'string') return res.status(400).json({ error: 'Invalid username' });
-        patch.username = username.trim().toLowerCase();
-    }
-    if (email !== undefined) {
-        if (typeof email !== 'string') return res.status(400).json({ error: 'Invalid email' });
-        patch.email = email.trim().toLowerCase();
-    }
-    if (avatarDataUri !== undefined) {
-        if (avatarDataUri !== null && (typeof avatarDataUri !== 'string' || !avatarDataUri.startsWith('data:image/') || avatarDataUri.length > 400000)) {
-            return res.status(400).json({ error: 'Invalid avatar image' });
-        }
-        patch.avatarDataUri = avatarDataUri;
-    }
+    const parsed = parseProfileFields(req.body);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    const patch = parsed.patch;
     try {
         const user = await withUserLock(req.userId, async () => {
             const users = await readJSON(req.userStore);
             const idx   = users.findIndex(u => u.id === req.userId);
             if (idx === -1) throw httpError(404, 'User not found');
-            // Format rules only apply to a value that's actually changing, so
-            // an avatar-only save that echoes back a legacy username which
-            // predates these rules still succeeds.
-            if (patch.username !== undefined && patch.username !== users[idx].username && !USERNAME_RE.test(patch.username)) {
-                throw httpError(400, 'Username must be 3-30 characters: letters, numbers, or underscores');
-            }
-            if (patch.email !== undefined && patch.email !== users[idx].email && !EMAIL_RE.test(patch.email)) {
-                throw httpError(400, 'Enter a valid email address');
-            }
+            assertProfileFormat(patch, users[idx]);
             assertIdentityUnique(users, req.userId, patch.username, patch.email);
             users[idx] = Object.assign({}, users[idx], patch);
             await writeJSON(req.userStore, users);
@@ -1604,20 +1711,25 @@ app.get('/api/me/transactions', async (req, res) => {
 // /api/me/transfer or /api/me/move-money, which build the record server-side.
 app.post('/api/me/transactions', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const all    = await readJSON(req.transactionStore);
-    const record = Object.assign({}, req.body, {
-        id:        nextId(all),
-        userId:    req.userId,
-        timestamp: req.body.timestamp || Date.now()
+    const record = await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.transactionStore);
+        const rec = Object.assign({}, req.body, {
+            id:        nextId(all),
+            userId:    req.userId,
+            timestamp: (req.body && req.body.timestamp) || Date.now()
+        });
+        all.push(rec);
+        await writeJSON(req.transactionStore, all);
+        return rec;
     });
-    all.push(record);
-    await writeJSON(req.transactionStore, all);
     res.status(201).json(record);
 });
 
 app.delete('/api/me/transactions', async (req, res) => {
-    const all = await readJSON(req.transactionStore);
-    await writeJSON(req.transactionStore, all.filter(t => t.userId !== req.userId));
+    await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.transactionStore);
+        await writeJSON(req.transactionStore, all.filter(t => t.userId !== req.userId));
+    });
     res.json({ ok: true });
 });
 
@@ -1636,20 +1748,25 @@ app.get('/api/me/payments', async (req, res) => {
 // POST /api/me/bills/:cycleId/pay, which debits the balance.
 app.post('/api/me/payments', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const all    = await readJSON(req.paymentStore);
-    const record = Object.assign({}, req.body, {
-        id:        nextId(all),
-        userId:    req.userId,
-        timestamp: req.body.timestamp || Date.now()
+    const record = await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.paymentStore);
+        const rec = Object.assign({}, req.body, {
+            id:        nextId(all),
+            userId:    req.userId,
+            timestamp: (req.body && req.body.timestamp) || Date.now()
+        });
+        all.push(rec);
+        await writeJSON(req.paymentStore, all);
+        return rec;
     });
-    all.push(record);
-    await writeJSON(req.paymentStore, all);
     res.status(201).json(record);
 });
 
 app.delete('/api/me/payments', async (req, res) => {
-    const all = await readJSON(req.paymentStore);
-    await writeJSON(req.paymentStore, all.filter(p => p.userId !== req.userId));
+    await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.paymentStore);
+        await writeJSON(req.paymentStore, all.filter(p => p.userId !== req.userId));
+    });
     res.json({ ok: true });
 });
 
@@ -1714,20 +1831,25 @@ app.get('/api/me/purchases/:id', async (req, res) => {
 // which debits the balance and prices items from the catalog.
 app.post('/api/me/purchases', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const all    = await readJSON(req.purchaseStore);
-    const record = Object.assign({}, req.body, {
-        id:        nextId(all),
-        userId:    req.userId,
-        timestamp: req.body.timestamp || Date.now()
+    const record = await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.purchaseStore);
+        const rec = Object.assign({}, req.body, {
+            id:        nextId(all),
+            userId:    req.userId,
+            timestamp: (req.body && req.body.timestamp) || Date.now()
+        });
+        all.push(rec);
+        await writeJSON(req.purchaseStore, all);
+        return rec;
     });
-    all.push(record);
-    await writeJSON(req.purchaseStore, all);
     res.status(201).json(record);
 });
 
 app.delete('/api/me/purchases', async (req, res) => {
-    const all = await readJSON(req.purchaseStore);
-    await writeJSON(req.purchaseStore, all.filter(p => p.userId !== req.userId));
+    await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.purchaseStore);
+        await writeJSON(req.purchaseStore, all.filter(p => p.userId !== req.userId));
+    });
     res.json({ ok: true });
 });
 
@@ -2191,18 +2313,21 @@ app.get('/api/me/overall-progress', async (req, res) => {
 // would allow self-authored challenges with arbitrary points/florins.
 app.post('/api/me/challenges', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const all    = await readJSON(req.challengeStore);
-    const record = Object.assign({
-        active:    true,
-        completed: false,
-        condition: 'manual',
-        createdAt: Date.now()
-    }, req.body, {
-        id:     nextId(all),
-        userId: req.userId
+    const record = await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.challengeStore);
+        const rec = Object.assign({
+            active:    true,
+            completed: false,
+            condition: 'manual',
+            createdAt: Date.now()
+        }, req.body, {
+            id:     nextId(all),
+            userId: req.userId
+        });
+        all.push(rec);
+        await writeJSON(req.challengeStore, all);
+        return rec;
     });
-    all.push(record);
-    await writeJSON(req.challengeStore, all);
     res.status(201).json(record);
 });
 
@@ -2428,9 +2553,13 @@ app.post('/api/me/credit-card/payment', async (req, res) => {
             await writeJSON(req.creditCardStore, cards);
 
             const activity = await readJSON(req.creditActivityStore);
+            // fromAccount is stored so the statement can put the debit on the
+            // account that actually paid (rows from before this field existed
+            // were always paid from checking).
             const record = {
-                id: nextId(activity), userId: req.userId, type: 'payment',
-                amount: payAmt, description: 'Card payment', date: new Date().toLocaleDateString(), timestamp: Date.now()
+                id: nextId(activity), userId: req.userId, type: 'payment', fromAccount,
+                amount: payAmt, description: fromAccount === 'savings' ? 'Card payment from savings' : 'Card payment',
+                date: new Date().toLocaleDateString(), timestamp: Date.now()
             };
             activity.push(record);
             await writeJSON(req.creditActivityStore, activity);
@@ -2923,13 +3052,15 @@ app.get('/api/me/statement', async (req, res) => {
     pays.filter(p => p.userId === req.userId && p.fromAccount === account).forEach(p => {
         events.push({ timestamp: p.timestamp || 0, amount: -(p.amount || 0), label: (p.type || 'Bill') + ' bill payment' });
     });
+    // A card payment debits whichever account it was paid from (older rows
+    // have no fromAccount and were always paid from checking).
+    creditActivity.filter(a => a.userId === req.userId && a.type === 'payment' && (a.fromAccount || 'checking') === account).forEach(a => {
+        events.push({ timestamp: a.timestamp || 0, amount: -(a.amount || 0), label: 'Credit card payment' });
+    });
     if (account === 'checking') {
         purchs.filter(p => p.userId === req.userId).forEach(p => {
             const n = p.items ? p.items.length : 0;
             events.push({ timestamp: p.timestamp || 0, amount: -(p.total || 0), label: 'Store purchase (' + n + ' item' + (n !== 1 ? 's' : '') + ')' });
-        });
-        creditActivity.filter(a => a.userId === req.userId && a.type === 'payment').forEach(a => {
-            events.push({ timestamp: a.timestamp || 0, amount: -(a.amount || 0), label: 'Credit card payment' });
         });
         loanPayments.filter(lp => lp.userId === req.userId).forEach(lp => {
             events.push({ timestamp: lp.timestamp || 0, amount: -(lp.amount || 0), label: 'Loan payment' });
@@ -3096,22 +3227,25 @@ app.post('/api/admin/messages/system', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const { subject, body, recipientId, type, category } = req.body || {};
     if (!subject || !body) return res.status(400).json({ error: 'subject and body required' });
-    const messages = await readJSON(req.messageStore);
-    const record   = {
-        id:          nextId(messages),
-        senderId:    0,
-        senderName:  'System',
-        senderEmail: null,
-        recipientId: recipientId,
-        subject:     subject.trim(),
-        body:        body.trim(),
-        type:        type || 'info',
-        category:    category || 'system',
-        sentAt:      Date.now(),
-        readBy:      []
-    };
-    messages.push(record);
-    await writeJSON(req.messageStore, messages);
+    const record = await withUserLock(req.userId, async () => {
+        const messages = await readJSON(req.messageStore);
+        const rec = {
+            id:          nextId(messages),
+            senderId:    0,
+            senderName:  'System',
+            senderEmail: null,
+            recipientId: recipientId,
+            subject:     subject.trim(),
+            body:        body.trim(),
+            type:        type || 'info',
+            category:    category || 'system',
+            sentAt:      Date.now(),
+            readBy:      []
+        };
+        messages.push(rec);
+        await writeJSON(req.messageStore, messages);
+        return rec;
+    });
     res.status(201).json(record);
 });
 
@@ -3131,32 +3265,37 @@ app.post('/api/admin/messages', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const { subject, body, recipientId, type, senderEmail, category } = req.body || {};
     if (!subject || !body) return res.status(400).json({ error: 'subject and body required' });
-    const messages = await readJSON(req.messageStore);
-    const users    = await readJSON(req.userStore);
-    const sender   = users.find(u => u.id === req.userId);
-    const record   = {
-        id:          nextId(messages),
-        senderId:    req.userId,
-        senderName:  sender ? (sender.fullName || sender.username) : 'Unknown',
-        senderEmail: (senderEmail || '').trim() || null,
-        recipientId: recipientId,
-        subject:     subject.trim(),
-        body:        body.trim(),
-        type:        type || 'info',
-        category:    category || 'system',
-        sentAt:      Date.now(),
-        readBy:      []
-    };
-    messages.push(record);
-    await writeJSON(req.messageStore, messages);
+    const record = await withUserLock(req.userId, async () => {
+        const messages = await readJSON(req.messageStore);
+        const users    = await readJSON(req.userStore);
+        const sender   = users.find(u => u.id === req.userId);
+        const rec      = {
+            id:          nextId(messages),
+            senderId:    req.userId,
+            senderName:  sender ? (sender.fullName || sender.username) : 'Unknown',
+            senderEmail: (senderEmail || '').trim() || null,
+            recipientId: recipientId,
+            subject:     subject.trim(),
+            body:        body.trim(),
+            type:        type || 'info',
+            category:    category || 'system',
+            sentAt:      Date.now(),
+            readBy:      []
+        };
+        messages.push(rec);
+        await writeJSON(req.messageStore, messages);
+        return rec;
+    });
     res.status(201).json(record);
 });
 
 app.delete('/api/admin/messages/:id', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const id  = Number(req.params.id);
-    const all = await readJSON(req.messageStore);
-    await writeJSON(req.messageStore, all.filter(m => m.id !== id));
+    await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.messageStore);
+        await writeJSON(req.messageStore, all.filter(m => m.id !== id));
+    });
     res.json({ ok: true });
 });
 
@@ -3175,20 +3314,24 @@ app.delete('/api/admin/messages/:id', async (req, res) => {
 app.patch('/api/admin/challenges/:id', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const id  = Number(req.params.id);
-    const all = await readJSON(req.challengeStore);
-    const target = all.find(c => c.id === id);
-    if (!target) return res.status(404).json({ error: 'Challenge not found' });
     const { completed, completedAt, id: _ignoredId, userId: _ignoredUserId, ...templatePatch } = req.body || {};
     const perUserPatch = {};
     if (completed !== undefined) perUserPatch.completed = completed;
     if (completedAt !== undefined) perUserPatch.completedAt = completedAt;
-    const updated = all.map(c => {
-        if (c.id === id) return Object.assign({}, c, templatePatch, perUserPatch);
-        if (c.title === target.title) return Object.assign({}, c, templatePatch);
-        return c;
+    const result = await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.challengeStore);
+        const target = all.find(c => c.id === id);
+        if (!target) return null;
+        const updated = all.map(c => {
+            if (c.id === id) return Object.assign({}, c, templatePatch, perUserPatch);
+            if (c.title === target.title) return Object.assign({}, c, templatePatch);
+            return c;
+        });
+        await writeJSON(req.challengeStore, updated);
+        return updated.find(c => c.id === id);
     });
-    await writeJSON(req.challengeStore, updated);
-    res.json(updated.find(c => c.id === id));
+    if (!result) return res.status(404).json({ error: 'Challenge not found' });
+    res.json(result);
 });
 
 // DELETE /api/admin/challenges/:id — delete this challenge definition for
@@ -3196,17 +3339,21 @@ app.patch('/api/admin/challenges/:id', async (req, res) => {
 app.delete('/api/admin/challenges/:id', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const id  = Number(req.params.id);
-    const all = await readJSON(req.challengeStore);
-    const target = all.find(c => c.id === id);
-    if (!target) return res.status(404).json({ error: 'Challenge not found' });
-    await writeJSON(req.challengeStore, all.filter(c => c.title !== target.title));
+    const found = await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.challengeStore);
+        const target = all.find(c => c.id === id);
+        if (!target) return false;
+        await writeJSON(req.challengeStore, all.filter(c => c.title !== target.title));
+        return true;
+    });
+    if (!found) return res.status(404).json({ error: 'Challenge not found' });
     res.json({ ok: true });
 });
 
 // DELETE /api/admin/challenges — wipe ALL challenges (admin only)
 app.delete('/api/admin/challenges', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    await writeJSON(req.challengeStore, []);
+    await withUserLock(req.userId, () => writeJSON(req.challengeStore, []));
     res.json({ ok: true });
 });
 
@@ -3224,30 +3371,33 @@ app.post('/api/admin/challenges', async (req, res) => {
     } = req.body || {};
     if (!title) return res.status(400).json({ error: 'title required' });
 
-    const users        = await readJSON(req.userStore);
-    const participants = users.filter(u => u.role === 'participant' && u.status === 'approved');
-    const challenges   = await readJSON(req.challengeStore);
-    let id      = nextId(challenges);
-    const now   = Date.now();
-    const created = participants.map(u => ({
-        id:              id++,
-        userId:          u.id,
-        title,
-        description:     description || '',
-        category:        category || 'general',
-        active:          active !== false,
-        completed:       false,
-        createdAt:       now,
-        points:          points || 0,
-        florins:         florins || 0,
-        condition:       condition || 'manual',
-        conditionValue:  conditionValue !== undefined ? conditionValue : null,
-        customField:     customField || null,
-        customOperator:  customOperator || null,
-        extraConditions: Array.isArray(extraConditions) ? extraConditions : [],
-        conditionLogic:  conditionLogic || 'all'
-    }));
-    await writeJSON(req.challengeStore, challenges.concat(created));
+    const created = await withUserLock(req.userId, async () => {
+        const users        = await readJSON(req.userStore);
+        const participants = users.filter(u => u.role === 'participant' && u.status === 'approved');
+        const challenges   = await readJSON(req.challengeStore);
+        let id      = nextId(challenges);
+        const now   = Date.now();
+        const made = participants.map(u => ({
+            id:              id++,
+            userId:          u.id,
+            title,
+            description:     description || '',
+            category:        category || 'general',
+            active:          active !== false,
+            completed:       false,
+            createdAt:       now,
+            points:          points || 0,
+            florins:         florins || 0,
+            condition:       condition || 'manual',
+            conditionValue:  conditionValue !== undefined ? conditionValue : null,
+            customField:     customField || null,
+            customOperator:  customOperator || null,
+            extraConditions: Array.isArray(extraConditions) ? extraConditions : [],
+            conditionLogic:  conditionLogic || 'all'
+        }));
+        await writeJSON(req.challengeStore, challenges.concat(made));
+        return made;
+    });
     res.status(201).json(created);
 });
 
@@ -3263,26 +3413,29 @@ app.post('/api/admin/challenges/seed', async (req, res) => {
 // POST /api/admin/challenges/reseed — add any missing default challenges for every approved participant
 app.post('/api/admin/challenges/reseed', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const challenges   = await readJSON(req.challengeStore);
-    const users        = await readJSON(req.userStore);
-    const participants = users.filter(u => u.role === 'participant' && u.status === 'approved');
-    const added        = [];
-    let   nextChalId   = nextId(challenges);
-    const now          = Date.now();
+    const added = await withUserLock(req.userId, async () => {
+        const challenges   = await readJSON(req.challengeStore);
+        const users        = await readJSON(req.userStore);
+        const participants = users.filter(u => u.role === 'participant' && u.status === 'approved');
+        const out          = [];
+        let   nextChalId   = nextId(challenges);
+        const now          = Date.now();
 
-    participants.forEach(u => {
-        const existing      = challenges.filter(c => c.userId === u.id);
-        const existingTitles = new Set(existing.map(c => c.title));
-        ALL_DEFAULT_CHALLENGES.forEach(c => {
-            if (!existingTitles.has(c.title)) {
-                const rec = Object.assign({}, c, { id: nextChalId++, userId: u.id, createdAt: now, active: true, completed: false });
-                challenges.push(rec);
-                added.push(rec);
-            }
+        participants.forEach(u => {
+            const existing      = challenges.filter(c => c.userId === u.id);
+            const existingTitles = new Set(existing.map(c => c.title));
+            ALL_DEFAULT_CHALLENGES.forEach(c => {
+                if (!existingTitles.has(c.title)) {
+                    const rec = Object.assign({}, c, { id: nextChalId++, userId: u.id, createdAt: now, active: true, completed: false });
+                    challenges.push(rec);
+                    out.push(rec);
+                }
+            });
         });
-    });
 
-    await writeJSON(req.challengeStore, challenges);
+        await writeJSON(req.challengeStore, challenges);
+        return out;
+    });
     res.json(added);
 });
 
@@ -3332,16 +3485,12 @@ app.get('/api/admin/purchases', async (req, res) => {
 // programmatically so it can never drift out of sync with them.
 app.get('/api/admin/data-overview', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const storeNames = new Set(Object.keys(PER_USER_STORE_PROPS));
-    Object.values(MODULE_STORES).forEach(mod => {
-        Object.values(mod).forEach(name => storeNames.add(name));
-    });
     const counts = {};
-    for (const name of storeNames) {
+    for (const name of allStoreNames()) {
         const result = await readJSON(name);
         counts[name] = Array.isArray(result) ? result.length : 0;
     }
-    res.json({ backend: dbUsable ? 'postgres' : 'json-files', counts });
+    res.json({ backend: pool ? 'postgres' : 'json-files', counts });
 });
 
 // ── Bills API ─────────────────────────────────────────────────────────────────
@@ -3379,30 +3528,39 @@ app.get('/api/bills', async (_req, res) => {
 // POST /api/bills — admin only
 app.post('/api/bills', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const bills = await readJSON('bills');
-    const bill  = Object.assign({ active: true }, req.body, { id: nextId(bills) });
-    bills.push(bill);
-    await writeJSON('bills', bills);
+    const bill = await withUserLock(req.userId, async () => {
+        const bills = await readJSON('bills');
+        const rec   = Object.assign({ active: true }, req.body, { id: nextId(bills) });
+        bills.push(rec);
+        await writeJSON('bills', bills);
+        return rec;
+    });
     res.status(201).json(bill);
 });
 
 // PUT /api/bills/:id — admin only
 app.put('/api/bills/:id', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const bills = await readJSON('bills');
-    const idx   = bills.findIndex(b => String(b.id) === String(req.params.id));
-    if (idx === -1) return res.status(404).json({ error: 'Not found' });
-    bills[idx] = Object.assign({}, bills[idx], req.body, { id: bills[idx].id });
-    await writeJSON('bills', bills);
-    res.json(bills[idx]);
+    const updated = await withUserLock(req.userId, async () => {
+        const bills = await readJSON('bills');
+        const idx   = bills.findIndex(b => String(b.id) === String(req.params.id));
+        if (idx === -1) return null;
+        bills[idx] = Object.assign({}, bills[idx], req.body, { id: bills[idx].id });
+        await writeJSON('bills', bills);
+        return bills[idx];
+    });
+    if (!updated) return res.status(404).json({ error: 'Not found' });
+    res.json(updated);
 });
 
 // DELETE /api/bills/:id — admin only
 app.delete('/api/bills/:id', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const all   = await readJSON('bills');
-    const bills = all.filter(b => String(b.id) !== String(req.params.id));
-    await writeJSON('bills', bills);
+    await withUserLock(req.userId, async () => {
+        const all   = await readJSON('bills');
+        const bills = all.filter(b => String(b.id) !== String(req.params.id));
+        await writeJSON('bills', bills);
+    });
     res.json({ ok: true });
 });
 
@@ -3747,24 +3905,33 @@ app.post('/api/me/bills/autopay', async (req, res) => {
     res.json(pref);
 });
 
-// Validates simulated card details (Luhn check digit, future expiry, CVV
-// length). Returns { error } or { brand, last4 } — the full number and CVV
-// are never stored.
-function validateCardDetails(c) {
-    if (!c || typeof c !== 'object') return { error: 'Card details required' };
-    const number = String(c.number || '').replace(/\s+/g, '');
-    if (!/^\d{13,19}$/.test(number)) return { error: 'Enter a valid card number' };
+// Card checks shared by every simulated-card path (the wallet and bill pay), so
+// the two can't disagree about what a valid card is.
+function passesLuhn(number) {
     let sum = 0, dbl = false;
     for (let i = number.length - 1; i >= 0; i--) {
         let d = parseInt(number[i], 10);
         if (dbl) { d *= 2; if (d > 9) d -= 9; }
         sum += d; dbl = !dbl;
     }
-    if (sum % 10 !== 0) return { error: 'Enter a valid card number' };
+    return sum % 10 === 0;
+}
+// A card is good through the last day of its expiry month.
+function cardNotExpired(month, year) {
+    return new Date(year, month, 1).getTime() > Date.now();
+}
+
+// Validates simulated card details (Luhn check digit, future expiry, CVV
+// length). Returns { error } or { brand, last4 } — the full number and CVV
+// are never stored.
+function validateCardDetails(c) {
+    if (!c || typeof c !== 'object') return { error: 'Card details required' };
+    const number = String(c.number || '').replace(/\s+/g, '');
+    if (!/^\d{13,19}$/.test(number) || !passesLuhn(number)) return { error: 'Enter a valid card number' };
     if (!String(c.name || '').trim()) return { error: 'Name on card required' };
     const m = /^(\d{2})\/(\d{2})$/.exec(String(c.exp || '').trim());
     if (!m || +m[1] < 1 || +m[1] > 12) return { error: 'Expiry must be MM/YY' };
-    if (new Date(2000 + (+m[2]), +m[1], 1).getTime() <= Date.now()) return { error: 'That card has expired' };
+    if (!cardNotExpired(+m[1], 2000 + (+m[2]))) return { error: 'That card has expired' };
     const amex = /^3[47]/.test(number);
     if (!(amex ? /^\d{4}$/ : /^\d{3}$/).test(String(c.cvv || '').trim())) return { error: 'Invalid security code' };
     const brand = /^4/.test(number) ? 'Visa'
@@ -4116,10 +4283,11 @@ app.post('/api/me/payment-methods', async (req, res) => {
     const cardholderName = String(body.cardholderName || '').trim();
     const expMonth = Number(body.expMonth);
     const expYear  = Number(body.expYear);
-    if (number.length < 12 || number.length > 19) return res.status(400).json({ error: 'Enter a valid card number' });
+    if (number.length < 12 || number.length > 19 || !passesLuhn(number)) return res.status(400).json({ error: 'Enter a valid card number' });
     if (!cardholderName) return res.status(400).json({ error: 'Cardholder name required' });
-    if (!expMonth || expMonth < 1 || expMonth > 12) return res.status(400).json({ error: 'Valid expiration month required' });
-    if (!expYear || expYear < new Date().getFullYear()) return res.status(400).json({ error: 'Card is expired' });
+    if (!Number.isInteger(expMonth) || expMonth < 1 || expMonth > 12) return res.status(400).json({ error: 'Valid expiration month required' });
+    if (!Number.isInteger(expYear) || expYear < 2000 || expYear > 2100) return res.status(400).json({ error: 'Valid expiration year required' });
+    if (!cardNotExpired(expMonth, expYear)) return res.status(400).json({ error: 'Card is expired' });
 
     const record = await withUserLock(req.userId, async () => {
         const all = await readJSON(req.paymentMethodStore);
@@ -4172,6 +4340,14 @@ app.delete('/api/me/payment-methods/:id', async (req, res) => {
     }
 });
 
+// ── Unknown API routes: a JSON 404, never the SPA page ────────────────────────
+// Without this an unknown GET /api/... answered 200 with index.html, so a
+// client calling a route this server doesn't have (e.g. a newer page against
+// an older deploy) died on a JSON parse error instead of getting a clear 404.
+app.use('/api', (req, res) => {
+    res.status(404).json({ error: 'Not found' });
+});
+
 // ── Catch-all: SPA fallback ───────────────────────────────────────────────────
 app.get('/{*path}', (req, res) => {
     if (!path.extname(req.path)) {
@@ -4183,9 +4359,13 @@ app.get('/{*path}', (req, res) => {
 
 // ── Global error handler — keep API responses JSON even on unexpected failures
 app.use((err, _req, res, _next) => {
-    console.error('Unhandled error:', err);
+    // Honour deliberate statuses (e.g. 503 from the storage layer, 400 for a
+    // malformed JSON body); anything else is an unexpected 500.
+    const status = Number.isInteger(err && err.status) && err.status >= 400 && err.status < 600 ? err.status : 500;
+    if (status >= 500 && !(err && err.status === 503)) console.error('Unhandled error:', err);
     if (res.headersSent) return;
-    res.status(500).json({ error: 'Server error' });
+    if (status === 400 && err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON body' });
+    res.status(status).json({ error: status < 500 || status === 503 ? (err.message || 'Request failed') : 'Server error' });
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
@@ -4209,7 +4389,7 @@ function startScheduledTransferSweep() {
                 .then(users => Promise.all(users.map(u =>
                     runDueScheduledTransfers(u.id, userStore, messageStore, scheduledTransferStore, transactionStore).catch(() => {})
                 )))
-                .catch(() => {});
+                .catch(err => console.error('Scheduled-transfer sweep skipped for ' + userStore + ':', err.message));
         });
     }, 5 * 60 * 1000);
 }
@@ -4222,6 +4402,7 @@ async function start() {
     await seedDefaultModuleAdmin('utilitiesUsers', 'utilitiesChallenges', 'utilities');
     await seedDefaultBills();
     await seedDefaultProducts();
+    await warnIfDefaultAdminPassword().catch(err => console.error('Admin password check skipped:', err.message));
     startScheduledTransferSweep();
     app.listen(PORT, () => {
         console.log('DigiFinWiz server running on http://localhost:' + PORT);
