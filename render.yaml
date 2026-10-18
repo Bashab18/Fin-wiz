@@ -18,4 +18,8 @@ services:
         fromDatabase:
           name: digifinwiz-db
           property: connectionString
+      # Password for the seeded admin accounts (read once, when they are first
+      # created). Set it in the dashboard; it is deliberately not in this file.
+      - key: ADMIN_PASSWORD
+        sync: false
     autoDeploy: true

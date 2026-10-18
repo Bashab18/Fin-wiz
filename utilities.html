@@ -100,6 +100,7 @@
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
                     </button>
                 </div>
+                <a href="index.html" class="amz-header-logout" title="Back to the main site" style="margin-right:0.5rem">&larr; Main Site</a>
                 <a href="#" class="amz-header-logout" data-logout title="Logout">Logout</a>
             </div>
         </div>
@@ -504,7 +505,9 @@
             ? d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) +
               ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
             : (payment.date || '—');
-        var fromLbl = payment.fromAccount
+        var fromLbl = payment.paidWith === 'card'
+            ? ((payment.cardBrand || 'Card') + ' ending ' + payment.cardLast4)
+            : payment.fromAccount
             ? (payment.fromAccount.charAt(0).toUpperCase() + payment.fromAccount.slice(1)) + ' Account'
             : '—';
         var row = function(label, valueHtml) {
@@ -1544,7 +1547,7 @@
                 var ld = last.timestamp ? new Date(last.timestamp) : null;
                 set('utilRecentType',(last.type||'—')+' Bill'+(last.autoPaid?' · Auto-pay':''));
                 set('utilRecentDate',(ld && !isNaN(ld.getTime())) ? ld.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : (last.date||'—'));
-                set('utilRecentAcct',last.fromAccount?'From: '+last.fromAccount.charAt(0).toUpperCase()+last.fromAccount.slice(1)+' Account':'');
+                set('utilRecentAcct',last.paidWith==='card'?'Paid with '+(last.cardBrand||'card')+' ending '+last.cardLast4:(last.fromAccount?'From: '+last.fromAccount.charAt(0).toUpperCase()+last.fromAccount.slice(1)+' Account':''));
                 set('utilRecentAmt', fmtFlorin(last.amount));
                 set('utilRecentXp',  '+'+(last.pointsEarned||0)+' XP earned');
             }
@@ -1843,6 +1846,7 @@
             if (!/[a-z]/.test(newPwd)) { showNotification('Must contain a lowercase letter.', 'error'); return; }
             if (!/[0-9]/.test(newPwd)) { showNotification('Must contain a number.', 'error'); return; }
             if (newPwd !== confirm)    { showNotification('New passwords do not match.', 'error'); return; }
+            if (newPwd === current) { showNotification('Your new password cannot be the same as your previous password.', 'error'); return; }
             withProfileActionLock(function() {
                 return DigifinwizDB.changePassword(current, newPwd).then(function() {
                     passwordForm.reset();

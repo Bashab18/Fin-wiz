@@ -60,7 +60,65 @@ const DigifinwizDB = (() => {
         }
         // 204 No Content — return null
         if (res.status === 204) return null;
-        return res.json();
+        const data = await res.json();
+        if (opts.method !== 'GET' && /^\/api\/me\//.test(url) && !/\/(messages|alert-prefs)/.test(url)) {
+            _surfaceNewAlerts(res.headers.get('Date'));
+            // Lets the main site's progress/challenges pages (open in another
+            // tab) refresh the moment something is done in a module.
+            try { localStorage.setItem('dfw_progress_ping', String(Date.now())); } catch (e) { /* storage blocked */ }
+        }
+        return data;
+    }
+
+    // Balance alerts (low balance / large transaction / large purchase / large
+    // bill) are written to the user's Messages inbox by the server. On their
+    // own that's easy to miss — users set a threshold, exceeded it, and saw
+    // nothing — so after any money-moving call we also pop the fresh alert up
+    // on whatever page they're on.
+    var _toastedAlertIds = {};
+    function _surfaceNewAlerts(serverDateHeader) {
+        var serverNow = serverDateHeader ? Date.parse(serverDateHeader) : NaN;
+        if (isNaN(serverNow)) serverNow = Date.now();
+        setTimeout(function () {
+            fetch((window.API_BASE_URL || '') + '/api/me/messages', { headers: _headers() })
+                .then(function (r) { return r.ok ? r.json() : []; })
+                .then(function (msgs) {
+                    (msgs || []).forEach(function (m) {
+                        if (_toastedAlertIds[m.id] || m.senderId !== 0 || !/alert/i.test(m.subject || '')) return;
+                        if ((m.sentAt || 0) < serverNow - 8000) return;
+                        _toastedAlertIds[m.id] = true;
+                        _showAlertToast(m.subject, m.body);
+                    });
+                })
+                .catch(function () { /* alerts stay in the inbox regardless */ });
+        }, 150);
+    }
+
+    function _showAlertToast(title, body) {
+        if (typeof document === 'undefined' || !document.body) return;
+        var wrap = document.getElementById('dfwAlertToasts');
+        if (!wrap) {
+            wrap = document.createElement('div');
+            wrap.id = 'dfwAlertToasts';
+            wrap.style.cssText = 'position:fixed;top:1rem;right:1rem;z-index:3000;display:flex;flex-direction:column;gap:0.6rem;max-width:min(360px,calc(100vw - 2rem))';
+            document.body.appendChild(wrap);
+        }
+        var el = document.createElement('div');
+        el.setAttribute('role', 'alert');
+        el.style.cssText = 'background:#fffbeb;border:1px solid #f59e0b;border-left:5px solid #d97706;color:#78350f;border-radius:10px;padding:0.75rem 1rem;box-shadow:0 8px 24px rgba(0,0,0,0.18);font-size:0.85rem;cursor:pointer';
+        var h = document.createElement('div');
+        h.style.cssText = 'font-weight:700;margin-bottom:0.2rem';
+        h.textContent = '⚠ ' + title;
+        var p = document.createElement('div');
+        p.textContent = body;
+        var s = document.createElement('div');
+        s.style.cssText = 'font-size:0.72rem;margin-top:0.3rem;opacity:0.8';
+        s.textContent = 'Also saved in your Messages inbox. Click to dismiss.';
+        el.appendChild(h); el.appendChild(p); el.appendChild(s);
+        var remove = function () { if (el.parentNode) el.parentNode.removeChild(el); };
+        el.addEventListener('click', remove);
+        wrap.appendChild(el);
+        setTimeout(remove, 9000);
     }
 
     // ── Init / health ─────────────────────────────────────────────────────────
@@ -291,8 +349,9 @@ const DigifinwizDB = (() => {
     // expectedTotal (optional): the amount the confirm modal showed. If the
     // server's live total differs (e.g. a late fee kicked in since the page
     // loaded) it refuses with 409 { error, currentTotal } and charges nothing.
-    function payBillCycle(cycleId, expectedTotal) {
+    function payBillCycle(cycleId, expectedTotal, card) {
         const body = (typeof expectedTotal === 'number') ? { expectedTotal } : {};
+        if (card) body.card = card;
         return _api('POST', '/api/me/bills/' + cycleId + '/pay', body);
     }
 
@@ -488,9 +547,64 @@ const DigifinwizDB = (() => {
         return _api('GET', '/api/admin/data-overview');
     }
 
+    // Admin-only: every Banking / Ecommerce / Utilities account and the main-site
+    // account it belongs to.
+    function getSubSiteAccounts() {
+        return _api('GET', '/api/admin/sub-site-accounts');
+    }
+
     // ── Stats & activity ──────────────────────────────────────────────────────
     function getStats() {
         return _api('GET', '/api/me/stats');
+    }
+
+    function getOverallProgress() {
+        return _api('GET', '/api/me/overall-progress');
+    }
+
+    // Main Site only: the linked Banking / Ecommerce / Utilities accounts'
+    // balances, records and progress in one read-only call (see GET /api/me/hub).
+    // Cached briefly so the several panels of one page share a single request, and
+    // dropped as soon as another tab reports that something was done.
+    var _hubCache = null;
+    try {
+        window.addEventListener('storage', function(e) { if (e.key === 'dfw_progress_ping') _hubCache = null; });
+    } catch (e) { /* no window events: the 5 s memo is all there is */ }
+    function getHub() {
+        var now = Date.now();
+        if (_hubCache && now - _hubCache.at < 5000) return _hubCache.promise;
+        var promise = _api('GET', '/api/me/hub');
+        _hubCache = { at: now, promise: promise };
+        promise.catch(function() { if (_hubCache && _hubCache.promise === promise) _hubCache = null; });
+        return promise;
+    }
+
+    // Same shape as getStats(), but on the Main Site the counts, totals and
+    // skills add the linked sub-site accounts' activity to this account's own,
+    // since that is where transfers, purchases and bill payments now happen.
+    // Without any linked account (or on a sub-site page) it is just getStats().
+    function getCombinedStats() {
+        if (window.APP_MODULE) return getStats();
+        return Promise.all([getStats(), getHub().catch(function() { return { failed: true }; })]).then(function(res) {
+            var stats = res[0], hub = res[1];
+            if (hub && hub.failed) return Object.assign({}, stats, { hubFailed: true });   // the sub-site data could not be read
+            if (!hub || !hub.linkedCount) return stats;
+            var linked = ['banking', 'ecommerce', 'utilities'].map(function(k) { return hub.modules[k]; }).filter(function(m) { return m && m.linked; });
+            var out = Object.assign({}, stats);
+            ['txCount', 'payCount', 'purchCount', 'totalSpentEcommerce', 'totalSpentBills', 'totalTransferred', 'txPts', 'payPts', 'purchPts', 'totalPts']
+                .forEach(function(f) { out[f] = (Number(stats[f]) || 0) + linked.reduce(function(n, m) { return n + (Number(m.stats[f]) || 0); }, 0); });
+            // Skills use the same formulas as the server, over the combined counts.
+            var pct = function(n, per) { return Math.min(100, Math.round((n / per) * 100)); };
+            out.bankingSkill   = pct(out.txCount, 10);
+            out.ecommerceSkill = pct(out.purchCount, 10);
+            out.billSkill      = pct(out.payCount, 10);
+            out.planningSkill  = pct(out.txCount + out.payCount + out.purchCount, 30);
+            // Badges and the level skill look at the highest level reached on any site.
+            var top = linked.reduce(function(n, m) { return Math.max(n, Number(m.userData.level) || 1); }, Number(stats.user && stats.user.level) || 1);
+            out.topLevel  = top;
+            out.mgmtSkill = pct(top, 20);
+            return out;
+        });
     }
 
     function getRecentActivity(limit) {
@@ -752,6 +866,7 @@ const DigifinwizDB = (() => {
         getAdminPayments,
         getAdminPurchases,
         getAdminDataOverview,
+        getSubSiteAccounts,
 
         // Stats & activity
         getStats,
@@ -777,6 +892,9 @@ const DigifinwizDB = (() => {
         // Savings goals
         getSavingsGoals,
         createSavingsGoal,
+        getOverallProgress,
+        getHub,
+        getCombinedStats,
         contributeSavingsGoal,
         withdrawSavingsGoal,
         deleteSavingsGoal,

@@ -60,6 +60,33 @@ function utilReplaceLoadedCycle(cycle) {
 // (Pay All only). Opening a new modal while one is showing settles the old
 // one as cancelled, so whoever awaited it (e.g. Pay All) never hangs.
 var activePaymentModal = null;
+// Last card typed this session (never persisted, CVV excluded) so Pay All
+// doesn't make the user retype the number for every bill.
+var lastPayCard = null;
+
+function utilLuhnOk(num) {
+    var sum = 0, dbl = false;
+    for (var i = num.length - 1; i >= 0; i--) {
+        var d = parseInt(num.charAt(i), 10);
+        if (dbl) { d *= 2; if (d > 9) d -= 9; }
+        sum += d; dbl = !dbl;
+    }
+    return sum % 10 === 0;
+}
+
+// Returns an error string, or '' when the card details look valid.
+function utilValidateCard(c) {
+    if (!/^\d{13,19}$/.test(c.number) || !utilLuhnOk(c.number)) return 'Enter a valid card number.';
+    if (!c.name) return 'Enter the name on the card.';
+    var m = /^(\d{2})\/(\d{2})$/.exec(c.exp);
+    if (!m || +m[1] < 1 || +m[1] > 12) return 'Enter the expiry as MM/YY.';
+    var now = new Date();
+    var expEnd = new Date(2000 + (+m[2]), +m[1], 1); // first day of the month after expiry
+    if (expEnd <= now) return 'That card has expired.';
+    var amex = /^3[47]/.test(c.number);
+    if (!(amex ? /^\d{4}$/ : /^\d{3}$/).test(c.cvv)) return 'Enter the ' + (amex ? '4' : '3') + '-digit security code (CVV).';
+    return '';
+}
 
 function showPaymentConfirmModal(details) {
     return new Promise(function(resolve) {
@@ -71,7 +98,7 @@ function showPaymentConfirmModal(details) {
         modal.id = 'paymentModal';
         modal.setAttribute('role', 'dialog');
         modal.setAttribute('aria-modal', 'true');
-        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;animation:fadeIn 0.2s';
+        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;justify-content:center;z-index:1000;animation:fadeIn 0.2s;overflow-y:auto;padding:1rem';
 
         var row = function(label, valueHtml, extra) {
             return '<div style="display:flex;justify-content:space-between;gap:1rem;margin-bottom:0.5rem' + (extra || '') + '"><span style="color:#64748b">' + label + '</span>' + valueHtml + '</div>';
@@ -87,7 +114,7 @@ function showPaymentConfirmModal(details) {
             : '';
 
         modal.innerHTML =
-            '<div style="background:#fff;border-radius:16px;padding:2rem;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2)">' +
+            '<div style="background:#fff;border-radius:16px;padding:1.75rem;max-width:440px;width:100%;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">' +
             progressHtml +
             '<h2 style="font-size:1.2rem;font-weight:700;margin-bottom:1rem;color:#1e293b">Confirm Bill Payment</h2>' +
             noticeHtml +
@@ -95,10 +122,35 @@ function showPaymentConfirmModal(details) {
                 row('Bill', '<strong style="text-align:right">' + escHtml(details.billType) + '</strong>') +
                 (details.billMonth ? row('Billing month', '<span>' + escHtml(details.billMonth) + '</span>') : '') +
                 row('Account No.', '<span style="font-family:monospace">' + escHtml(details.accountNumber || '—') + '</span>') +
-                row('Pay From', '<span>' + escHtml(details.fromLabel) + '</span>') +
                 lateFeeRow +
-                row('Amount', '<strong id="payModalAmount" style="color:var(--color-primary-600);font-size:1.1rem">' + fmtFlorin(details.amount) + '</strong>', ';border-top:1px solid #e2e8f0;padding-top:0.5rem;margin-top:0.5rem') +
-                row('New balance', '<span style="color:' + (details.newBalance < 0 ? '#ef4444' : '#10b981') + '">' + fmtFlorin(details.newBalance) + '</span>', ';margin-bottom:0') +
+                row('Amount', '<strong id="payModalAmount" style="color:var(--color-primary-600);font-size:1.1rem">' + fmtFlorin(details.amount) + '</strong>', ';border-top:1px solid #e2e8f0;padding-top:0.5rem;margin-top:0.5rem;margin-bottom:0') +
+            '</div>' +
+            '<div style="font-size:0.78rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.5rem">Pay with</div>' +
+            '<div id="payMethodWrap" style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:1.25rem">' +
+                '<label style="display:flex;gap:0.6rem;align-items:flex-start;border:1px solid #cbd5e1;border-radius:10px;padding:0.65rem 0.8rem;cursor:pointer' + (details.balanceOption ? '' : ';opacity:0.55;cursor:not-allowed') + '">' +
+                    '<input type="radio" name="payMethod" value="balance" style="margin-top:0.2rem"' + (details.balanceOption ? ' checked' : ' disabled') + '>' +
+                    '<span style="font-size:0.85rem"><strong>DigiPay balance</strong><br>' +
+                    (details.balanceOption
+                        ? '<span style="color:#64748b">' + escHtml(details.balanceOption.label) + ' · new balance <span style="color:' + (details.balanceOption.balance - details.amount < 0 ? '#ef4444' : '#10b981') + '">' + fmtFlorin(details.balanceOption.balance - details.amount) + '</span></span>'
+                        : '<span style="color:#b91c1c">Not enough funds in checking or savings</span>') +
+                    '</span></label>' +
+                '<label style="display:flex;gap:0.6rem;align-items:flex-start;border:1px solid #cbd5e1;border-radius:10px;padding:0.65rem 0.8rem;cursor:pointer">' +
+                    '<input type="radio" name="payMethod" value="card" style="margin-top:0.2rem"' + (details.balanceOption ? '' : ' checked') + '>' +
+                    '<span style="font-size:0.85rem"><strong>Credit / debit card</strong><br><span style="color:#64748b">Visa, Mastercard, Amex or Discover</span></span></label>' +
+                '<div id="payCardFields" style="display:none;border:1px solid #e2e8f0;background:#f8fafc;border-radius:10px;padding:0.8rem">' +
+                    '<div style="margin-bottom:0.6rem"><label style="font-size:0.75rem;font-weight:600;color:#475569">Card number</label>' +
+                        '<input id="payCardNumber" type="text" inputmode="numeric" autocomplete="cc-number" placeholder="4242 4242 4242 4242" maxlength="23" class="form-input" style="width:100%;margin-top:0.2rem"></div>' +
+                    '<div style="margin-bottom:0.6rem"><label style="font-size:0.75rem;font-weight:600;color:#475569">Name on card</label>' +
+                        '<input id="payCardName" type="text" autocomplete="cc-name" placeholder="Full name" maxlength="60" class="form-input" style="width:100%;margin-top:0.2rem"></div>' +
+                    '<div style="display:flex;gap:0.6rem">' +
+                        '<div style="flex:1"><label style="font-size:0.75rem;font-weight:600;color:#475569">Expiry (MM/YY)</label>' +
+                            '<input id="payCardExp" type="text" inputmode="numeric" autocomplete="cc-exp" placeholder="MM/YY" maxlength="5" class="form-input" style="width:100%;margin-top:0.2rem"></div>' +
+                        '<div style="flex:1"><label style="font-size:0.75rem;font-weight:600;color:#475569">CVV</label>' +
+                            '<input id="payCardCvv" type="password" inputmode="numeric" autocomplete="cc-csc" placeholder="123" maxlength="4" class="form-input" style="width:100%;margin-top:0.2rem"></div>' +
+                    '</div>' +
+                    '<div id="payCardError" style="display:none;color:#b91c1c;font-size:0.78rem;margin-top:0.55rem;font-weight:600"></div>' +
+                    '<div style="font-size:0.7rem;color:#94a3b8;margin-top:0.5rem">Simulation only — use any test number that passes the check digit (e.g. 4242 4242 4242 4242). Nothing is stored except the last 4 digits.</div>' +
+                '</div>' +
             '</div>' +
             '<div style="display:flex;gap:0.75rem">' +
                 '<button id="payModalCancel"  class="btn" style="flex:1">' + (details.progress ? 'Skip' : 'Cancel') + '</button>' +
@@ -121,7 +173,41 @@ function showPaymentConfirmModal(details) {
         activePaymentModal = { el: modal, settle: settle };
         document.addEventListener('keydown', onKey);
         document.getElementById('payModalCancel').addEventListener('click',  function(){ settle(false); });
-        document.getElementById('payModalConfirm').addEventListener('click', function(){ settle(true); });
+        var cardFields = document.getElementById('payCardFields');
+        var syncMethod = function() {
+            var m = modal.querySelector('input[name="payMethod"]:checked');
+            cardFields.style.display = (m && m.value === 'card') ? 'block' : 'none';
+        };
+        modal.querySelectorAll('input[name="payMethod"]').forEach(function(r) { r.addEventListener('change', syncMethod); });
+        var numEl = document.getElementById('payCardNumber'), expEl = document.getElementById('payCardExp');
+        numEl.addEventListener('input', function() {
+            var d = this.value.replace(/\D/g, '').slice(0, 19);
+            this.value = d.replace(/(.{4})/g, '$1 ').trim();
+        });
+        expEl.addEventListener('input', function() {
+            var d = this.value.replace(/\D/g, '').slice(0, 4);
+            this.value = d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
+        });
+        if (lastPayCard) {
+            numEl.value = lastPayCard.number; expEl.value = lastPayCard.exp;
+            document.getElementById('payCardName').value = lastPayCard.name;
+        }
+        syncMethod();
+        document.getElementById('payModalConfirm').addEventListener('click', function() {
+            var m = modal.querySelector('input[name="payMethod"]:checked');
+            if (!m || m.value !== 'card') { settle(true); return; }
+            var card = {
+                number: numEl.value.replace(/\s/g, ''),
+                name:   document.getElementById('payCardName').value.trim(),
+                exp:    expEl.value.trim(),
+                cvv:    document.getElementById('payCardCvv').value.trim()
+            };
+            var problem = utilValidateCard(card);
+            var errEl = document.getElementById('payCardError');
+            if (problem) { errEl.textContent = problem; errEl.style.display = 'block'; return; }
+            lastPayCard = { number: numEl.value, name: card.name, exp: card.exp };
+            settle({ card: card });
+        });
         var stopBtn = document.getElementById('payModalStop');
         if (stopBtn) stopBtn.addEventListener('click', function(){ settle('stop'); });
         modal.addEventListener('click', function(e){ if (e.target === modal) settle(false); });
@@ -188,19 +274,14 @@ function utilConfirmAndPay(cycle, expectedTotal, opts, notice) {
     var isPast = utilIsPastMonthCycle(cycle);
     var monthLabel = utilCycleMonthLabel(cycle.cycleMonth);
     return utilPreviewPayAccount(expectedTotal).then(function(chosen) {
-        if (!chosen) {
-            showNotification('Insufficient funds: ' + cycle.name + (isPast ? ' (' + monthLabel + ')' : '') +
-                ' needs ' + fmtFlorin(expectedTotal) + ' and neither checking nor savings can cover it.', 'error');
-            return { paid: false, insufficient: true };
-        }
+        // `chosen` is null when neither account can cover it — a card can still pay.
         return showPaymentConfirmModal({
             billType: cycle.name + ' Bill',
             billMonth: monthLabel + (isPast ? ' (past due)' : ''),
             accountNumber: cycle.accountNumber,
             amount: expectedTotal,
             lateFee: Math.max(0, Math.round((expectedTotal - (cycle.amount || 0)) * 100) / 100),
-            fromLabel: chosen.label,
-            newBalance: chosen.balance - expectedTotal,
+            balanceOption: chosen ? { label: chosen.label, balance: chosen.balance } : null,
             notice: notice,
             progress: opts.progress || null
         }).then(function(choice) {
@@ -210,7 +291,8 @@ function utilConfirmAndPay(cycle, expectedTotal, opts, notice) {
             paymentInFlight = true;
             var btn = document.getElementById('payBtn-' + cycle.id);
             if (btn) { btn.disabled = true; btn.textContent = 'Processing…'; }
-            return DigifinwizDB.payBillCycle(cycle.id, expectedTotal).then(function(result) {
+            var card = (choice && choice.card) || null;
+            return DigifinwizDB.payBillCycle(cycle.id, expectedTotal, card).then(function(result) {
                 paymentInFlight = false;
                 UTIL_PAID_BY_PAGE[cycle.id] = true;
                 var charged = (result && result.payment && typeof result.payment.amount === 'number') ? result.payment.amount : expectedTotal;
@@ -257,7 +339,9 @@ function utilConfirmAndPay(cycle, expectedTotal, opts, notice) {
 }
 
 function utilAnnouncePayment(cycle, result, charged) {
-    var acct = result && result.account ? (result.account.charAt(0).toUpperCase() + result.account.slice(1)) : '';
+    var acct = result && result.payment && result.payment.paidWith === 'card'
+        ? ('card ending ' + result.payment.cardLast4)
+        : (result && result.account ? (result.account.charAt(0).toUpperCase() + result.account.slice(1)) : '');
     var label = cycle.name + (utilIsPastMonthCycle(cycle) ? ' (' + utilCycleMonthLabel(cycle.cycleMonth) + ')' : '');
     var bits = [];
     bits.push('+' + (result.pointsEarned || 0) + ' XP' + (result.onTimeBonus ? ' incl. on-time bonus' : ''));
@@ -386,7 +470,9 @@ function updatePaymentHistory() {
                 var icon    = utilBillIcon(p.type);
                 var d       = p.timestamp ? new Date(p.timestamp) : null;
                 var dateStr = (d && !isNaN(d.getTime())) ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (p.date || '');
-                var fromLbl = p.fromAccount
+                var fromLbl = p.paidWith === 'card'
+                    ? ((p.cardBrand || 'Card') + ' ' + p.cardLast4)
+                    : p.fromAccount
                     ? (p.fromAccount.charAt(0).toUpperCase() + p.fromAccount.slice(1))
                     : '';
                 var detailBits = [];

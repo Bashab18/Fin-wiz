@@ -5,6 +5,7 @@ const cors     = require('cors');
 const fs       = require('fs');
 const path     = require('path');
 const { Pool } = require('pg');
+const { AsyncLocalStorage } = require('async_hooks');
 
 const app      = express();
 const PORT     = process.env.PORT || 3000;
@@ -18,93 +19,279 @@ const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
 // ── Storage backend ────────────────────────────────────────────────────────────
 // If DATABASE_URL is set (e.g. a Render Postgres instance), every named
 // "store" (users, transactions, ...) is persisted as one row of JSONB in a
-// real database — durable across redeploys/restarts. Otherwise this falls
-// back to the original flat JSON files under data/, so local development
-// needs no database setup at all. Both paths expose the exact same
+// real database — durable across redeploys/restarts. Otherwise the original
+// flat JSON files under data/ are used, so local development needs no
+// database setup at all. Both paths expose the exact same
 // readJSON(name) / writeJSON(name, data) contract the rest of this file uses.
+//
+// When DATABASE_URL IS set, Postgres is the ONLY store. It never degrades to
+// the local files: those sit on a disk that is wiped on every restart, so a
+// silent switch would make every existing account "disappear" and send new
+// writes somewhere that is thrown away. Instead a failing query is retried
+// (connection blips are routine), and if the database really is unreachable
+// the request fails with 503 until it comes back, with no restart needed. A
+// hosted deploy (RENDER / NODE_ENV=production) with no DATABASE_URL refuses to
+// boot for the same reason.
+//
+// Writes made while a request holds the lock (see withUserLock) are buffered
+// and saved in ONE database transaction when that locked section ends. A
+// request that fails part-way saves nothing, and so does a 503, so the client
+// can always safely try again.
 const DATABASE_URL = process.env.DATABASE_URL;
+const HOSTED = process.env.RENDER === 'true' || process.env.NODE_ENV === 'production';
 const pool = DATABASE_URL
     ? new Pool({
         connectionString: DATABASE_URL,
         ssl: { rejectUnauthorized: false },
-        // Without this, an unreachable database (expired free-tier instance,
-        // network partition, etc.) hangs the connection attempt forever —
-        // and since initStorage() awaits it before app.listen(), the whole
-        // server never comes up. Fail fast instead so boot can fall back.
-        connectionTimeoutMillis: 8000
+        // An unreachable database (expired instance, network partition, ...)
+        // must fail a request, not hang it: every write runs inside one global
+        // lock, so a query that never returns would freeze all writes.
+        connectionTimeoutMillis: 8000,
+        statement_timeout: 8000,   // the server cancels a statement running this long...
+        query_timeout: 10000,      // ...and the driver gives up on a silently dead socket
+        keepAlive: true
     })
     : null;
-// True once Postgres is confirmed reachable; flipped false (permanently
-// falling back to local JSON files) if it never connects or later errors out.
-let dbUsable = !!pool;
 
 if (pool) {
+    // An idle client dropped by the server (restart, failover, network blip)
+    // is discarded by the pool and replaced on the next query — just log it.
     pool.on('error', err => {
-        console.error('DigifinwizDB: unexpected Postgres pool error, falling back to local JSON files:', err.message);
-        dbUsable = false;
+        console.error('DigifinwizDB: idle Postgres connection error (the pool will reconnect):', err.message);
     });
+}
+
+const STORAGE_MAX_ATTEMPTS    = 3;
+const STORAGE_RETRY_BUDGET_MS = 12000;
+const SLOW_FAILURE_MS = 3000;   // a failure that took this long is not a blip, so retrying it would only double the wait
+const FAIL_FAST_MS    = 5000;   // after the database stopped answering, reply 503 at once for this long instead of queueing more timeouts
+const BOOT_ATTEMPTS  = Number(process.env.DB_BOOT_ATTEMPTS)  || 5;
+const BOOT_DELAY_MS  = Number(process.env.DB_BOOT_DELAY_MS)  || 2000;
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+// Errors that mean "could not reach / lost the database" (worth retrying and,
+// failing that, a 503) as opposed to "this query is wrong" (a bug: 500).
+const TRANSIENT_PG_CODES = new Set([
+    'ECONNRESET', 'ECONNREFUSED', 'ECONNABORTED', 'ETIMEDOUT', 'EPIPE', 'ENOTFOUND', 'EAI_AGAIN',
+    '57P01', '57P02', '57P03', '57014',            // admin/crash shutdown, cannot connect now, statement timeout
+    '08000', '08001', '08003', '08004', '08006', '08007',   // connection exceptions
+    '53300', '40001', '40P01'                      // too many connections, serialization failure, deadlock
+]);
+function isTransientPgError(err) {
+    if (!err) return false;
+    if (TRANSIENT_PG_CODES.has(err.code)) return true;
+    if (typeof err.code === 'string' && err.code.startsWith('ERR_SSL_')) return true;   // TLS stream broke mid-query
+    return /Connection terminated|timeout exceeded when trying to connect|connection timeout|Query read timeout|Client has encountered a connection error|server closed the connection|terminating connection|read ECONN|write EPIPE/i
+        .test(err.message || '');
+}
+
+// Outcome of the most recent database call, so /api/health can report an
+// outage as soon as real traffic runs into it instead of waiting for its own ping.
+const dbState = { ok: true, at: 0, hung: false };
+function noteDbResult(ok, hung) { dbState.ok = ok; dbState.at = Date.now(); dbState.hung = !!hung; }
+
+let lastStorageLogAt = 0;
+function logStorageProblem(err) {
+    // One line per few seconds, not one per request, while the database is down.
+    if (Date.now() - lastStorageLogAt < 5000) return;
+    lastStorageLogAt = Date.now();
+    console.error('DigifinwizDB: Postgres query failed:', err && (err.code ? err.code + ' ' : '') + (err && err.message));
+}
+
+function createStoreTable() {
+    return pool.query(`
+        CREATE TABLE IF NOT EXISTS app_store (
+            name TEXT PRIMARY KEY,
+            data JSONB NOT NULL DEFAULT '[]'::jsonb
+        )
+    `);
+}
+
+const UPSERT_SQL = `INSERT INTO app_store (name, data) VALUES ($1, $2::jsonb)
+                    ON CONFLICT (name) DO UPDATE SET data = EXCLUDED.data`;
+
+function storageUnavailable(cause) {
+    const e = httpError(503, 'Storage is temporarily unavailable. Please try again in a moment.');
+    if (cause) e.cause = cause;
+    return e;
+}
+
+// The table vanishing while the app runs means the database was reset or
+// dropped under us. Recreating it empty would leave an app that looks healthy
+// but has no accounts, bills or products (the seeds only run at boot), so
+// exit instead: the next boot recreates the table and seeds it properly.
+let exitScheduled = false;
+function storageTableMissing(cause) {
+    if (!exitScheduled) {
+        exitScheduled = true;
+        console.error('DigifinwizDB: FATAL — the app_store table no longer exists (database reset or dropped?). Exiting so the next boot recreates and re-seeds it.');
+        setTimeout(() => process.exit(1), 500);
+    }
+    noteDbResult(false, true);
+    const e = httpError(503, 'The service is restarting. Please try again in a minute.');
+    e.cause = cause;
+    return e;
+}
+
+// Runs one storage operation (a query, or a whole transaction) with retries for
+// transient failures. Throws an Error carrying an HTTP status (503 = storage
+// unavailable, 500 = unexpected query error) with a generic message, so no
+// driver/SQL detail ever reaches a client.
+async function withStorageRetry(attemptFn) {
+    // The database just hung: don't make every queued request wait out its own timeout.
+    if (!dbState.ok && dbState.hung && Date.now() - dbState.at < FAIL_FAST_MS) throw storageUnavailable();
+    const deadline = Date.now() + STORAGE_RETRY_BUDGET_MS;
+    for (let attempt = 1; ; attempt++) {
+        const started = Date.now();
+        try {
+            const out = await attemptFn();
+            noteDbResult(true);
+            return out;
+        } catch (err) {
+            if (err && err.code === '42P01') throw storageTableMissing(err);
+            const transient = isTransientPgError(err);
+            const slow = Date.now() - started >= SLOW_FAILURE_MS;
+            if (transient && !slow && attempt < STORAGE_MAX_ATTEMPTS && Date.now() < deadline) {
+                await sleep(100 * attempt * attempt);
+                continue;
+            }
+            logStorageProblem(err);
+            // A cancelled statement (57014) proves the server is alive, so only
+            // a failure where it never answered at all counts as "hung".
+            if (transient) noteDbResult(false, slow && err.code !== '57014');
+            const out = transient ? storageUnavailable(err) : httpError(500, 'Storage error');
+            out.cause = err;
+            throw out;
+        }
+    }
+}
+
+function pgQuery(text, params) {
+    return withStorageRetry(() => pool.query(text, params));
+}
+
+// Saves several stores atomically: all of them, or none.
+function pgCommit(entries) {
+    return withStorageRetry(async () => {
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            for (const [name, json] of entries) await client.query(UPSERT_SQL, [name, json]);
+            await client.query('COMMIT');
+            client.release();
+        } catch (err) {
+            // A healthy connection can roll back; a broken one is simply dropped
+            // (the server rolls the transaction back when the socket closes).
+            if (!isTransientPgError(err)) { try { await client.query('ROLLBACK'); } catch (e) { /* already gone */ } }
+            client.release(true);
+            throw err;
+        }
+    });
+}
+
+// Every store the app can touch. Derived (not hand-listed) so it can never
+// drift from the maps the routes actually use: the shared catalogs, each
+// per-user store's main-site name, and every module's own copy of it.
+function allStoreNames() {
+    const names = new Set(['bills', 'products']);
+    Object.keys(PER_USER_STORE_PROPS).forEach(n => names.add(n));
+    Object.values(MODULE_STORES).forEach(mod => Object.values(mod).forEach(n => names.add(n)));
+    return Array.from(names);
 }
 
 function ensureLocalDataFiles() {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    STORE_NAMES.forEach(name => {
+    allStoreNames().forEach(name => {
         const fp = path.join(DATA_DIR, name + '.json');
         if (!fs.existsSync(fp)) fs.writeFileSync(fp, '[]', 'utf8');
     });
 }
 
-const STORE_NAMES = [
-    'users', 'transactions', 'payments', 'purchases', 'challenges', 'messages', 'cart', 'bills',
-    'creditCards', 'creditActivity', 'loans', 'loanPayments', 'savingsGoals', 'savingsGoalActivity',
-    'scheduledTransfers', 'products', 'addresses', 'paymentMethods', 'billCycles', 'customBills',
-    // Standalone per-module accounts (Banking/E-Commerce/Utilities each fully separate from the
-    // shared 'users'/'challenges'/'messages' stores above — see the X-App middleware below).
-    'bankingUsers', 'ecommerceUsers', 'utilitiesUsers',
-    'bankingChallenges', 'ecommerceChallenges', 'utilitiesChallenges',
-    'bankingMessages', 'ecommerceMessages', 'utilitiesMessages',
-    // Every other per-user store a module actually writes to — each module has
-    // its own independent id sequence (its first user is always id 1), so
-    // these need their own store too, or two accounts in different modules
-    // that happen to share a numeric id would see and even delete each
-    // other's transactions/credit cards/loans/orders/addresses/bills.
-    'bankingTransactions', 'bankingCreditCards', 'bankingCreditActivity', 'bankingLoans',
-    'bankingLoanPayments', 'bankingSavingsGoals', 'bankingSavingsGoalActivity', 'bankingScheduledTransfers',
-    'ecommercePurchases', 'ecommerceCart', 'ecommerceAddresses', 'ecommercePaymentMethods',
-    'utilitiesPayments', 'utilitiesBillCycles', 'utilitiesCustomBills'
-];
-
 async function initStorage() {
-    if (pool) {
+    if (!pool) {
+        if (HOSTED && process.env.ALLOW_LOCAL_DATA !== '1') {
+            throw new Error('DATABASE_URL is not set on a hosted deploy — refusing to start on a disk that is wiped on every restart. Set DATABASE_URL (or ALLOW_LOCAL_DATA=1 to run on local files anyway).');
+        }
+        ensureLocalDataFiles();
+        console.log('DigifinwizDB: no DATABASE_URL set — using local JSON files in data/.');
+        return;
+    }
+    // A database that is still waking up should not fail the whole deploy, but
+    // one that stays unreachable must: starting anyway would serve an empty
+    // app. Exiting leaves the previous deploy running and shows up loudly.
+    let lastErr;
+    for (let attempt = 1; attempt <= BOOT_ATTEMPTS; attempt++) {
         try {
-            await pool.query(`
-                CREATE TABLE IF NOT EXISTS app_store (
-                    name TEXT PRIMARY KEY,
-                    data JSONB NOT NULL DEFAULT '[]'::jsonb
-                )
-            `);
-            dbUsable = true;
+            await createStoreTable();
             console.log('DigifinwizDB: connected to Postgres.');
             return;
         } catch (err) {
-            dbUsable = false;
-            console.error('DigifinwizDB: Postgres unreachable at boot, falling back to local JSON files:', err.message);
+            lastErr = err;
+            console.error('DigifinwizDB: Postgres not reachable at boot (attempt ' + attempt + '/' + BOOT_ATTEMPTS + '): ' + err.message);
+            if (attempt < BOOT_ATTEMPTS) await sleep(BOOT_DELAY_MS * attempt);
         }
     }
-    // Local JSON-file fallback — ensure data directory + files exist.
-    ensureLocalDataFiles();
-    if (!pool) console.log('DigifinwizDB: no DATABASE_URL set — using local JSON files in data/.');
+    throw new Error('DATABASE_URL is set but Postgres is unreachable — refusing to start on a temporary disk. Last error: ' + lastErr.message);
+}
+
+// Serializes all money-mutating work application-wide (not just per user).
+// The JSON-file stores (users, products, purchases, ...) are shared arrays
+// that get fully read, mutated, and rewritten on every request — a per-user
+// lock alone still lets two DIFFERENT users' requests interleave on the same
+// shared array (e.g. both read stock 1, both pass the check, both decrement
+// it) and lose one write. A single global chain makes every withUserLock
+// call run one at a time, which is the only way to guarantee no lost writes
+// against a full-array-rewrite store.
+//
+// Each locked call is also one "section": its writeJSON calls are held in
+// memory (and read back by its own readJSON calls) and saved together, in one
+// transaction, only if the section finishes. If it throws, nothing it wrote is
+// saved.
+//
+// Re-entrant: work that already holds the lock (a route calling a helper that
+// takes it too) just runs inline in the same section instead of queueing
+// behind itself forever, which would freeze every write in the app.
+// AsyncLocalStorage marks "this async call chain is inside a section"; a
+// section that has ended no longer counts, so a stray promise that outlives it
+// takes the lock like any other caller.
+const lockHolder = new AsyncLocalStorage();
+let globalLock = Promise.resolve();
+
+async function commitSection(section) {
+    if (!section.writes.size) return;
+    const entries = Array.from(section.writes.entries());
+    if (pool) { await pgCommit(entries); return; }
+    entries.forEach(([name, json]) => writeLocalFile(name, json));
+}
+
+function withUserLock(userId, fn) {
+    const held = lockHolder.getStore();
+    if (held && !held.closed) return Promise.resolve().then(fn);
+    const run = async () => {
+        const section = { writes: new Map(), closed: false };
+        try {
+            const result = await lockHolder.run(section, fn);
+            await commitSection(section);
+            return result;
+        } finally {
+            section.closed = true;
+        }
+    };
+    const next = globalLock.then(run, run);
+    globalLock = next;
+    return next;
+}
+
+function writeLocalFile(name, json) {
+    fs.writeFileSync(path.join(DATA_DIR, name + '.json'), JSON.stringify(JSON.parse(json), null, 2), 'utf8');
 }
 
 async function readJSON(name) {
-    if (pool && dbUsable) {
-        try {
-            const { rows } = await pool.query('SELECT data FROM app_store WHERE name = $1', [name]);
-            return rows.length ? rows[0].data : [];
-        } catch (err) {
-            dbUsable = false;
-            ensureLocalDataFiles();
-            console.error('DigifinwizDB: Postgres read failed, falling back to local JSON files:', err.message);
-        }
+    const section = lockHolder.getStore();
+    if (section && !section.closed && section.writes.has(name)) return JSON.parse(section.writes.get(name));
+    if (pool) {
+        const { rows } = await pgQuery('SELECT data FROM app_store WHERE name = $1', [name]);
+        return rows.length ? rows[0].data : [];
     }
     try {
         const raw = fs.readFileSync(path.join(DATA_DIR, name + '.json'), 'utf8');
@@ -115,26 +302,19 @@ async function readJSON(name) {
 }
 
 async function writeJSON(name, data) {
-    if (pool && dbUsable) {
-        try {
-            await pool.query(
-                `INSERT INTO app_store (name, data) VALUES ($1, $2::jsonb)
-                 ON CONFLICT (name) DO UPDATE SET data = EXCLUDED.data`,
-                [name, JSON.stringify(data)]
-            );
-            return;
-        } catch (err) {
-            dbUsable = false;
-            ensureLocalDataFiles();
-            console.error('DigifinwizDB: Postgres write failed, falling back to local JSON files:', err.message);
-        }
+    const json = JSON.stringify(data);   // snapshot now: later changes to `data` are not part of this write
+    const section = lockHolder.getStore();
+    if (section) {
+        if (!section.closed) { section.writes.set(name, json); return; }
+        console.warn('DigifinwizDB: "' + name + '" was written after its locked section ended; saving it directly.');
     }
-    fs.writeFileSync(path.join(DATA_DIR, name + '.json'), JSON.stringify(data, null, 2), 'utf8');
+    if (pool) { await pgQuery(UPSERT_SQL, [name, json]); return; }
+    writeLocalFile(name, json);
 }
 
 function nextId(arr) {
     if (!arr || arr.length === 0) return 1;
-    return Math.max(...arr.map(r => r.id || 0)) + 1;
+    return arr.reduce((max, r) => Math.max(max, r.id || 0), 0) + 1;
 }
 
 function httpError(status, message) {
@@ -227,21 +407,6 @@ async function buildChallengeContext(userId, stores) {
     };
 }
 
-// Serializes all money-mutating work application-wide (not just per user).
-// The JSON-file stores (users, products, purchases, ...) are shared arrays
-// that get fully read, mutated, and rewritten on every request — a per-user
-// lock alone still lets two DIFFERENT users' requests interleave on the same
-// shared array (e.g. both read stock 1, both pass the check, both decrement
-// it) and lose one write. A single global chain makes every withUserLock
-// call run one at a time, which is the only way to guarantee no lost writes
-// against a full-array-rewrite store without a real database transaction.
-let globalLock = Promise.resolve();
-function withUserLock(userId, fn) {
-    const next = globalLock.then(fn, fn);
-    globalLock = next;
-    return next;
-}
-
 // ── Password hashing (prototype-level djb2 XOR, not cryptographic) ────────────
 function simpleHash(str) {
     let h = 5381;
@@ -250,6 +415,12 @@ function simpleHash(str) {
     }
     return (h >>> 0).toString(16).padStart(8, '0');
 }
+
+// The seeded admin accounts' starting password. The default is public (it is
+// printed in the readme), so a real deployment should set ADMIN_PASSWORD before
+// the first boot; it only affects accounts created at seed time.
+const DEFAULT_ADMIN_PASSWORD = 'Admin1234';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || DEFAULT_ADMIN_PASSWORD;
 
 // ── Default data shapes ───────────────────────────────────────────────────────
 const DEFAULT_BALANCES     = { checking: 88674.00, savings: 18074.00 };
@@ -317,10 +488,13 @@ function computeOrderStatus(order) {
         // on to Shipped. The always-true "Order Placed" step is added by the
         // client in front of this list, since placing the order is instant.
         trackingSteps: [
-            { key: 'processing',       label: 'Processing',       done: elapsed >= processingMs },
-            { key: 'shipped',          label: 'Shipped',          done: elapsed >= outForDeliveryMs },
-            { key: 'out_for_delivery', label: 'Out for Delivery', done: elapsed >= totalMs },
-            { key: 'delivered',        label: 'Delivered',        done: elapsed >= totalMs }
+            // expectedAt: when each stage begins (or, for Delivered, when the
+            // package arrives), so the UI can show a real date instead of a
+            // bare "Pending".
+            { key: 'processing',       label: 'Processing',       done: elapsed >= processingMs,      expectedAt: order.timestamp || 0 },
+            { key: 'shipped',          label: 'Shipped',          done: elapsed >= outForDeliveryMs,  expectedAt: (order.timestamp || 0) + processingMs },
+            { key: 'out_for_delivery', label: 'Out for Delivery', done: elapsed >= totalMs,           expectedAt: (order.timestamp || 0) + outForDeliveryMs },
+            { key: 'delivered',        label: 'Delivered',        done: elapsed >= totalMs,           expectedAt: (order.timestamp || 0) + totalMs }
         ]
     };
 }
@@ -330,15 +504,20 @@ function computeOrderStatus(order) {
 // bill overdue notices, order status changes, security notices). `category`
 // drives the per-module unread badges in the sidebar nav.
 async function pushSystemMessage(userId, { subject, body, type, category }, messageStore = 'messages') {
-    const messages = await readJSON(messageStore);
-    const msg = {
-        id: nextId(messages), senderId: 0, senderName: 'System', senderEmail: null,
-        recipientId: userId, subject, body, type: type || 'info', category: category || 'system',
-        sentAt: Date.now(), readBy: []
-    };
-    messages.push(msg);
-    await writeJSON(messageStore, messages);
-    return msg;
+    // Takes the lock itself (re-entrant, so a no-op inside a locked route):
+    // it rewrites the whole messages array, and some callers — the auto-pay
+    // notices — hold no lock of their own.
+    return withUserLock(userId, async () => {
+        const messages = await readJSON(messageStore);
+        const msg = {
+            id: nextId(messages), senderId: 0, senderName: 'System', senderEmail: null,
+            recipientId: userId, subject, body, type: type || 'info', category: category || 'system',
+            sentAt: Date.now(), readBy: []
+        };
+        messages.push(msg);
+        await writeJSON(messageStore, messages);
+        return msg;
+    });
 }
 
 // Pushes a system message into the user's own Messages inbox when a balance
@@ -363,9 +542,15 @@ async function maybeFireBalanceAlerts(user, account, current, next, delta, categ
     }
     if (prefs.largeTxEnabled && Math.abs(delta) >= prefs.largeTxThreshold) {
         alerts.push({
-            subject: 'Large transaction alert',
-            body: 'A ' + (delta < 0 ? 'debit' : 'credit') + ' of ƒ' + Math.abs(delta).toFixed(2) +
-                  ' hit your ' + account + ' account (alert threshold: ƒ' + Number(prefs.largeTxThreshold).toFixed(2) + ').',
+            // Named after what the user configured on their Alerts page:
+            // "Large Purchase" (store), "Large Bill Payment" (utilities),
+            // "Large Transaction" (bank).
+            subject: category === 'ecommerce' ? 'Large purchase alert'
+                   : category === 'utilities' ? 'Large bill payment alert'
+                   : 'Large transaction alert',
+            body: (category === 'ecommerce' ? 'An order' : category === 'utilities' ? 'A bill payment' : 'A ' + (delta < 0 ? 'debit' : 'credit')) +
+                  ' of ƒ' + Math.abs(delta).toFixed(2) + (category === 'ecommerce' || category === 'utilities' ? ' was charged to ' : ' hit ') + 'your ' + (/^(checking|savings)$/.test(account) ? account + ' account' : account) +
+                  ' (alert threshold: ƒ' + Number(prefs.largeTxThreshold).toFixed(2) + ').',
             type: 'warning'
         });
     }
@@ -549,7 +734,7 @@ async function seedDefaultAdmin() {
         fullName:     'Administrator',
         username:     'admin',
         email:        'admin@digifinwiz.local',
-        passwordHash: simpleHash('Admin1234'),
+        passwordHash: simpleHash(ADMIN_PASSWORD),
         role:         'admin',
         status:       'approved',
         createdAt:    Date.now(),
@@ -559,11 +744,11 @@ async function seedDefaultAdmin() {
         balances:     Object.assign({}, DEFAULT_BALANCES)
     });
     await writeJSON('users', users);
-    console.log('DigifinwizDB: default admin created (admin / Admin1234)');
+    console.log('DigifinwizDB: default admin created (username: admin' +
+        (ADMIN_PASSWORD === DEFAULT_ADMIN_PASSWORD ? ', DEFAULT password — change it)' : ', password from ADMIN_PASSWORD)'));
 }
 
-// Seeds a default 'admin' login (admin / Admin1234) into one of the
-// standalone module user stores. Unlike seedDefaultAdmin() above, this is
+// Seeds a default 'admin' login into one of the standalone module user stores. Unlike seedDefaultAdmin() above, this is
 // just an ordinary account with that username/password — module accounts
 // have no role/status/approval concept at all, so there's nothing
 // privileged about it beyond being a memorable, pre-existing credential
@@ -576,7 +761,7 @@ async function seedDefaultModuleAdmin(userStore, challengeStore, category) {
         fullName:     'Administrator',
         username:     'admin',
         email:        'admin@digifinwiz.local',
-        passwordHash: simpleHash('Admin1234'),
+        passwordHash: simpleHash(ADMIN_PASSWORD),
         createdAt:    Date.now(),
         lastLogin:    null,
         userData:     Object.assign({}, DEFAULT_USER_DATA),
@@ -585,7 +770,23 @@ async function seedDefaultModuleAdmin(userStore, challengeStore, category) {
     users.push(user);
     await writeJSON(userStore, users);
     await seedChallengesForUser(user.id, challengeStore, category);
-    console.log('DigifinwizDB: default admin created for ' + userStore + ' (admin / Admin1234)');
+    console.log('DigifinwizDB: default admin created for ' + userStore + ' (username: admin' +
+        (ADMIN_PASSWORD === DEFAULT_ADMIN_PASSWORD ? ', DEFAULT password — change it)' : ', password from ADMIN_PASSWORD)'));
+}
+
+// Boot-time nudge: logs which user stores still have an admin account on the
+// publicly documented default password.
+async function warnIfDefaultAdminPassword() {
+    const defaultHash = simpleHash(DEFAULT_ADMIN_PASSWORD);
+    const exposed = [];
+    for (const store of ['users', 'bankingUsers', 'ecommerceUsers', 'utilitiesUsers']) {
+        const users = await readJSON(store);
+        if (users.some(u => u.username === 'admin' && u.passwordHash === defaultHash)) exposed.push(store);
+    }
+    if (exposed.length) {
+        console.warn('SECURITY: the default admin password (from the readme) is still active in: ' + exposed.join(', ') +
+            '. Anyone can sign in as admin there — change the password.');
+    }
 }
 
 // ── Challenge helpers ─────────────────────────────────────────────────────────
@@ -619,24 +820,47 @@ async function getChallengesForUser(userId, role, challengeStore = 'challenges')
 // self-contained and included regardless of category, since they don't
 // depend on activity in another module.
 async function seedChallengesForUser(userId, challengeStore = 'challenges', category = null) {
-    const challenges = await readJSON(challengeStore);
-    const existing   = challenges.filter(c => c.userId === userId);
-    if (existing.length > 0) return;
-    const now = Date.now();
-    let id    = nextId(challenges);
-    const defs = category
-        ? ALL_DEFAULT_CHALLENGES.filter(c => c.category === category || c.category === 'general')
-        : ALL_DEFAULT_CHALLENGES;
-    defs.forEach(c => {
-        challenges.push(Object.assign({}, c, {
-            id:        id++,
-            userId:    userId,
-            createdAt: now,
-            active:    true,
-            completed: false
-        }));
+    // Locked (re-entrant): a whole-array read-modify-write of the challenges store.
+    return withUserLock(userId, async () => {
+        const challenges = await readJSON(challengeStore);
+        const existing   = challenges.filter(c => c.userId === userId);
+        if (existing.length > 0) return;
+        const now = Date.now();
+        let id    = nextId(challenges);
+        const defs = category
+            ? ALL_DEFAULT_CHALLENGES.filter(c => c.category === category || c.category === 'general')
+            : ALL_DEFAULT_CHALLENGES;
+        defs.forEach(c => {
+            challenges.push(Object.assign({}, c, {
+                id:        id++,
+                userId:    userId,
+                createdAt: now,
+                active:    true,
+                completed: false
+            }));
+        });
+        await writeJSON(challengeStore, challenges);
     });
-    await writeJSON(challengeStore, challenges);
+}
+
+// Appends to `rows` every default challenge the user lacks (matched by title)
+// and returns how many it added. Sub-site accounts (category set) get their own
+// site's challenges plus the general ones, the same set seedChallengesForUser
+// gives a new account; main-site accounts (category null) get all of them.
+// `titles` limits it to some titles. Callers hold the lock.
+function addMissingChallenges(rows, userId, category, titles) {
+    const have = new Set(rows.filter(c => c.userId === userId).map(c => c.title));
+    const now = Date.now();
+    let id = nextId(rows);
+    let added = 0;
+    ALL_DEFAULT_CHALLENGES.forEach(d => {
+        if (category && d.category !== category && d.category !== 'general') return;
+        if (titles && !titles.includes(d.title)) return;
+        if (have.has(d.title)) return;
+        rows.push(Object.assign({}, d, { id: id++, userId, createdAt: now, active: true, completed: false }));
+        added++;
+    });
+    return added;
 }
 
 // Context fields a "custom" condition is allowed to read — never eval
@@ -862,25 +1086,199 @@ Object.keys(MODULE_STORES).forEach(moduleKey => {
     });
 });
 
-app.use((req, res, next) => {
-    const mod = MODULE_STORES[req.headers['x-app']];
-    req.appModule = mod ? req.headers['x-app'] : null;
+// The store names a request works on, keyed by the req.<x>Store property
+// names: the main site's own (moduleKey null) or one sub-site's.
+function storesFor(moduleKey) {
+    const mod = moduleKey ? MODULE_STORES[moduleKey] : null;
+    const stores = {};
     for (const literalName in PER_USER_STORE_PROPS) {
-        const prop = PER_USER_STORE_PROPS[literalName];
-        req[prop] = (mod && mod[literalName]) ? mod[literalName] : literalName;
+        stores[PER_USER_STORE_PROPS[literalName]] = (mod && mod[literalName]) ? mod[literalName] : literalName;
     }
+    return stores;
+}
+
+app.use((req, res, next) => {
+    // Own-key check, not a plain lookup: 'constructor' or '__proto__' would
+    // otherwise resolve to Object.prototype members, switch on module-only
+    // behaviour, and still read the main site's stores.
+    const appHeader = req.headers['x-app'];
+    const known = typeof appHeader === 'string' && Object.prototype.hasOwnProperty.call(MODULE_STORES, appHeader);
+    if (appHeader !== undefined && !known) return res.status(400).json({ error: 'Unknown X-App value' });
+    req.appModule = known ? appHeader : null;
+    Object.assign(req, storesFor(req.appModule));
     next();
 });
 
+// ── Main Site ↔ sub-sites ─────────────────────────────────────────────────────
+// Banking, E-Commerce and Utilities are standalone apps with their own
+// accounts and records, so what a person does there never touches their
+// main-site account. The two sides belong together by identity: a main-site
+// account and a sub-site account are the same person when they share an email
+// or a username (case-insensitive). The main site reads the linked accounts'
+// own stores to show the whole picture; nothing is copied between them.
+const sameText = v => String(v == null ? '' : v).trim().toLowerCase();
+
+// The sub-site account that belongs to a main-site account, or null. An email
+// match outranks a username match (usernames collide by accident more easily);
+// the first account wins a tie.
+function pickLinkedAccount(moduleUsers, me) {
+    const email = sameText(me.email), uname = sameText(me.username);
+    let best = null, bestScore = 0;
+    for (const u of moduleUsers) {
+        const score = (email && sameText(u.email) === email ? 2 : 0) + (uname && sameText(u.username) === uname ? 1 : 0);
+        if (score > bestScore) { best = u; bestScore = score; }
+    }
+    return best;
+}
+
+// { banking: account|null, ecommerce: account|null, utilities: account|null }
+async function linkedAccounts(me) {
+    const out = {};
+    for (const key of Object.keys(MODULE_STORES)) out[key] = pickLinkedAccount(await readJSON(MODULE_STORES[key].users), me);
+    return out;
+}
+
+// id / username / email of every account in a user store, without the avatars
+// and other bulky fields. The link lookups run on every main-site page (the
+// sidebar badges), so they must stay cheap; they need nothing more than this.
+const identitiesOf = users => users.map(u => ({ id: u.id, username: u.username, email: u.email }));
+async function readIdentities(store) {
+    const section = lockHolder.getStore();
+    if (section && !section.closed && section.writes.has(store)) return identitiesOf(JSON.parse(section.writes.get(store)));
+    if (pool) {
+        const { rows } = await pgQuery(
+            `SELECT COALESCE(jsonb_agg(jsonb_build_object('id', u->'id', 'username', u->'username', 'email', u->'email')), '[]'::jsonb) AS data
+               FROM app_store s, jsonb_array_elements(s.data) u WHERE s.name = $1`, [store]);
+        return rows.length ? rows[0].data : [];
+    }
+    return identitiesOf(await readJSON(store));
+}
+
+// linkedAccounts() for callers that only need the linked accounts' ids.
+async function linkedIdentities(me) {
+    const out = {};
+    for (const key of Object.keys(MODULE_STORES)) out[key] = pickLinkedAccount(await readIdentities(MODULE_STORES[key].users), me);
+    return out;
+}
+
 // ── Health ────────────────────────────────────────────────────────────────────
-app.get('/api/health', (_req, res) => {
-    res.json({ ok: true });
+// Reports the database's state instead of always answering "ok". The answer is
+// whatever the latest database call (any request's, or this endpoint's own
+// ping) saw; it pings only when that is more than a few seconds old, so page
+// loads that call this can't turn into a query storm.
+app.get('/api/health', async (_req, res) => {
+    if (!pool) return res.json({ ok: true, backend: 'json-files' });
+    if (Date.now() - dbState.at > 3000) {
+        let timer;
+        try {
+            await Promise.race([
+                pool.query('SELECT 1'),
+                new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('health check timed out')), 3000); })
+            ]);
+            noteDbResult(true);
+        } catch (err) {
+            noteDbResult(false);
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+    if (!dbState.ok) return res.status(503).json({ ok: false, backend: 'postgres', error: 'Database unavailable' });
+    res.json({ ok: true, backend: 'postgres' });
 });
 
+// ── Profile / identity helpers ────────────────────────────────────────────────
+// A user record as sent to a client: never the password hash.
+function publicUser(u) {
+    if (!u || typeof u !== 'object') return u;
+    const { passwordHash, ...rest } = u;
+    return rest;
+}
+
+const isNonEmptyString = v => typeof v === 'string' && v.trim().length > 0;
+
+// Same username rule the registration pages enforce client-side
+// (register.html / *-register.html USERNAME_RE).
+const USERNAME_RE = /^[a-z0-9_]{3,30}$/;
+const EMAIL_RE    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Throws 409 if another user in `users` (excluding selfId) already owns the
+// given (already-lowercased) username or email — login matches the first
+// record with that username/email, so a duplicate would lock the real
+// owner out of their account.
+function assertIdentityUnique(users, selfId, username, email) {
+    if (username !== undefined && users.some(u => u.id !== selfId && u.username === username)) {
+        throw httpError(409, 'Username already taken');
+    }
+    if (email !== undefined && users.some(u => u.id !== selfId && u.email === email)) {
+        throw httpError(409, 'Email already registered');
+    }
+}
+
+// The editable identity fields shared by PUT /api/me/profile and the
+// self-service branch of PUT /api/users/:id, so both enforce one set of rules.
+// Returns { patch } or { error }.
+function parseProfileFields(body) {
+    const { fullName, username, email, avatarDataUri } = body || {};
+    const patch = {};
+    if (fullName !== undefined) {
+        if (typeof fullName !== 'string' || !fullName.trim()) return { error: 'Full name is required' };
+        patch.fullName = fullName.trim();
+    }
+    // Lowercased to match login's lowercase comparison — otherwise saving
+    // "Jane@Email.com" would make email login stop matching.
+    if (username !== undefined) {
+        if (typeof username !== 'string') return { error: 'Invalid username' };
+        patch.username = username.trim().toLowerCase();
+    }
+    if (email !== undefined) {
+        if (typeof email !== 'string') return { error: 'Invalid email' };
+        patch.email = email.trim().toLowerCase();
+    }
+    if (avatarDataUri !== undefined) {
+        if (avatarDataUri !== null && (typeof avatarDataUri !== 'string' || !avatarDataUri.startsWith('data:image/') || avatarDataUri.length > 400000)) {
+            return { error: 'Invalid avatar image' };
+        }
+        patch.avatarDataUri = avatarDataUri;
+    }
+    return { patch };
+}
+
+// Format rules only apply to a value that's actually changing, so a save that
+// echoes back a legacy name/username/email/phone/address which predates these
+// rules (the profile form always sends every field) still succeeds.
+function assertProfileFormat(patch, existing) {
+    if (patch.fullName !== undefined && patch.fullName !== String(existing.fullName || '').trim() && patch.fullName.length > 100) {
+        throw httpError(400, 'Full name must be 100 characters or fewer');
+    }
+    if (patch.username !== undefined && patch.username !== existing.username && !USERNAME_RE.test(patch.username)) {
+        throw httpError(400, 'Username must be 3-30 characters: letters, numbers, or underscores');
+    }
+    if (patch.email !== undefined && patch.email !== existing.email && !EMAIL_RE.test(patch.email)) {
+        throw httpError(400, 'Enter a valid email address');
+    }
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
+// Records a successful login. The password check happens first and without the
+// lock (a wrong password never touches storage); only the lastLogin write is a
+// read-modify-write of the whole users array, so it takes the lock and re-reads
+// fresh state. Writing back the snapshot the password check used would
+// overwrite any balance change another request committed in between.
+async function recordLogin(userStore, userId) {
+    const now = Date.now();
+    await withUserLock(userId, async () => {
+        const users = await readJSON(userStore);
+        const idx   = users.findIndex(u => u.id === userId);
+        if (idx === -1) return;
+        users[idx] = Object.assign({}, users[idx], { lastLogin: now });
+        await writeJSON(userStore, users);
+    });
+    return now;
+}
+
 app.post('/api/auth/login', async (req, res) => {
     const { usernameOrEmail, password } = req.body || {};
-    if (!usernameOrEmail || !password) {
+    if (!isNonEmptyString(usernameOrEmail) || typeof password !== 'string' || !password) {
         return res.status(400).json({ success: false, reason: 'missing_fields' });
     }
     const val   = usernameOrEmail.toLowerCase();
@@ -891,223 +1289,169 @@ app.post('/api/auth/login', async (req, res) => {
     if (user.status === 'pending')  return res.json({ success: false, reason: 'pending' });
     if (user.status === 'rejected') return res.json({ success: false, reason: 'rejected' });
 
-    // Update lastLogin
-    const now     = Date.now();
-    const updated = users.map(u => u.id === user.id ? Object.assign({}, u, { lastLogin: now }) : u);
-    await writeJSON('users', updated);
-    res.json({ success: true, user: Object.assign({}, user, { lastLogin: now }) });
+    const now = await recordLogin('users', user.id);
+    res.json({ success: true, user: publicUser(Object.assign({}, user, { lastLogin: now })) });
 });
+
+// The first way a sign-up collides with an existing account, or null.
+function identityConflict(users, uLower, eLower) {
+    if (users.some(u => u.username === uLower)) return 'Username already taken';
+    if (users.some(u => u.email === eLower))    return 'Email already registered';
+    return null;
+}
 
 app.post('/api/auth/register', async (req, res) => {
     const { fullName, username, email, password } = req.body || {};
-    if (!fullName || !username || !email || !password) {
+    if (![fullName, username, email, password].every(isNonEmptyString)) {
         return res.status(400).json({ error: 'Missing required fields' });
     }
-    const users  = await readJSON('users');
     const uLower = username.toLowerCase();
     const eLower = email.toLowerCase();
-    if (users.some(u => u.username === uLower)) {
-        return res.status(409).json({ error: 'Username already taken' });
-    }
-    if (users.some(u => u.email === eLower)) {
-        return res.status(409).json({ error: 'Email already registered' });
-    }
-    const id = nextId(users);
-    users.push({
-        id,
-        fullName,
-        username:     uLower,
-        email:        eLower,
-        passwordHash: simpleHash(password),
-        role:         'participant',
-        status:       'pending',
-        createdAt:    Date.now(),
-        approvedAt:   null,
-        lastLogin:    null,
-        userData:     Object.assign({}, DEFAULT_USER_DATA),
-        balances:     Object.assign({}, DEFAULT_BALANCES)
+    // Cheap check first, so repeated attempts at a taken name never queue for
+    // the lock behind real money writes. It is repeated inside the lock, where
+    // it is the check that counts.
+    const early = identityConflict(await readJSON('users'), uLower, eLower);
+    if (early) return res.status(409).json({ error: early });
+    // Locked: the duplicate check and the append must be one step, or two
+    // simultaneous sign-ups can both pass the check (same username twice) or
+    // overwrite each other's row.
+    const outcome = await withUserLock(0, async () => {
+        const users = await readJSON('users');
+        const conflict = identityConflict(users, uLower, eLower);
+        if (conflict) return { status: 409, error: conflict };
+        const id = nextId(users);
+        users.push({
+            id,
+            fullName,
+            username:     uLower,
+            email:        eLower,
+            passwordHash: simpleHash(password),
+            role:         'participant',
+            status:       'pending',
+            createdAt:    Date.now(),
+            approvedAt:   null,
+            lastLogin:    null,
+            userData:     Object.assign({}, DEFAULT_USER_DATA),
+            balances:     Object.assign({}, DEFAULT_BALANCES)
+        });
+        await writeJSON('users', users);
+        return { id };
     });
-    await writeJSON('users', users);
-    res.status(201).json({ id });
+    if (outcome.error) return res.status(outcome.status).json({ error: outcome.error });
+    res.status(201).json({ id: outcome.id });
 });
 
+// Tells the admins a new sign-up is waiting for approval. The page calls it
+// right after registering, so it only acts for an account that really is
+// pending and hasn't been announced yet, and takes the details from that
+// account rather than from the request. Anything else is a quiet no-op, so
+// repeated or invented calls can't fill the admins' inboxes (or the lock).
 app.post('/api/auth/notify-admins', async (req, res) => {
-    const { username, fullName } = req.body || {};
-    const users    = await readJSON(req.userStore);
-    const messages = await readJSON(req.messageStore);
-    const admins   = users.filter(u => u.role === 'admin');
-    const now      = Date.now();
-    admins.forEach(admin => {
-        messages.push({
-            id:          nextId(messages),
-            senderId:    0,
-            senderName:  'System',
-            senderEmail: null,
-            recipientId: admin.id,
-            subject:     'New Registration: @' + username,
-            body:        (fullName || username) + ' (@' + username + ') has registered and is awaiting approval. Go to Admin \u2192 Users to approve or reject.',
-            type:        'info',
-            sentAt:      now,
-            readBy:      []
-        });
-    });
-    await writeJSON(req.messageStore, messages);
+    const raw      = req.body && req.body.username;
+    const username = isNonEmptyString(raw) ? raw.trim().toLowerCase() : '';
+    if (username) {
+        const subject = 'New Registration: @' + username;
+        const pendingSignup = async () => {
+            const [users, messages] = await Promise.all([readJSON(req.userStore), readJSON(req.messageStore)]);
+            const user = users.find(u => u.username === username && u.status === 'pending');
+            const announced = messages.some(m => m.senderId === 0 && m.subject === subject);
+            return user && !announced ? { user, users, messages } : null;
+        };
+        if (await pendingSignup()) {            // cheap, unlocked; repeated inside the lock
+            await withUserLock(0, async () => {
+                const found = await pendingSignup();
+                if (!found) return;
+                const { user, users, messages } = found;
+                const now = Date.now();
+                users.filter(u => u.role === 'admin').forEach(admin => {
+                    messages.push({
+                        id:          nextId(messages),
+                        senderId:    0,
+                        senderName:  'System',
+                        senderEmail: null,
+                        recipientId: admin.id,
+                        subject,
+                        body:        (user.fullName || username) + ' (@' + username + ') has registered and is awaiting approval. Go to Admin → Users to approve or reject.',
+                        type:        'info',
+                        sentAt:      now,
+                        readBy:      []
+                    });
+                });
+                await writeJSON(req.messageStore, messages);
+            });
+        }
+    }
     res.json({ ok: true });
 });
 
 // ── Module auth (Banking / E-Commerce / Utilities standalone accounts) ─────────
 // Each module has its own separate account space, decoupled from the shared
 // 'users' store above — no role/status/approval gate, accounts are usable
-// immediately after registration.
-app.post('/api/banking/auth/register', async (req, res) => {
-    const { fullName, username, email, password } = req.body || {};
-    if (!fullName || !username || !email || !password) {
-        return res.status(400).json({ error: 'Missing required fields' });
-    }
-    const users  = await readJSON('bankingUsers');
-    const uLower = username.toLowerCase();
-    const eLower = email.toLowerCase();
-    if (users.some(u => u.username === uLower)) {
-        return res.status(409).json({ error: 'Username already taken' });
-    }
-    if (users.some(u => u.email === eLower)) {
-        return res.status(409).json({ error: 'Email already registered' });
-    }
-    const user = {
-        id:           nextId(users),
-        fullName,
-        username:     uLower,
-        email:        eLower,
-        passwordHash: simpleHash(password),
-        createdAt:    Date.now(),
-        lastLogin:    Date.now(),
-        userData:     Object.assign({}, DEFAULT_USER_DATA),
-        balances:     Object.assign({}, DEFAULT_BALANCES)
+// immediately after registration. The three modules differ only in which
+// stores they use, so one handler pair serves all of them.
+function moduleRegisterHandler(userStore, challengeStore, category) {
+    return async (req, res) => {
+        const { fullName, username, email, password } = req.body || {};
+        if (![fullName, username, email, password].every(isNonEmptyString)) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+        const uLower = username.toLowerCase();
+        const eLower = email.toLowerCase();
+        const early = identityConflict(await readJSON(userStore), uLower, eLower);   // cheap, unlocked; rechecked below
+        if (early) return res.status(409).json({ error: early });
+        const outcome = await withUserLock(0, async () => {
+            const users = await readJSON(userStore);
+            const conflict = identityConflict(users, uLower, eLower);
+            if (conflict) return { status: 409, error: conflict };
+            const user = {
+                id:           nextId(users),
+                fullName,
+                username:     uLower,
+                email:        eLower,
+                passwordHash: simpleHash(password),
+                createdAt:    Date.now(),
+                lastLogin:    Date.now(),
+                userData:     Object.assign({}, DEFAULT_USER_DATA),
+                balances:     Object.assign({}, DEFAULT_BALANCES)
+            };
+            users.push(user);
+            await writeJSON(userStore, users);
+            await seedChallengesForUser(user.id, challengeStore, category);
+            return { user };
+        });
+        if (outcome.error) return res.status(outcome.status).json({ error: outcome.error });
+        res.status(201).json({ user: publicUser(outcome.user) });
     };
-    users.push(user);
-    await writeJSON('bankingUsers', users);
-    await seedChallengesForUser(user.id, 'bankingChallenges', 'banking');
-    const { passwordHash, ...safeUser } = user;
-    res.status(201).json({ user: safeUser });
-});
+}
 
-app.post('/api/banking/auth/login', async (req, res) => {
-    const { usernameOrEmail, password } = req.body || {};
-    if (!usernameOrEmail || !password) {
-        return res.status(400).json({ success: false, reason: 'missing_fields' });
-    }
-    const val   = usernameOrEmail.toLowerCase();
-    const users = await readJSON('bankingUsers');
-    const user  = users.find(u => u.username === val || u.email === val);
-    if (!user) return res.json({ success: false, reason: 'not_found' });
-    if (user.passwordHash !== simpleHash(password)) return res.json({ success: false, reason: 'wrong_password' });
-    const now = Date.now();
-    await writeJSON('bankingUsers', users.map(u => u.id === user.id ? Object.assign({}, u, { lastLogin: now }) : u));
-    const { passwordHash, ...safeUser } = user;
-    res.json({ success: true, user: Object.assign({}, safeUser, { lastLogin: now }) });
-});
-
-app.post('/api/ecommerce/auth/register', async (req, res) => {
-    const { fullName, username, email, password } = req.body || {};
-    if (!fullName || !username || !email || !password) {
-        return res.status(400).json({ error: 'Missing required fields' });
-    }
-    const users  = await readJSON('ecommerceUsers');
-    const uLower = username.toLowerCase();
-    const eLower = email.toLowerCase();
-    if (users.some(u => u.username === uLower)) {
-        return res.status(409).json({ error: 'Username already taken' });
-    }
-    if (users.some(u => u.email === eLower)) {
-        return res.status(409).json({ error: 'Email already registered' });
-    }
-    const user = {
-        id:           nextId(users),
-        fullName,
-        username:     uLower,
-        email:        eLower,
-        passwordHash: simpleHash(password),
-        createdAt:    Date.now(),
-        lastLogin:    Date.now(),
-        userData:     Object.assign({}, DEFAULT_USER_DATA),
-        balances:     Object.assign({}, DEFAULT_BALANCES)
+function moduleLoginHandler(userStore) {
+    return async (req, res) => {
+        const { usernameOrEmail, password } = req.body || {};
+        if (!isNonEmptyString(usernameOrEmail) || typeof password !== 'string' || !password) {
+            return res.status(400).json({ success: false, reason: 'missing_fields' });
+        }
+        const val   = usernameOrEmail.toLowerCase();
+        const users = await readJSON(userStore);
+        const user  = users.find(u => u.username === val || u.email === val);
+        if (!user) return res.json({ success: false, reason: 'not_found' });
+        if (user.passwordHash !== simpleHash(password)) return res.json({ success: false, reason: 'wrong_password' });
+        const now = await recordLogin(userStore, user.id);
+        res.json({ success: true, user: Object.assign({}, publicUser(user), { lastLogin: now }) });
     };
-    users.push(user);
-    await writeJSON('ecommerceUsers', users);
-    await seedChallengesForUser(user.id, 'ecommerceChallenges', 'ecommerce');
-    const { passwordHash, ...safeUser } = user;
-    res.status(201).json({ user: safeUser });
-});
+}
 
-app.post('/api/ecommerce/auth/login', async (req, res) => {
-    const { usernameOrEmail, password } = req.body || {};
-    if (!usernameOrEmail || !password) {
-        return res.status(400).json({ success: false, reason: 'missing_fields' });
-    }
-    const val   = usernameOrEmail.toLowerCase();
-    const users = await readJSON('ecommerceUsers');
-    const user  = users.find(u => u.username === val || u.email === val);
-    if (!user) return res.json({ success: false, reason: 'not_found' });
-    if (user.passwordHash !== simpleHash(password)) return res.json({ success: false, reason: 'wrong_password' });
-    const now = Date.now();
-    await writeJSON('ecommerceUsers', users.map(u => u.id === user.id ? Object.assign({}, u, { lastLogin: now }) : u));
-    const { passwordHash, ...safeUser } = user;
-    res.json({ success: true, user: Object.assign({}, safeUser, { lastLogin: now }) });
-});
-
-app.post('/api/utilities/auth/register', async (req, res) => {
-    const { fullName, username, email, password } = req.body || {};
-    if (!fullName || !username || !email || !password) {
-        return res.status(400).json({ error: 'Missing required fields' });
-    }
-    const users  = await readJSON('utilitiesUsers');
-    const uLower = username.toLowerCase();
-    const eLower = email.toLowerCase();
-    if (users.some(u => u.username === uLower)) {
-        return res.status(409).json({ error: 'Username already taken' });
-    }
-    if (users.some(u => u.email === eLower)) {
-        return res.status(409).json({ error: 'Email already registered' });
-    }
-    const user = {
-        id:           nextId(users),
-        fullName,
-        username:     uLower,
-        email:        eLower,
-        passwordHash: simpleHash(password),
-        createdAt:    Date.now(),
-        lastLogin:    Date.now(),
-        userData:     Object.assign({}, DEFAULT_USER_DATA),
-        balances:     Object.assign({}, DEFAULT_BALANCES)
-    };
-    users.push(user);
-    await writeJSON('utilitiesUsers', users);
-    await seedChallengesForUser(user.id, 'utilitiesChallenges', 'utilities');
-    const { passwordHash, ...safeUser } = user;
-    res.status(201).json({ user: safeUser });
-});
-
-app.post('/api/utilities/auth/login', async (req, res) => {
-    const { usernameOrEmail, password } = req.body || {};
-    if (!usernameOrEmail || !password) {
-        return res.status(400).json({ success: false, reason: 'missing_fields' });
-    }
-    const val   = usernameOrEmail.toLowerCase();
-    const users = await readJSON('utilitiesUsers');
-    const user  = users.find(u => u.username === val || u.email === val);
-    if (!user) return res.json({ success: false, reason: 'not_found' });
-    if (user.passwordHash !== simpleHash(password)) return res.json({ success: false, reason: 'wrong_password' });
-    const now = Date.now();
-    await writeJSON('utilitiesUsers', users.map(u => u.id === user.id ? Object.assign({}, u, { lastLogin: now }) : u));
-    const { passwordHash, ...safeUser } = user;
-    res.json({ success: true, user: Object.assign({}, safeUser, { lastLogin: now }) });
-});
+app.post('/api/banking/auth/register',   moduleRegisterHandler('bankingUsers',   'bankingChallenges',   'banking'));
+app.post('/api/banking/auth/login',      moduleLoginHandler('bankingUsers'));
+app.post('/api/ecommerce/auth/register', moduleRegisterHandler('ecommerceUsers', 'ecommerceChallenges', 'ecommerce'));
+app.post('/api/ecommerce/auth/login',    moduleLoginHandler('ecommerceUsers'));
+app.post('/api/utilities/auth/register', moduleRegisterHandler('utilitiesUsers', 'utilitiesChallenges', 'utilities'));
+app.post('/api/utilities/auth/login',    moduleLoginHandler('utilitiesUsers'));
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 app.get('/api/users', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const users = await readJSON(req.userStore);
-    res.json(users.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+    res.json(users.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(publicUser));
 });
 
 app.get('/api/users/:id', async (req, res) => {
@@ -1118,14 +1462,13 @@ app.get('/api/users/:id', async (req, res) => {
     if (req.userRole !== 'admin' && req.userId !== id) {
         return res.status(403).json({ error: 'Forbidden' });
     }
-    res.json(user);
+    res.json(publicUser(user));
 });
 
 // Non-admin callers may only touch their own record, and only the
 // profile-level fields listed here — never role, status, balances, or
 // passwordHash. Admins may patch any field on any user (this is how the
 // admin panel edits userData/balances).
-const SELF_EDITABLE_USER_FIELDS = ['fullName', 'email', 'username', 'prefs', 'avatarDataUri', 'phone', 'address'];
 app.put('/api/users/:id', async (req, res) => {
     const id      = Number(req.params.id);
     const isAdmin = req.userRole === 'admin';
@@ -1139,22 +1482,32 @@ app.put('/api/users/:id', async (req, res) => {
             const patch = {};
             if (isAdmin) {
                 Object.assign(patch, body);
+                // Lowercased to match login's lowercase comparison — otherwise saving
+                // "Jane@Email.com" here would make email/username login stop matching.
+                if (patch.email    !== undefined) patch.email    = String(patch.email).toLowerCase();
+                if (patch.username !== undefined) patch.username = String(patch.username).toLowerCase();
             } else {
-                SELF_EDITABLE_USER_FIELDS.forEach(f => { if (body[f] !== undefined) patch[f] = body[f]; });
+                // Same rules as PUT /api/me/profile for the identity fields.
+                const parsed = parseProfileFields(body);
+                if (parsed.error) throw httpError(400, parsed.error);
+                Object.assign(patch, parsed.patch);
+                assertProfileFormat(patch, users[idx]);
+                ['prefs', 'phone', 'address'].forEach(f => { if (body[f] !== undefined) patch[f] = body[f]; });
+                ['phone', 'address'].forEach(f => {
+                    if (patch[f] !== undefined && patch[f] !== users[idx][f] && (typeof patch[f] !== 'string' || patch[f].length > 500)) {
+                        throw httpError(400, 'Invalid ' + f);
+                    }
+                });
+                // A participant may not claim a username/email another account
+                // already owns (login matches the first record, which would lock
+                // the real owner out). Admin edits are left as before.
+                assertIdentityUnique(users, id, patch.username, patch.email);
             }
-            // Lowercased to match login's lowercase comparison — otherwise saving
-            // "Jane@Email.com" here would make email/username login stop matching.
-            if (patch.email    !== undefined) patch.email    = String(patch.email).toLowerCase();
-            if (patch.username !== undefined) patch.username = String(patch.username).toLowerCase();
-            // A participant may not claim a username/email another account
-            // already owns (login matches the first record, which would lock
-            // the real owner out). Admin edits are left as before.
-            if (!isAdmin) assertIdentityUnique(users, id, patch.username, patch.email);
             users[idx] = Object.assign({}, users[idx], patch, { id });
             await writeJSON(req.userStore, users);
             return users[idx];
         });
-        res.json(result);
+        res.json(publicUser(result));
     } catch (err) {
         res.status(err.status || 500).json({ error: err.message || 'Server error' });
     }
@@ -1164,55 +1517,67 @@ app.delete('/api/users/:id', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const id = Number(req.params.id);
 
-    // Remove from all per-user stores
-    for (const store of [
-        req.transactionStore, req.paymentStore, req.purchaseStore, req.challengeStore,
-        req.creditCardStore, req.creditActivityStore, req.loanStore, req.loanPaymentStore,
-        req.savingsGoalStore, req.savingsGoalActivityStore,
-        req.scheduledTransferStore, req.addressStore, req.paymentMethodStore, req.billCycleStore, req.customBillStore, req.autopayStore
-    ]) {
-        const rows = await readJSON(store);
-        await writeJSON(store, rows.filter(r => r.userId !== id));
-    }
+    // One locked section: this rewrites a dozen stores, and must not
+    // interleave with the user's own in-flight writes.
+    await withUserLock(0, async () => {
+        // Remove from all per-user stores
+        for (const store of [
+            req.transactionStore, req.paymentStore, req.purchaseStore, req.challengeStore,
+            req.creditCardStore, req.creditActivityStore, req.loanStore, req.loanPaymentStore,
+            req.savingsGoalStore, req.savingsGoalActivityStore,
+            req.scheduledTransferStore, req.addressStore, req.paymentMethodStore, req.billCycleStore, req.customBillStore, req.autopayStore
+        ]) {
+            const rows = await readJSON(store);
+            await writeJSON(store, rows.filter(r => r.userId !== id));
+        }
 
-    // Messages: delete direct, scrub readBy from broadcasts
-    const messages = await readJSON(req.messageStore);
-    await writeJSON(req.messageStore, messages
-        .filter(m => m.recipientId !== id)
-        .map(m => {
-            if (m.recipientId === 'all') {
-                return Object.assign({}, m, { readBy: (m.readBy || []).filter(uid => uid !== id) });
-            }
-            return m;
-        })
-    );
+        // Messages: delete direct, scrub readBy from broadcasts
+        const messages = await readJSON(req.messageStore);
+        await writeJSON(req.messageStore, messages
+            .filter(m => m.recipientId !== id)
+            .map(m => {
+                if (m.recipientId === 'all') {
+                    return Object.assign({}, m, { readBy: (m.readBy || []).filter(uid => uid !== id) });
+                }
+                return m;
+            })
+        );
 
-    const users = await readJSON(req.userStore);
-    await writeJSON(req.userStore, users.filter(u => u.id !== id));
+        const users = await readJSON(req.userStore);
+        await writeJSON(req.userStore, users.filter(u => u.id !== id));
+    });
     res.json({ ok: true });
 });
 
 app.post('/api/users/:id/approve', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const id    = Number(req.params.id);
-    const users = await readJSON(req.userStore);
-    const idx   = users.findIndex(u => u.id === id);
-    if (idx === -1) return res.status(404).json({ error: 'User not found' });
-    users[idx] = Object.assign({}, users[idx], { status: 'approved', approvedAt: Date.now() });
-    await writeJSON(req.userStore, users);
-    await seedChallengesForUser(id);
-    res.json(users[idx]);
+    const id = Number(req.params.id);
+    const approved = await withUserLock(0, async () => {
+        const users = await readJSON(req.userStore);
+        const idx   = users.findIndex(u => u.id === id);
+        if (idx === -1) return null;
+        users[idx] = Object.assign({}, users[idx], { status: 'approved', approvedAt: Date.now() });
+        await writeJSON(req.userStore, users);
+        await seedChallengesForUser(id);
+        return users[idx];
+    });
+    if (!approved) return res.status(404).json({ error: 'User not found' });
+    res.json(publicUser(approved));
 });
 
 app.post('/api/users/:id/reject', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const id    = Number(req.params.id);
-    const users = await readJSON(req.userStore);
-    const idx   = users.findIndex(u => u.id === id);
-    if (idx === -1) return res.status(404).json({ error: 'User not found' });
-    users[idx] = Object.assign({}, users[idx], { status: 'rejected' });
-    await writeJSON(req.userStore, users);
-    res.json(users[idx]);
+    const id = Number(req.params.id);
+    const rejected = await withUserLock(0, async () => {
+        const users = await readJSON(req.userStore);
+        const idx   = users.findIndex(u => u.id === id);
+        if (idx === -1) return null;
+        users[idx] = Object.assign({}, users[idx], { status: 'rejected' });
+        await writeJSON(req.userStore, users);
+        return users[idx];
+    });
+    if (!rejected) return res.status(404).json({ error: 'User not found' });
+    res.json(publicUser(rejected));
 });
 
 app.get('/api/users/:id/challenges', async (req, res) => {
@@ -1262,62 +1627,17 @@ app.get('/api/me/profile', async (req, res) => {
     res.json({ fullName: user.fullName, username: user.username, email: user.email, avatarDataUri: user.avatarDataUri || null });
 });
 
-// Same username rule the registration pages enforce client-side
-// (register.html / *-register.html USERNAME_RE).
-const USERNAME_RE = /^[a-z0-9_]{3,30}$/;
-const EMAIL_RE    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-// Throws 409 if another user in `users` (excluding selfId) already owns the
-// given (already-lowercased) username or email — login matches the first
-// record with that username/email, so a duplicate would lock the real
-// owner out of their account.
-function assertIdentityUnique(users, selfId, username, email) {
-    if (username !== undefined && users.some(u => u.id !== selfId && u.username === username)) {
-        throw httpError(409, 'Username already taken');
-    }
-    if (email !== undefined && users.some(u => u.id !== selfId && u.email === email)) {
-        throw httpError(409, 'Email already registered');
-    }
-}
 
 app.put('/api/me/profile', async (req, res) => {
-    const { fullName, username, email, avatarDataUri } = req.body || {};
-    const patch = {};
-    if (fullName !== undefined) {
-        if (typeof fullName !== 'string' || !fullName.trim()) return res.status(400).json({ error: 'Full name is required' });
-        if (fullName.trim().length > 100) return res.status(400).json({ error: 'Full name must be 100 characters or fewer' });
-        patch.fullName = fullName.trim();
-    }
-    // Lowercased to match login's lowercase comparison (server.js login handler) —
-    // otherwise saving "Jane@Email.com" here would make email login stop matching.
-    if (username !== undefined) {
-        if (typeof username !== 'string') return res.status(400).json({ error: 'Invalid username' });
-        patch.username = username.trim().toLowerCase();
-    }
-    if (email !== undefined) {
-        if (typeof email !== 'string') return res.status(400).json({ error: 'Invalid email' });
-        patch.email = email.trim().toLowerCase();
-    }
-    if (avatarDataUri !== undefined) {
-        if (avatarDataUri !== null && (typeof avatarDataUri !== 'string' || !avatarDataUri.startsWith('data:image/') || avatarDataUri.length > 400000)) {
-            return res.status(400).json({ error: 'Invalid avatar image' });
-        }
-        patch.avatarDataUri = avatarDataUri;
-    }
+    const parsed = parseProfileFields(req.body);
+    if (parsed.error) return res.status(400).json({ error: parsed.error });
+    const patch = parsed.patch;
     try {
         const user = await withUserLock(req.userId, async () => {
             const users = await readJSON(req.userStore);
             const idx   = users.findIndex(u => u.id === req.userId);
             if (idx === -1) throw httpError(404, 'User not found');
-            // Format rules only apply to a value that's actually changing, so
-            // an avatar-only save that echoes back a legacy username which
-            // predates these rules still succeeds.
-            if (patch.username !== undefined && patch.username !== users[idx].username && !USERNAME_RE.test(patch.username)) {
-                throw httpError(400, 'Username must be 3-30 characters: letters, numbers, or underscores');
-            }
-            if (patch.email !== undefined && patch.email !== users[idx].email && !EMAIL_RE.test(patch.email)) {
-                throw httpError(400, 'Enter a valid email address');
-            }
+            assertProfileFormat(patch, users[idx]);
             assertIdentityUnique(users, req.userId, patch.username, patch.email);
             users[idx] = Object.assign({}, users[idx], patch);
             await writeJSON(req.userStore, users);
@@ -1335,6 +1655,9 @@ app.post('/api/me/password', async (req, res) => {
     const { currentPassword, newPassword } = req.body || {};
     if (!currentPassword || !newPassword) {
         return res.status(400).json({ error: 'currentPassword and newPassword required' });
+    }
+    if (newPassword === currentPassword) {
+        return res.status(400).json({ error: 'Your new password cannot be the same as your previous password.' });
     }
     try {
         await withUserLock(req.userId, async () => {
@@ -1592,20 +1915,25 @@ app.get('/api/me/transactions', async (req, res) => {
 // /api/me/transfer or /api/me/move-money, which build the record server-side.
 app.post('/api/me/transactions', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const all    = await readJSON(req.transactionStore);
-    const record = Object.assign({}, req.body, {
-        id:        nextId(all),
-        userId:    req.userId,
-        timestamp: req.body.timestamp || Date.now()
+    const record = await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.transactionStore);
+        const rec = Object.assign({}, req.body, {
+            id:        nextId(all),
+            userId:    req.userId,
+            timestamp: (req.body && req.body.timestamp) || Date.now()
+        });
+        all.push(rec);
+        await writeJSON(req.transactionStore, all);
+        return rec;
     });
-    all.push(record);
-    await writeJSON(req.transactionStore, all);
     res.status(201).json(record);
 });
 
 app.delete('/api/me/transactions', async (req, res) => {
-    const all = await readJSON(req.transactionStore);
-    await writeJSON(req.transactionStore, all.filter(t => t.userId !== req.userId));
+    await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.transactionStore);
+        await writeJSON(req.transactionStore, all.filter(t => t.userId !== req.userId));
+    });
     res.json({ ok: true });
 });
 
@@ -1624,20 +1952,25 @@ app.get('/api/me/payments', async (req, res) => {
 // POST /api/me/bills/:cycleId/pay, which debits the balance.
 app.post('/api/me/payments', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const all    = await readJSON(req.paymentStore);
-    const record = Object.assign({}, req.body, {
-        id:        nextId(all),
-        userId:    req.userId,
-        timestamp: req.body.timestamp || Date.now()
+    const record = await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.paymentStore);
+        const rec = Object.assign({}, req.body, {
+            id:        nextId(all),
+            userId:    req.userId,
+            timestamp: (req.body && req.body.timestamp) || Date.now()
+        });
+        all.push(rec);
+        await writeJSON(req.paymentStore, all);
+        return rec;
     });
-    all.push(record);
-    await writeJSON(req.paymentStore, all);
     res.status(201).json(record);
 });
 
 app.delete('/api/me/payments', async (req, res) => {
-    const all = await readJSON(req.paymentStore);
-    await writeJSON(req.paymentStore, all.filter(p => p.userId !== req.userId));
+    await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.paymentStore);
+        await writeJSON(req.paymentStore, all.filter(p => p.userId !== req.userId));
+    });
     res.json({ ok: true });
 });
 
@@ -1702,20 +2035,25 @@ app.get('/api/me/purchases/:id', async (req, res) => {
 // which debits the balance and prices items from the catalog.
 app.post('/api/me/purchases', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const all    = await readJSON(req.purchaseStore);
-    const record = Object.assign({}, req.body, {
-        id:        nextId(all),
-        userId:    req.userId,
-        timestamp: req.body.timestamp || Date.now()
+    const record = await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.purchaseStore);
+        const rec = Object.assign({}, req.body, {
+            id:        nextId(all),
+            userId:    req.userId,
+            timestamp: (req.body && req.body.timestamp) || Date.now()
+        });
+        all.push(rec);
+        await writeJSON(req.purchaseStore, all);
+        return rec;
     });
-    all.push(record);
-    await writeJSON(req.purchaseStore, all);
     res.status(201).json(record);
 });
 
 app.delete('/api/me/purchases', async (req, res) => {
-    const all = await readJSON(req.purchaseStore);
-    await writeJSON(req.purchaseStore, all.filter(p => p.userId !== req.userId));
+    await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.purchaseStore);
+        await writeJSON(req.purchaseStore, all.filter(p => p.userId !== req.userId));
+    });
     res.json({ ok: true });
 });
 
@@ -1973,17 +2311,23 @@ app.get('/api/me/challenges/level1', async (req, res) => {
     // standalone single-module account — it has no way to ever satisfy the
     // other two, so treat it as already met.
     if (req.appModule) return res.json({ allMet: true, items: [] });
-    const challenges = await getChallengesForUser(req.userId, 'participant', req.challengeStore);
+    const own = await getChallengesForUser(req.userId, 'participant', req.challengeStore);
+    const me  = (await readIdentities(req.userStore)).find(u => u.id === req.userId);
+    const siteRows = me ? await subSiteChallengeRows(me) : new Map();
+    const challenges = mirrorCompletions(own, siteRows);
     const defs = [
-        { condition: 'first_transfer', title: 'Make your first bank transfer',          link: 'banking.html'   },
-        { condition: 'first_purchase', title: 'Complete your first ecommerce purchase', link: 'ecommerce.html' },
-        { condition: 'first_payment',  title: 'Pay your first utility bill',             link: 'utilities.html' }
+        { condition: 'first_transfer', site: 'banking',   title: 'Make your first bank transfer',          link: 'banking.html'   },
+        { condition: 'first_purchase', site: 'ecommerce', title: 'Complete your first ecommerce purchase', link: 'ecommerce.html' },
+        { condition: 'first_payment',  site: 'utilities', title: 'Pay your first utility bill',             link: 'utilities.html' }
     ];
+    // Met by this account's own (or mirrored) challenge, or by the linked site's
+    // own challenge for the same condition (an admin may have renamed either copy).
     const items = defs.map(d => ({
         condition: d.condition,
         title:     d.title,
         link:      d.link,
-        met:       challenges.some(c => c.condition === d.condition && c.completed)
+        met:       challenges.some(c => c.condition === d.condition && c.completed) ||
+                   (siteRows.get(d.site) || []).some(c => c.condition === d.condition && c.completed)
     }));
     res.json({ allMet: items.every(i => i.met), items });
 });
@@ -2107,8 +2451,197 @@ app.post('/api/me/reset', async (req, res) => {
     }
 });
 
+// The main site keeps its own copy of every sub-site's challenges (e.g. "First
+// transfer"), but the activity that completes them happens in the sub-site, so
+// the main copy could never be completed. For a main-site participant those
+// copies are shown as done when the linked sub-site account has completed the
+// same-titled challenge. Read-only: stored rows and XP are not touched (the XP
+// was earned, and is counted, in the sub-site account).
+// The linked accounts' own challenge rows, by site (only sites that have a link).
+async function subSiteChallengeRows(me) {
+    const ids = await linkedIdentities(me);
+    const rows = new Map();
+    for (const key of Object.keys(MODULE_STORES)) {
+        if (ids[key]) rows.set(key, await getChallengesForUser(ids[key].id, 'participant', MODULE_STORES[key].challenges));
+    }
+    return rows;
+}
+
+function mirrorCompletions(mainChallenges, siteRows) {
+    const doneByTitle = new Map();
+    siteRows.forEach((rows, key) => doneByTitle.set(key, new Map(rows.filter(c => c.completed).map(c => [c.title, c]))));
+    return mainChallenges.map(c => {
+        const hit = !c.completed && doneByTitle.has(c.category) ? doneByTitle.get(c.category).get(c.title) : null;
+        return hit ? Object.assign({}, c, { completed: true, completedAt: hit.completedAt || null, mirroredFrom: c.category }) : c;
+    });
+}
+
 app.get('/api/me/challenges', async (req, res) => {
-    res.json(await getChallengesForUser(req.userId, req.userRole || 'participant', req.challengeStore));
+    const role = req.userRole || 'participant';
+    const own  = await getChallengesForUser(req.userId, role, req.challengeStore);
+    if (req.appModule || role !== 'participant') return res.json(own);
+    const me = (await readIdentities(req.userStore)).find(u => u.id === req.userId);
+    res.json(me ? mirrorCompletions(own, await subSiteChallengeRows(me)) : own);
+});
+
+// ── Me: progress combined across Banking, E-Commerce and Utilities ───────────
+// The three standalone modules keep their own accounts and progress records
+// (level, XP, challenges), so the main site's own record only shows a slice.
+// This joins them: each module account is matched to the signed-in main
+// account by email or username (case-insensitive) and its level / XP /
+// challenge progress is read from that module's own stores. Main-site only.
+app.get('/api/me/overall-progress', async (req, res) => {
+    if (req.appModule) return res.status(400).json({ error: 'Main-site accounts only' });
+    const users = await readJSON(req.userStore);
+    const me = users.find(u => u.id === req.userId);
+    if (!me) return res.status(404).json({ error: 'User not found' });
+    const accounts = await linkedAccounts(me);
+
+    const summarize = (userData, challenges) => {
+        const ud = Object.assign({}, DEFAULT_USER_DATA, userData || {});
+        const active = challenges.filter(c => c.active !== false);
+        const done = active.filter(c => c.completed);
+        return {
+            level: ud.level || 1,
+            levelsCompleted: Math.max(0, (ud.level || 1) - 1),
+            points: ud.points || 0,
+            pointsToNextLevel: ud.pointsToNextLevel != null ? ud.pointsToNextLevel : 1000,
+            challengesCompleted: done.length,
+            challengesTotal: active.length,
+            challengeXp: done.reduce((s, c) => s + (c.points || 0), 0)
+        };
+    };
+
+    const modules = [];
+    const siteTitles = new Map();   // site -> titles of the linked account's own challenges
+    for (const key of Object.keys(MODULE_STORES)) {
+        const match = accounts[key];
+        if (!match) { modules.push({ module: key, linked: false }); continue; }
+        const chals = await getChallengesForUser(match.id, 'participant', MODULE_STORES[key].challenges);
+        siteTitles.set(key, new Set(chals.map(c => c.title)));
+        modules.push(Object.assign({
+            module: key, linked: true, accountName: match.username,
+            challenges: chals.filter(c => c.active !== false).map(c => ({
+                title: c.title, description: c.description, points: c.points || 0,
+                completed: !!c.completed, completedAt: c.completedAt || null
+            }))
+        }, summarize(match.userData, chals)));
+    }
+    // A main copy of a sub-site's challenge is counted under that sub-site (its own
+    // record is the real one), not twice. One with no same-titled challenge there
+    // (a custom or renamed one) has no counterpart and stays in the main count.
+    const mainChallenges = (await getChallengesForUser(req.userId, 'participant', req.challengeStore))
+        .filter(c => !(siteTitles.has(c.category) && siteTitles.get(c.category).has(c.title)));
+    const main = summarize(me.userData, mainChallenges);
+    const linked = modules.filter(m => m.linked);
+    const parts = [main].concat(linked);
+    res.json({
+        main, modules,
+        totals: {
+            levelsCompleted: parts.reduce((s, p) => s + p.levelsCompleted, 0),
+            points: parts.reduce((s, p) => s + p.points, 0),
+            challengesCompleted: parts.reduce((s, p) => s + p.challengesCompleted, 0),
+            challengesTotal: parts.reduce((s, p) => s + p.challengesTotal, 0),
+            linkedModules: linked.length,
+            totalModules: modules.length
+        }
+    });
+});
+
+// ── Me: everything the main site shows about a person's sub-site accounts ────
+// One read-only call (nothing here creates or changes a record) that gathers,
+// for each linked sub-site account, its balances, records and progress, plus
+// totals across them and one merged activity feed. Main-site accounts only.
+async function subSiteSnapshot(key, account) {
+    const stores = storesFor(key);
+    const uid = account.id;
+    const mine = rows => rows.filter(r => r.userId === uid);
+    const newest = (rows, n) => rows.slice().sort((a, b) => (b.timestamp || b.id || 0) - (a.timestamp || a.id || 0)).slice(0, n);
+    const [txs, pays, purchs, cards, loans, goals, cycles, messages, challenges, stats, activity] = await Promise.all([
+        readJSON(stores.transactionStore), readJSON(stores.paymentStore), readJSON(stores.purchaseStore),
+        readJSON(stores.creditCardStore), readJSON(stores.loanStore), readJSON(stores.savingsGoalStore),
+        readJSON(stores.billCycleStore), readJSON(stores.messageStore),
+        getChallengesForUser(uid, 'participant', stores.challengeStore),
+        buildStats(uid, stores, account), buildActivity(uid, stores)
+    ]);
+    const live = challenges.filter(c => c.active !== false);
+    const month = currentCycleMonth();
+    const balances = Object.assign({}, DEFAULT_BALANCES, account.balances || {});
+    return {
+        module: key, linked: true,
+        account: { id: account.id, username: account.username, fullName: account.fullName },
+        balances: { checking: balances.checking, savings: balances.savings },
+        userData: Object.assign({}, DEFAULT_USER_DATA, account.userData || {}),
+        stats,
+        transactions: newest(mine(txs), 100),
+        payments: newest(mine(pays), 100),
+        purchases: newest(mine(purchs), 200),
+        creditCard: mine(cards).find(c => c.active) || null,
+        loan: mine(loans).sort((a, b) => (b.openedAt || 0) - (a.openedAt || 0))[0] || null,
+        savingsGoals: mine(goals),
+        // Existing cycles only (GET /api/me/bills would also create this
+        // month's cycles and run auto-pay, which a read-only view must not).
+        bills: mine(cycles).filter(c => c.status !== 'paid' || c.cycleMonth === month)
+            .map(c => Object.assign({}, c, computeBillCycleStatus(c))).sort((a, b) => (a.dueDate || 0) - (b.dueDate || 0)),
+        activity: activity.slice(0, 30),
+        challenges: { total: live.length, completed: live.filter(c => c.completed).length },
+        unreadMessages: messages.filter(m => (m.recipientId === 'all' || m.recipientId === uid) && !(m.readBy || []).includes(uid)).length
+    };
+}
+
+// The main account's own records, from before the sub-sites were separate (and
+// any a stray request left in the main stores). Kept in the picture so linking a
+// sub-site never makes that history disappear; the main account's own wallet is
+// not (it is the old starting balance, not an account anyone uses any more).
+async function mainOwnSnapshot(me) {
+    const stores = storesFor(null);
+    const uid = me.id;
+    const mine = rows => rows.filter(r => r.userId === uid);
+    const newest = (rows, n) => rows.slice().sort((a, b) => (b.timestamp || b.id || 0) - (a.timestamp || a.id || 0)).slice(0, n);
+    const [txs, pays, purchs, stats, activity] = await Promise.all([
+        readJSON(stores.transactionStore), readJSON(stores.paymentStore), readJSON(stores.purchaseStore),
+        buildStats(uid, stores, me), buildActivity(uid, stores)
+    ]);
+    return {
+        stats,
+        transactions: newest(mine(txs), 100), payments: newest(mine(pays), 100), purchases: newest(mine(purchs), 200),
+        activity: activity.slice(0, 30)
+    };
+}
+
+app.get('/api/me/hub', async (req, res) => {
+    if (req.appModule) return res.status(400).json({ error: 'Main-site accounts only' });
+    const me = (await readJSON(req.userStore)).find(u => u.id === req.userId);
+    if (!me) return res.status(404).json({ error: 'User not found' });
+    const accounts = await linkedAccounts(me);
+    const modules = {};
+    for (const key of Object.keys(MODULE_STORES)) {
+        modules[key] = accounts[key] ? await subSiteSnapshot(key, accounts[key]) : { module: key, linked: false };
+    }
+    const linked = Object.keys(modules).map(k => modules[k]).filter(m => m.linked);
+    const own = await mainOwnSnapshot(me);
+    const sum = f => linked.reduce((n, m) => n + f(m), 0);
+    const checking = sum(m => m.balances.checking), savings = sum(m => m.balances.savings);
+    const liabilities = sum(m => (m.creditCard ? Number(m.creditCard.balance) || 0 : 0) +
+                                 (m.loan && m.loan.active && !m.loan.paidOff ? Number(m.loan.balance) || 0 : 0));
+    res.json({
+        linkedCount: linked.length,
+        modules,
+        own,
+        totals: {
+            checking, savings, assets: checking + savings, liabilities, net: checking + savings - liabilities,
+            // From the full stats (every record), not the capped lists shown above.
+            spentOnBills: own.stats.totalSpentBills + sum(m => m.stats.totalSpentBills),
+            spentOnPurchases: own.stats.totalSpentEcommerce + sum(m => m.stats.totalSpentEcommerce),
+            goalsSaved: sum(m => m.savingsGoals.reduce((s, g) => s + (Number(g.current) || 0), 0)),
+            goalsTarget: sum(m => m.savingsGoals.reduce((s, g) => s + (Number(g.target) || 0), 0)),
+            goalsCount: sum(m => m.savingsGoals.length)
+        },
+        // Every site's recent events (and the main account's own) in one feed;
+        // each sub-site event is tagged with its site.
+        activity: linked.reduce((all, m) => all.concat(m.activity.map(e => Object.assign({ module: m.module }, e))), own.activity.slice())
+            .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 50)
+    });
 });
 
 // Admin-only: the only caller is admin.js's data import. Participants never
@@ -2116,18 +2649,21 @@ app.get('/api/me/challenges', async (req, res) => {
 // would allow self-authored challenges with arbitrary points/florins.
 app.post('/api/me/challenges', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const all    = await readJSON(req.challengeStore);
-    const record = Object.assign({
-        active:    true,
-        completed: false,
-        condition: 'manual',
-        createdAt: Date.now()
-    }, req.body, {
-        id:     nextId(all),
-        userId: req.userId
+    const record = await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.challengeStore);
+        const rec = Object.assign({
+            active:    true,
+            completed: false,
+            condition: 'manual',
+            createdAt: Date.now()
+        }, req.body, {
+            id:     nextId(all),
+            userId: req.userId
+        });
+        all.push(rec);
+        await writeJSON(req.challengeStore, all);
+        return rec;
     });
-    all.push(record);
-    await writeJSON(req.challengeStore, all);
     res.status(201).json(record);
 });
 
@@ -2178,9 +2714,41 @@ app.delete('/api/me/challenges/:id', async (req, res) => {
 });
 
 // ── Me: messages ──────────────────────────────────────────────────────────────
+// A main-site participant's inbox also holds the messages and alerts of their
+// linked sub-site accounts ("Large transaction", "Order shipped", ...), which
+// otherwise only show up inside that sub-site. Their ids are offset by site so
+// they never collide with main-site ids (every other piece of the inbox UI keeps
+// working on plain numbers), and readBy is rewritten to the main account's id so
+// the page's usual "unread" test works.
+const SUBSITE_MESSAGE_ID_BASE = 1e9;   // main-site message ids stay far below this
+const SITE_LABELS = { banking: 'DigiBank', ecommerce: 'InStyl', utilities: 'DigiPay' };
+
+async function subSiteMessagesFor(mainUser) {
+    const accounts = await linkedIdentities(mainUser);
+    const out = [];
+    const keys = Object.keys(MODULE_STORES);
+    for (let i = 0; i < keys.length; i++) {
+        const key = keys[i], account = accounts[key];
+        if (!account) continue;
+        const msgs = await readJSON(MODULE_STORES[key].messages);
+        // A copy an admin sent to the main site and the sub-sites together (mainMessageId) is
+        // the same message the main inbox already holds; don't list it again.
+        msgs.filter(m => !m.mainMessageId && (m.recipientId === 'all' || m.recipientId === account.id)).forEach(m => out.push(Object.assign({}, m, {
+            id: (i + 1) * SUBSITE_MESSAGE_ID_BASE + m.id,
+            module: key,
+            senderName: (SITE_LABELS[key] || key) + ' \u2014 ' + (m.senderName || 'System'),
+            readBy: (m.readBy || []).includes(account.id) ? [mainUser.id] : []
+        })));
+    }
+    return out;
+}
+
 app.get('/api/me/messages', async (req, res) => {
     const all = await readJSON(req.messageStore);
-    res.json(all.filter(m => m.recipientId === 'all' || m.recipientId === req.userId));
+    const own = all.filter(m => m.recipientId === 'all' || m.recipientId === req.userId);
+    if (req.appModule || (req.userRole || 'participant') !== 'participant') return res.json(own);
+    const me = (await readIdentities(req.userStore)).find(u => u.id === req.userId);
+    res.json(me ? own.concat(await subSiteMessagesFor(me)) : own);
 });
 
 // Locked: rewrites the whole shared message array, which system alerts
@@ -2190,6 +2758,29 @@ app.get('/api/me/messages', async (req, res) => {
 app.patch('/api/me/messages/:id', async (req, res) => {
     const id = Number(req.params.id);
     try {
+        if (!req.appModule && id >= SUBSITE_MESSAGE_ID_BASE) {
+            // A sub-site message shown in the main inbox: mark it read on the
+            // linked sub-site account's own record.
+            const key = Object.keys(MODULE_STORES)[Math.floor(id / SUBSITE_MESSAGE_ID_BASE) - 1];
+            const msgId = id % SUBSITE_MESSAGE_ID_BASE;
+            const msg = await withUserLock(req.userId, async () => {
+                const me = key && (await readIdentities(req.userStore)).find(u => u.id === req.userId);
+                const account = me && (await linkedIdentities(me))[key];
+                if (!account) throw httpError(404, 'Message not found');
+                const store = MODULE_STORES[key].messages;
+                const all = await readJSON(store);
+                const idx = all.findIndex(m => m.id === msgId && (m.recipientId === 'all' || m.recipientId === account.id));
+                if (idx === -1) throw httpError(404, 'Message not found');
+                const readBy = Array.from(all[idx].readBy || []);
+                if (!readBy.includes(account.id)) {
+                    readBy.push(account.id);
+                    all[idx] = Object.assign({}, all[idx], { readBy });
+                    await writeJSON(store, all);
+                }
+                return Object.assign({}, all[idx], { id, module: key, readBy: [req.userId] });
+            });
+            return res.json(msg);
+        }
         const msg = await withUserLock(req.userId, async () => {
             const all = await readJSON(req.messageStore);
             const idx = all.findIndex(m => m.id === id && (m.recipientId === 'all' || m.recipientId === req.userId));
@@ -2353,9 +2944,13 @@ app.post('/api/me/credit-card/payment', async (req, res) => {
             await writeJSON(req.creditCardStore, cards);
 
             const activity = await readJSON(req.creditActivityStore);
+            // fromAccount is stored so the statement can put the debit on the
+            // account that actually paid. Rows saved before this field existed
+            // carry no account (see the statement route for how they're read).
             const record = {
-                id: nextId(activity), userId: req.userId, type: 'payment',
-                amount: payAmt, description: 'Card payment', date: new Date().toLocaleDateString(), timestamp: Date.now()
+                id: nextId(activity), userId: req.userId, type: 'payment', fromAccount,
+                amount: payAmt, description: fromAccount === 'savings' ? 'Card payment from savings' : 'Card payment',
+                date: new Date().toLocaleDateString(), timestamp: Date.now()
             };
             activity.push(record);
             await writeJSON(req.creditActivityStore, activity);
@@ -2848,13 +3443,17 @@ app.get('/api/me/statement', async (req, res) => {
     pays.filter(p => p.userId === req.userId && p.fromAccount === account).forEach(p => {
         events.push({ timestamp: p.timestamp || 0, amount: -(p.amount || 0), label: (p.type || 'Bill') + ' bill payment' });
     });
+    // A card payment debits whichever account it was paid from. Rows saved
+    // before fromAccount was recorded don't say; they are read as checking,
+    // which is wrong for any that were actually paid from savings (that choice
+    // existed before the account was stored, and can't be recovered).
+    creditActivity.filter(a => a.userId === req.userId && a.type === 'payment' && (a.fromAccount || 'checking') === account).forEach(a => {
+        events.push({ timestamp: a.timestamp || 0, amount: -(a.amount || 0), label: 'Credit card payment' });
+    });
     if (account === 'checking') {
         purchs.filter(p => p.userId === req.userId).forEach(p => {
             const n = p.items ? p.items.length : 0;
             events.push({ timestamp: p.timestamp || 0, amount: -(p.total || 0), label: 'Store purchase (' + n + ' item' + (n !== 1 ? 's' : '') + ')' });
-        });
-        creditActivity.filter(a => a.userId === req.userId && a.type === 'payment').forEach(a => {
-            events.push({ timestamp: a.timestamp || 0, amount: -(a.amount || 0), label: 'Credit card payment' });
         });
         loanPayments.filter(lp => lp.userId === req.userId).forEach(lp => {
             events.push({ timestamp: lp.timestamp || 0, amount: -(lp.amount || 0), label: 'Loan payment' });
@@ -2892,19 +3491,21 @@ app.get('/api/me/statement', async (req, res) => {
 });
 
 // ── Me: stats ─────────────────────────────────────────────────────────────────
-app.get('/api/me/stats', async (req, res) => {
-    const users    = await readJSON(req.userStore);
-    const user     = users.find(u => u.id === req.userId);
+// Counts, totals and skill percentages for one account, from the given stores
+// (the req.<x>Store names, or storesFor(...) for another site's).
+async function buildStats(userId, stores, knownUser) {
+    // `knownUser`: the caller already holds this account's record, so don't read the whole store again.
+    const user     = knownUser || (await readJSON(stores.userStore)).find(u => u.id === userId);
     const userData = user ? (user.userData || Object.assign({}, DEFAULT_USER_DATA)) : Object.assign({}, DEFAULT_USER_DATA);
 
     const [allTxs, allPays, allPurchs] = await Promise.all([
-        readJSON(req.transactionStore), readJSON(req.paymentStore), readJSON(req.purchaseStore)
+        readJSON(stores.transactionStore), readJSON(stores.paymentStore), readJSON(stores.purchaseStore)
     ]);
     // Own-account moves (type 'internal') aren't transfers — they're
     // excluded from every transfer count/total/skill below.
-    const txs    = allTxs.filter(t => t.userId === req.userId && isExternalTransfer(t));
-    const pays   = allPays.filter(p => p.userId === req.userId);
-    const purchs = allPurchs.filter(p => p.userId === req.userId);
+    const txs    = allTxs.filter(t => t.userId === userId && isExternalTransfer(t));
+    const pays   = allPays.filter(p => p.userId === userId);
+    const purchs = allPurchs.filter(p => p.userId === userId);
 
     const totalSpentEcommerce = purchs.reduce((s, p) => s + (p.total   || 0), 0);
     const totalSpentBills     = pays.reduce((s, p)   => s + (p.amount  || 0), 0);
@@ -2921,28 +3522,32 @@ app.get('/api/me/stats', async (req, res) => {
     const planningSkill  = Math.min(100, Math.round(((txs.length + pays.length + purchs.length) / 30) * 100));
     const mgmtSkill      = userData ? Math.min(100, Math.round((userData.level / 20) * 100)) : 0;
 
-    res.json({
+    return {
         user: userData,
         txCount: txs.length, payCount: pays.length, purchCount: purchs.length,
         totalSpentEcommerce, totalSpentBills, totalTransferred,
         txPts, payPts, purchPts, totalPts,
         bankingSkill, ecommerceSkill, billSkill, planningSkill, mgmtSkill
-    });
+    };
+}
+
+app.get('/api/me/stats', async (req, res) => {
+    res.json(await buildStats(req.userId, req));
 });
 
 // ── Me: recent activity ───────────────────────────────────────────────────────
-app.get('/api/me/activity', async (req, res) => {
-    const limit  = req.query.limit ? parseInt(req.query.limit, 10) : null;
+// Every event that moved money or earned points for one account, newest first.
+async function buildActivity(userId, stores) {
     const [allTxs, allPays, allPurchs, allCreditActivity, allLoanPayments, allGoalActivity, allGoals] = await Promise.all([
-        readJSON(req.transactionStore), readJSON(req.paymentStore), readJSON(req.purchaseStore),
-        readJSON(req.creditActivityStore), readJSON(req.loanPaymentStore), readJSON(req.savingsGoalActivityStore), readJSON(req.savingsGoalStore)
+        readJSON(stores.transactionStore), readJSON(stores.paymentStore), readJSON(stores.purchaseStore),
+        readJSON(stores.creditActivityStore), readJSON(stores.loanPaymentStore), readJSON(stores.savingsGoalActivityStore), readJSON(stores.savingsGoalStore)
     ]);
-    const txs    = allTxs.filter(t => t.userId === req.userId);
-    const pays   = allPays.filter(p => p.userId === req.userId);
-    const purchs = allPurchs.filter(p => p.userId === req.userId);
-    const cardActivity = allCreditActivity.filter(a => a.userId === req.userId);
-    const loanPays      = allLoanPayments.filter(p => p.userId === req.userId);
-    const goalActivity  = allGoalActivity.filter(a => a.userId === req.userId);
+    const txs    = allTxs.filter(t => t.userId === userId);
+    const pays   = allPays.filter(p => p.userId === userId);
+    const purchs = allPurchs.filter(p => p.userId === userId);
+    const cardActivity = allCreditActivity.filter(a => a.userId === userId);
+    const loanPays      = allLoanPayments.filter(p => p.userId === userId);
+    const goalActivity  = allGoalActivity.filter(a => a.userId === userId);
     const goalNames     = {};
     allGoals.forEach(g => { goalNames[g.id] = g.name; });
 
@@ -3013,6 +3618,12 @@ app.get('/api/me/activity', async (req, res) => {
         });
     });
     events.sort((a, b) => b.timestamp - a.timestamp);
+    return events;
+}
+
+app.get('/api/me/activity', async (req, res) => {
+    const limit  = req.query.limit ? parseInt(req.query.limit, 10) : null;
+    const events = await buildActivity(req.userId, req);
     res.json(limit ? events.slice(0, limit) : events);
 });
 
@@ -3021,22 +3632,25 @@ app.post('/api/admin/messages/system', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const { subject, body, recipientId, type, category } = req.body || {};
     if (!subject || !body) return res.status(400).json({ error: 'subject and body required' });
-    const messages = await readJSON(req.messageStore);
-    const record   = {
-        id:          nextId(messages),
-        senderId:    0,
-        senderName:  'System',
-        senderEmail: null,
-        recipientId: recipientId,
-        subject:     subject.trim(),
-        body:        body.trim(),
-        type:        type || 'info',
-        category:    category || 'system',
-        sentAt:      Date.now(),
-        readBy:      []
-    };
-    messages.push(record);
-    await writeJSON(req.messageStore, messages);
+    const record = await withUserLock(req.userId, async () => {
+        const messages = await readJSON(req.messageStore);
+        const rec = {
+            id:          nextId(messages),
+            senderId:    0,
+            senderName:  'System',
+            senderEmail: null,
+            recipientId: recipientId,
+            subject:     subject.trim(),
+            body:        body.trim(),
+            type:        type || 'info',
+            category:    category || 'system',
+            sentAt:      Date.now(),
+            readBy:      []
+        };
+        messages.push(rec);
+        await writeJSON(req.messageStore, messages);
+        return rec;
+    });
     res.status(201).json(record);
 });
 
@@ -3052,37 +3666,100 @@ app.get('/api/admin/messages', async (req, res) => {
     res.json(req.query.includeSystem ? all : all.filter(m => m.senderId !== 0));
 });
 
+// audience 'all' also delivers the message to the Banking, Ecommerce and
+// Utilities accounts: a broadcast goes to every account on each site, a message
+// to one person goes to that person's linked account on each site (and is skipped
+// where they have none). The main-site copy records which sites got one
+// (`sites`), and each sub-site copy points back at it (`mainMessageId`), so
+// deleting the message removes every copy.
 app.post('/api/admin/messages', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const { subject, body, recipientId, type, senderEmail, category } = req.body || {};
+    const { subject, body, recipientId, type, senderEmail, category, audience } = req.body || {};
     if (!subject || !body) return res.status(400).json({ error: 'subject and body required' });
-    const messages = await readJSON(req.messageStore);
-    const users    = await readJSON(req.userStore);
-    const sender   = users.find(u => u.id === req.userId);
-    const record   = {
-        id:          nextId(messages),
-        senderId:    req.userId,
-        senderName:  sender ? (sender.fullName || sender.username) : 'Unknown',
-        senderEmail: (senderEmail || '').trim() || null,
-        recipientId: recipientId,
-        subject:     subject.trim(),
-        body:        body.trim(),
-        type:        type || 'info',
-        category:    category || 'system',
-        sentAt:      Date.now(),
-        readBy:      []
-    };
-    messages.push(record);
-    await writeJSON(req.messageStore, messages);
+    // The main-site copy and the sub-site copies would land in the same store.
+    if (audience === 'all' && req.appModule) return res.status(400).json({ error: 'Delivering to all sites is for the main site only' });
+    const record = await withUserLock(req.userId, async () => {
+        const messages = await readJSON(req.messageStore);
+        const users    = await readJSON(req.userStore);
+        const sender   = users.find(u => u.id === req.userId);
+        const rec      = {
+            id:          nextId(messages),
+            senderId:    req.userId,
+            senderName:  sender ? (sender.fullName || sender.username) : 'Unknown',
+            senderEmail: (senderEmail || '').trim() || null,
+            recipientId: recipientId,
+            subject:     subject.trim(),
+            body:        body.trim(),
+            type:        type || 'info',
+            category:    category || 'system',
+            sentAt:      Date.now(),
+            readBy:      []
+        };
+        if (audience === 'all') {
+            const target   = recipientId === 'all' ? null : users.find(u => u.id === recipientId);
+            const accounts = target ? await linkedIdentities(target) : {};
+            const sites    = [];
+            for (const key of Object.keys(MODULE_STORES)) {
+                const to = recipientId === 'all' ? 'all' : (accounts[key] ? accounts[key].id : null);
+                if (to === null) continue;
+                const copies = await readJSON(MODULE_STORES[key].messages);
+                copies.push(Object.assign({}, rec, { id: nextId(copies), recipientId: to, mainMessageId: rec.id }));
+                await writeJSON(MODULE_STORES[key].messages, copies);
+                sites.push(key);
+            }
+            rec.sites = sites;
+        }
+        messages.push(rec);
+        await writeJSON(req.messageStore, messages);
+        return rec;
+    });
     res.status(201).json(record);
 });
 
 app.delete('/api/admin/messages/:id', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const id  = Number(req.params.id);
-    const all = await readJSON(req.messageStore);
-    await writeJSON(req.messageStore, all.filter(m => m.id !== id));
+    await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.messageStore);
+        const target = all.find(m => m.id === id);
+        for (const key of (target && target.sites) || []) {
+            const copies = await readJSON(MODULE_STORES[key].messages);
+            await writeJSON(MODULE_STORES[key].messages, copies.filter(m => m.mainMessageId !== id));
+        }
+        await writeJSON(req.messageStore, all.filter(m => m.id !== id));
+    });
     res.json({ ok: true });
+});
+
+// GET /api/admin/sub-site-accounts — every Banking / Ecommerce / Utilities account,
+// with the main-site account it belongs to (same email/username rule as the rest of
+// the sync), so the admin panel can see them. Never includes password hashes.
+app.get('/api/admin/sub-site-accounts', async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const mainUsers = await readJSON('users');
+    const keys = Object.keys(MODULE_STORES);
+    const siteUsers = {};
+    for (const key of keys) siteUsers[key] = await readJSON(MODULE_STORES[key].users);
+    const owners = new Map();   // "site:accountId" -> every main-site account that resolves to it
+    mainUsers.forEach(m => keys.forEach(key => {
+        const account = pickLinkedAccount(siteUsers[key], m);
+        if (account) owners.set(key + ':' + account.id, (owners.get(key + ':' + account.id) || []).concat([m]));
+    }));
+    const ref = m => ({ id: m.id, username: m.username, fullName: m.fullName });
+    const accounts = [];
+    keys.forEach(key => siteUsers[key].forEach(u => {
+        const ms = owners.get(key + ':' + u.id) || [];
+        const ud = Object.assign({}, DEFAULT_USER_DATA, u.userData || {});
+        const bal = Object.assign({}, DEFAULT_BALANCES, u.balances || {});
+        accounts.push({
+            site: key, id: u.id, username: u.username, fullName: u.fullName, email: u.email,
+            createdAt: u.createdAt || null, lastLogin: u.lastLogin || null,
+            level: ud.level, points: ud.points, coins: ud.coins, checking: bal.checking, savings: bal.savings,
+            mainAccount: ms.length ? ref(ms[0]) : null,
+            mainAccounts: ms.map(ref)
+        });
+    }));
+    res.json(accounts);
 });
 
 // ── Admin: challenge management ───────────────────────────────────────────────
@@ -3100,20 +3777,24 @@ app.delete('/api/admin/messages/:id', async (req, res) => {
 app.patch('/api/admin/challenges/:id', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const id  = Number(req.params.id);
-    const all = await readJSON(req.challengeStore);
-    const target = all.find(c => c.id === id);
-    if (!target) return res.status(404).json({ error: 'Challenge not found' });
     const { completed, completedAt, id: _ignoredId, userId: _ignoredUserId, ...templatePatch } = req.body || {};
     const perUserPatch = {};
     if (completed !== undefined) perUserPatch.completed = completed;
     if (completedAt !== undefined) perUserPatch.completedAt = completedAt;
-    const updated = all.map(c => {
-        if (c.id === id) return Object.assign({}, c, templatePatch, perUserPatch);
-        if (c.title === target.title) return Object.assign({}, c, templatePatch);
-        return c;
+    const result = await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.challengeStore);
+        const target = all.find(c => c.id === id);
+        if (!target) return null;
+        const updated = all.map(c => {
+            if (c.id === id) return Object.assign({}, c, templatePatch, perUserPatch);
+            if (c.title === target.title) return Object.assign({}, c, templatePatch);
+            return c;
+        });
+        await writeJSON(req.challengeStore, updated);
+        return updated.find(c => c.id === id);
     });
-    await writeJSON(req.challengeStore, updated);
-    res.json(updated.find(c => c.id === id));
+    if (!result) return res.status(404).json({ error: 'Challenge not found' });
+    res.json(result);
 });
 
 // DELETE /api/admin/challenges/:id — delete this challenge definition for
@@ -3121,17 +3802,21 @@ app.patch('/api/admin/challenges/:id', async (req, res) => {
 app.delete('/api/admin/challenges/:id', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const id  = Number(req.params.id);
-    const all = await readJSON(req.challengeStore);
-    const target = all.find(c => c.id === id);
-    if (!target) return res.status(404).json({ error: 'Challenge not found' });
-    await writeJSON(req.challengeStore, all.filter(c => c.title !== target.title));
+    const found = await withUserLock(req.userId, async () => {
+        const all = await readJSON(req.challengeStore);
+        const target = all.find(c => c.id === id);
+        if (!target) return false;
+        await writeJSON(req.challengeStore, all.filter(c => c.title !== target.title));
+        return true;
+    });
+    if (!found) return res.status(404).json({ error: 'Challenge not found' });
     res.json({ ok: true });
 });
 
 // DELETE /api/admin/challenges — wipe ALL challenges (admin only)
 app.delete('/api/admin/challenges', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    await writeJSON(req.challengeStore, []);
+    await withUserLock(req.userId, () => writeJSON(req.challengeStore, []));
     res.json({ ok: true });
 });
 
@@ -3149,30 +3834,33 @@ app.post('/api/admin/challenges', async (req, res) => {
     } = req.body || {};
     if (!title) return res.status(400).json({ error: 'title required' });
 
-    const users        = await readJSON(req.userStore);
-    const participants = users.filter(u => u.role === 'participant' && u.status === 'approved');
-    const challenges   = await readJSON(req.challengeStore);
-    let id      = nextId(challenges);
-    const now   = Date.now();
-    const created = participants.map(u => ({
-        id:              id++,
-        userId:          u.id,
-        title,
-        description:     description || '',
-        category:        category || 'general',
-        active:          active !== false,
-        completed:       false,
-        createdAt:       now,
-        points:          points || 0,
-        florins:         florins || 0,
-        condition:       condition || 'manual',
-        conditionValue:  conditionValue !== undefined ? conditionValue : null,
-        customField:     customField || null,
-        customOperator:  customOperator || null,
-        extraConditions: Array.isArray(extraConditions) ? extraConditions : [],
-        conditionLogic:  conditionLogic || 'all'
-    }));
-    await writeJSON(req.challengeStore, challenges.concat(created));
+    const created = await withUserLock(req.userId, async () => {
+        const users        = await readJSON(req.userStore);
+        const participants = users.filter(u => u.role === 'participant' && u.status === 'approved');
+        const challenges   = await readJSON(req.challengeStore);
+        let id      = nextId(challenges);
+        const now   = Date.now();
+        const made = participants.map(u => ({
+            id:              id++,
+            userId:          u.id,
+            title,
+            description:     description || '',
+            category:        category || 'general',
+            active:          active !== false,
+            completed:       false,
+            createdAt:       now,
+            points:          points || 0,
+            florins:         florins || 0,
+            condition:       condition || 'manual',
+            conditionValue:  conditionValue !== undefined ? conditionValue : null,
+            customField:     customField || null,
+            customOperator:  customOperator || null,
+            extraConditions: Array.isArray(extraConditions) ? extraConditions : [],
+            conditionLogic:  conditionLogic || 'all'
+        }));
+        await writeJSON(req.challengeStore, challenges.concat(made));
+        return made;
+    });
     res.status(201).json(created);
 });
 
@@ -3185,29 +3873,28 @@ app.post('/api/admin/challenges/seed', async (req, res) => {
     res.json({ ok: true, seeded: participants.length });
 });
 
-// POST /api/admin/challenges/reseed — add any missing default challenges for every approved participant
+// POST /api/admin/challenges/reseed — add any missing default challenges for every approved
+// participant, and for every account on the three sub-sites (which keep their own challenges).
+// Answers the list of rows it added.
 app.post('/api/admin/challenges/reseed', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const challenges   = await readJSON(req.challengeStore);
-    const users        = await readJSON(req.userStore);
-    const participants = users.filter(u => u.role === 'participant' && u.status === 'approved');
-    const added        = [];
-    let   nextChalId   = nextId(challenges);
-    const now          = Date.now();
-
-    participants.forEach(u => {
-        const existing      = challenges.filter(c => c.userId === u.id);
-        const existingTitles = new Set(existing.map(c => c.title));
-        ALL_DEFAULT_CHALLENGES.forEach(c => {
-            if (!existingTitles.has(c.title)) {
-                const rec = Object.assign({}, c, { id: nextChalId++, userId: u.id, createdAt: now, active: true, completed: false });
-                challenges.push(rec);
-                added.push(rec);
-            }
-        });
+    const added = await withUserLock(req.userId, async () => {
+        const out = [];
+        const reseed = async (challengeStore, userIds, category) => {
+            const rows = await readJSON(challengeStore);
+            const before = rows.length;
+            userIds.forEach(id => addMissingChallenges(rows, id, category));
+            if (rows.length > before) await writeJSON(challengeStore, rows);
+            out.push(...rows.slice(before));
+        };
+        const users = await readJSON(req.userStore);
+        await reseed(req.challengeStore, users.filter(u => u.role === 'participant' && u.status === 'approved').map(u => u.id), null);
+        for (const key of Object.keys(MODULE_STORES)) {
+            const mod = MODULE_STORES[key];
+            await reseed(mod.challenges, (await readJSON(mod.users)).map(u => u.id), key);
+        }
+        return out;
     });
-
-    await writeJSON(req.challengeStore, challenges);
     res.json(added);
 });
 
@@ -3257,16 +3944,12 @@ app.get('/api/admin/purchases', async (req, res) => {
 // programmatically so it can never drift out of sync with them.
 app.get('/api/admin/data-overview', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const storeNames = new Set(Object.keys(PER_USER_STORE_PROPS));
-    Object.values(MODULE_STORES).forEach(mod => {
-        Object.values(mod).forEach(name => storeNames.add(name));
-    });
     const counts = {};
-    for (const name of storeNames) {
+    for (const name of allStoreNames()) {
         const result = await readJSON(name);
         counts[name] = Array.isArray(result) ? result.length : 0;
     }
-    res.json({ backend: dbUsable ? 'postgres' : 'json-files', counts });
+    res.json({ backend: pool ? 'postgres' : 'json-files', counts });
 });
 
 // ── Bills API ─────────────────────────────────────────────────────────────────
@@ -3304,30 +3987,39 @@ app.get('/api/bills', async (_req, res) => {
 // POST /api/bills — admin only
 app.post('/api/bills', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const bills = await readJSON('bills');
-    const bill  = Object.assign({ active: true }, req.body, { id: nextId(bills) });
-    bills.push(bill);
-    await writeJSON('bills', bills);
+    const bill = await withUserLock(req.userId, async () => {
+        const bills = await readJSON('bills');
+        const rec   = Object.assign({ active: true }, req.body, { id: nextId(bills) });
+        bills.push(rec);
+        await writeJSON('bills', bills);
+        return rec;
+    });
     res.status(201).json(bill);
 });
 
 // PUT /api/bills/:id — admin only
 app.put('/api/bills/:id', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const bills = await readJSON('bills');
-    const idx   = bills.findIndex(b => String(b.id) === String(req.params.id));
-    if (idx === -1) return res.status(404).json({ error: 'Not found' });
-    bills[idx] = Object.assign({}, bills[idx], req.body, { id: bills[idx].id });
-    await writeJSON('bills', bills);
-    res.json(bills[idx]);
+    const updated = await withUserLock(req.userId, async () => {
+        const bills = await readJSON('bills');
+        const idx   = bills.findIndex(b => String(b.id) === String(req.params.id));
+        if (idx === -1) return null;
+        bills[idx] = Object.assign({}, bills[idx], req.body, { id: bills[idx].id });
+        await writeJSON('bills', bills);
+        return bills[idx];
+    });
+    if (!updated) return res.status(404).json({ error: 'Not found' });
+    res.json(updated);
 });
 
 // DELETE /api/bills/:id — admin only
 app.delete('/api/bills/:id', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const all   = await readJSON('bills');
-    const bills = all.filter(b => String(b.id) !== String(req.params.id));
-    await writeJSON('bills', bills);
+    await withUserLock(req.userId, async () => {
+        const all   = await readJSON('bills');
+        const bills = all.filter(b => String(b.id) !== String(req.params.id));
+        await writeJSON('bills', bills);
+    });
     res.json({ ok: true });
 });
 
@@ -3474,9 +4166,9 @@ async function notifyOverdueBillsForUser(userId, cycles, messageStore = 'message
 // Core bill-payment logic shared by the manual "Pay Now" route and the
 // auto-pay sweep below. Locks internally (like executeOneScheduledTransfer)
 // rather than throwing, so callers that loop over several cycles — the
-// auto-pay sweep — call this directly per cycle instead of nesting it
-// inside their own withUserLock, which would deadlock against the single
-// global lock chain (see withUserLock's comment above).
+// auto-pay sweep — call this directly per cycle instead of wrapping the whole
+// loop in one withUserLock. Each cycle is then its own locked section (its own
+// transaction), so one cycle failing cannot undo the payments already made.
 // opts: { viaAutopay, autopayEnabledAt } from the sweep — a cycle auto-paid
 // by a pref enabled on/before its due date (or a legacy pref with no
 // enabledAt) is settled as of the due date: no late fee, on-time bonus.
@@ -3501,8 +4193,12 @@ async function attemptPayBillCycle(userId, cycleId, req, opts = {}) {
         if (uidx === -1) return { ok: false, reason: 'user_not_found' };
         const balances = Object.assign({}, DEFAULT_BALANCES, users[uidx].balances || {});
 
-        let account = 'checking';
-        if (totalDue > balances[account]) {
+        // A validated card (opts.card, checked by the route) pays the bill
+        // directly: no DigiPay balance is touched, only the last 4 digits
+        // and brand are recorded.
+        const card = opts.card || null;
+        let account = card ? 'card' : 'checking';
+        if (!card && totalDue > balances[account]) {
             if (totalDue <= balances.savings) account = 'savings';
             else {
                 // At most one auto-pay failure message per cycle per 24h.
@@ -3514,9 +4210,9 @@ async function attemptPayBillCycle(userId, cycleId, req, opts = {}) {
                 return { ok: false, reason: 'insufficient_funds', totalDue, notifyFailure };
             }
         }
-        const current = balances[account];
-        const next    = parseFloat((current - totalDue).toFixed(2));
-        balances[account] = next;
+        const current = card ? balances.checking : balances[account];
+        const next    = card ? current : parseFloat((current - totalDue).toFixed(2));
+        if (!card) balances[account] = next;
 
         const onTime       = !statusInfo.overdue;
         const pointsEarned = 45 + (onTime ? 15 : 0);
@@ -3555,7 +4251,7 @@ async function attemptPayBillCycle(userId, cycleId, req, opts = {}) {
         const updatedUser = Object.assign({}, users[uidx], { balances, userData });
         users[uidx] = updatedUser;
         await writeJSON(req.userStore, users);
-        await maybeFireBalanceAlerts(updatedUser, account, current, next, -totalDue, 'utilities', req.messageStore);
+        await maybeFireBalanceAlerts(updatedUser, card ? 'card ending ' + card.last4 : account, current, next, -totalDue, 'utilities', req.messageStore);
 
         cycles[idx] = Object.assign({}, cycle, { status: 'paid', paidAt: Date.now(), paidAmount: totalDue, lateFeePaid: statusInfo.lateFee });
         await writeJSON(req.billCycleStore, cycles);
@@ -3565,6 +4261,7 @@ async function attemptPayBillCycle(userId, cycleId, req, opts = {}) {
             id: nextId(payments), userId,
             type: cycle.name, amount: totalDue, accountNumber: cycle.accountNumber,
             fromAccount: account, date: new Date().toLocaleDateString(), timestamp: Date.now(),
+            paidWith: card ? 'card' : 'balance', cardBrand: card ? card.brand : null, cardLast4: card ? card.last4 : null,
             pointsEarned, lateFee: statusInfo.lateFee, usage: cycle.usage, unit: cycle.unit, autoPaid: !!req.isAutopaySweep,
             // Which bill this settled, and the reward breakdown, so history
             // can say "August 2026 bill · on time · +8 coins" without guessing.
@@ -3589,9 +4286,9 @@ const AUTOPAY_ERROR_STATUS = {
 
 // Auto-pay sweep: charges any due-or-overdue cycle whose bill has auto-pay
 // enabled, the same lazy-execution-on-read pattern used for scheduled
-// transfers. Each cycle gets its own attemptPayBillCycle call (its own lock
-// acquisition) rather than one call wrapping the whole loop, since nesting
-// a second withUserLock inside an already-held one would deadlock.
+// transfers. Each cycle gets its own attemptPayBillCycle call (its own locked
+// section) rather than one lock wrapping the whole loop, so a failure on one
+// cycle can't roll back the cycles already paid.
 async function runDueAutopays(userId, req) {
     const prefs = (await readJSON(req.autopayStore)).filter(p => p.userId === userId && p.enabled);
     if (prefs.length === 0) return;
@@ -3667,14 +4364,58 @@ app.post('/api/me/bills/autopay', async (req, res) => {
     res.json(pref);
 });
 
+// Card checks shared by every simulated-card path (the wallet and bill pay), so
+// the two can't disagree about what a valid card is.
+function validCardNumber(number) {
+    return /^\d{13,19}$/.test(number) && passesLuhn(number);
+}
+function passesLuhn(number) {
+    let sum = 0, dbl = false;
+    for (let i = number.length - 1; i >= 0; i--) {
+        let d = parseInt(number[i], 10);
+        if (dbl) { d *= 2; if (d > 9) d -= 9; }
+        sum += d; dbl = !dbl;
+    }
+    return sum % 10 === 0;
+}
+// A card is good through the last day of its expiry month.
+function cardNotExpired(month, year) {
+    return new Date(year, month, 1).getTime() > Date.now();
+}
+
+// Validates simulated card details (Luhn check digit, future expiry, CVV
+// length). Returns { error } or { brand, last4 } — the full number and CVV
+// are never stored.
+function validateCardDetails(c) {
+    if (!c || typeof c !== 'object') return { error: 'Card details required' };
+    const number = String(c.number || '').replace(/\s+/g, '');
+    if (!validCardNumber(number)) return { error: 'Enter a valid card number' };
+    if (!String(c.name || '').trim()) return { error: 'Name on card required' };
+    const m = /^(\d{2})\/(\d{2})$/.exec(String(c.exp || '').trim());
+    if (!m || +m[1] < 1 || +m[1] > 12) return { error: 'Expiry must be MM/YY' };
+    if (!cardNotExpired(+m[1], 2000 + (+m[2]))) return { error: 'That card has expired' };
+    const amex = /^3[47]/.test(number);
+    if (!(amex ? /^\d{4}$/ : /^\d{3}$/).test(String(c.cvv || '').trim())) return { error: 'Invalid security code' };
+    const brand = /^4/.test(number) ? 'Visa'
+        : (/^5[1-5]/.test(number) || /^2(2[2-9]|[3-6]\d|7[01]|720)/.test(number)) ? 'Mastercard'
+        : amex ? 'Amex' : /^6(011|5)/.test(number) ? 'Discover' : 'Card';
+    return { brand, last4: number.slice(-4) };
+}
+
 app.post('/api/me/bills/:cycleId/pay', async (req, res) => {
     const cycleId = Number(req.params.cycleId);
+    let card = null;
+    if (req.body && req.body.card) {
+        const v = validateCardDetails(req.body.card);
+        if (v.error) return res.status(400).json({ error: v.error });
+        card = v;
+    }
     // Optional expectedTotal: the amount the confirm modal showed. If the
     // live total differs (e.g. a late fee kicked in), refuse without charging.
     const rawExpected = req.body && req.body.expectedTotal;
     const expectedTotal = rawExpected == null || rawExpected === '' ? undefined : Number(rawExpected);
     if (expectedTotal !== undefined && !Number.isFinite(expectedTotal)) return res.status(400).json({ error: 'expectedTotal must be a number' });
-    const result = await attemptPayBillCycle(req.userId, cycleId, req, { expectedTotal });
+    const result = await attemptPayBillCycle(req.userId, cycleId, req, { expectedTotal, card });
     if (!result.ok) {
         if (result.reason === 'amount_changed') {
             return res.status(409).json({ error: 'The amount due has changed', currentTotal: result.currentTotal });
@@ -3904,6 +4645,9 @@ app.post('/api/me/addresses', async (req, res) => {
     if (!city)     return res.status(400).json({ error: 'City required' });
     if (!STATE_TAX_RATES.hasOwnProperty(state)) return res.status(400).json({ error: 'Valid US state required' });
     if (!zip)      return res.status(400).json({ error: 'ZIP code required' });
+    if (!/^\d{5}$/.test(zip)) return res.status(400).json({ error: 'ZIP code must be exactly 5 digits' });
+    const phoneStr = String(body.phone || '').trim();
+    if (phoneStr && !/^\d{10}$/.test(phoneStr)) return res.status(400).json({ error: 'Phone number must be exactly 10 digits' });
 
     const record = await withUserLock(req.userId, async () => {
         const all = await readJSON(req.addressStore);
@@ -3928,6 +4672,8 @@ app.put('/api/me/addresses/:id', async (req, res) => {
     ['fullName', 'phone', 'street', 'street2', 'city', 'zip'].forEach(f => {
         if (body[f] !== undefined) patch[f] = String(body[f]).trim();
     });
+    if (patch.zip !== undefined && !/^\d{5}$/.test(patch.zip)) return res.status(400).json({ error: 'ZIP code must be exactly 5 digits' });
+    if (patch.phone && !/^\d{10}$/.test(patch.phone)) return res.status(400).json({ error: 'Phone number must be exactly 10 digits' });
     if (body.state !== undefined) {
         const state = String(body.state).trim().toUpperCase();
         if (!STATE_TAX_RATES.hasOwnProperty(state)) return res.status(400).json({ error: 'Valid US state required' });
@@ -3999,10 +4745,11 @@ app.post('/api/me/payment-methods', async (req, res) => {
     const cardholderName = String(body.cardholderName || '').trim();
     const expMonth = Number(body.expMonth);
     const expYear  = Number(body.expYear);
-    if (number.length < 12 || number.length > 19) return res.status(400).json({ error: 'Enter a valid card number' });
+    if (!validCardNumber(number)) return res.status(400).json({ error: 'Enter a valid card number' });
     if (!cardholderName) return res.status(400).json({ error: 'Cardholder name required' });
-    if (!expMonth || expMonth < 1 || expMonth > 12) return res.status(400).json({ error: 'Valid expiration month required' });
-    if (!expYear || expYear < new Date().getFullYear()) return res.status(400).json({ error: 'Card is expired' });
+    if (!Number.isInteger(expMonth) || expMonth < 1 || expMonth > 12) return res.status(400).json({ error: 'Valid expiration month required' });
+    if (!Number.isInteger(expYear) || expYear < 2000 || expYear > 2100) return res.status(400).json({ error: 'Valid expiration year required' });
+    if (!cardNotExpired(expMonth, expYear)) return res.status(400).json({ error: 'Card is expired' });
 
     const record = await withUserLock(req.userId, async () => {
         const all = await readJSON(req.paymentMethodStore);
@@ -4055,6 +4802,14 @@ app.delete('/api/me/payment-methods/:id', async (req, res) => {
     }
 });
 
+// ── Unknown API routes: a JSON 404, never the SPA page ────────────────────────
+// Without this an unknown GET /api/... answered 200 with index.html, so a
+// client calling a route this server doesn't have (e.g. a newer page against
+// an older deploy) died on a JSON parse error instead of getting a clear 404.
+app.use('/api', (req, res) => {
+    res.status(404).json({ error: 'Not found' });
+});
+
 // ── Catch-all: SPA fallback ───────────────────────────────────────────────────
 app.get('/{*path}', (req, res) => {
     if (!path.extname(req.path)) {
@@ -4066,9 +4821,13 @@ app.get('/{*path}', (req, res) => {
 
 // ── Global error handler — keep API responses JSON even on unexpected failures
 app.use((err, _req, res, _next) => {
-    console.error('Unhandled error:', err);
+    // Honour deliberate statuses (e.g. 503 from the storage layer, 400 for a
+    // malformed JSON body); anything else is an unexpected 500.
+    const status = Number.isInteger(err && err.status) && err.status >= 400 && err.status < 600 ? err.status : 500;
+    if (status >= 500 && !(err && err.status === 503)) console.error('Unhandled error:', err);
     if (res.headersSent) return;
-    res.status(500).json({ error: 'Server error' });
+    if (status === 400 && err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON body' });
+    res.status(status).json({ error: status < 500 || status === 503 ? (err.message || 'Request failed') : 'Server error' });
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
@@ -4092,9 +4851,87 @@ function startScheduledTransferSweep() {
                 .then(users => Promise.all(users.map(u =>
                     runDueScheduledTransfers(u.id, userStore, messageStore, scheduledTransferStore, transactionStore).catch(() => {})
                 )))
-                .catch(() => {});
+                .catch(err => console.error('Scheduled-transfer sweep skipped for ' + userStore + ':', err.message));
         });
     }, 5 * 60 * 1000);
+}
+
+// ── One-time data migrations ──────────────────────────────────────────────────
+// Changes to the stored data (not the schema) that must happen once on an
+// existing database. Each runs at boot inside one locked section together with
+// its entry in the ledger, so it either happens completely and is recorded, or
+// not at all and is retried on the next boot. The ledger is one plain object
+// stored under MIGRATIONS_KEY (not one of the array stores).
+const MIGRATIONS_KEY = '_migrations';
+
+// Audit findings F2/F3: nothing ever re-synced existing accounts' challenges with
+// the seed list. 'Video Learner' is missing for everyone seeded before it
+// existed, and 'Bank Explorer' still carries its pre-PR-26 description. Only
+// those two known differences are fixed.
+//  - 'Video Learner' reached production when PR #25 was merged (2026-09-16
+//    23:41 UTC). An account whose earliest challenge was created before then
+//    cannot have had it, so a missing copy is a gap. On a later account a
+//    missing copy means someone deleted it, and it stays deleted.
+//  - 'Bank Explorer' is only touched where it still has the exact old text,
+//    so an admin's own wording is never overwritten.
+const VIDEO_LEARNER_SHIPPED_AT = Date.parse('2026-09-17T00:00:00Z');
+const LEGACY_BANK_EXPLORER_TEXT = 'Learn how banking works by reading the Information tab on your Profile page.';
+const MIGRATIONS = [{
+    id: '2026-10-challenge-definitions-sync',
+    run: async () => {
+        const videoLearner = ALL_DEFAULT_CHALLENGES.find(c => c.title === 'Video Learner');
+        const bankExplorer = ALL_DEFAULT_CHALLENGES.find(c => c.title === 'Bank Explorer');
+        const summary = {};
+        const sync = async (label, challengeStore, userStore, category, onlyParticipants) => {
+            const [rows, users] = await Promise.all([readJSON(challengeStore), readJSON(userStore)]);
+            const per = new Map();   // userId -> { first: earliest createdAt, hasVideoLearner }
+            rows.forEach(c => {
+                const t = Number(c.createdAt) || 0;
+                const e = per.get(c.userId);
+                if (!e) per.set(c.userId, { first: t, hasVideoLearner: c.title === 'Video Learner' });
+                else { if (t < e.first) e.first = t; if (c.title === 'Video Learner') e.hasVideoLearner = true; }
+            });
+            const inScope = !category || videoLearner.category === category || videoLearner.category === 'general';
+            let nextChalId = nextId(rows);
+            const before = rows.length;
+            users.forEach(u => {
+                const e = per.get(u.id);
+                if (!inScope || !e || e.hasVideoLearner || e.first >= VIDEO_LEARNER_SHIPPED_AT) return;
+                if (onlyParticipants && !(u.role === 'participant' && u.status === 'approved')) return;
+                rows.push(Object.assign({}, videoLearner, { id: nextChalId++, userId: u.id, createdAt: Date.now(), active: true, completed: false }));
+            });
+            let refreshed = 0;
+            rows.forEach((c, i) => {
+                if (c.title === 'Bank Explorer' && c.description === LEGACY_BANK_EXPLORER_TEXT) { rows[i] = Object.assign({}, c, { description: bankExplorer.description }); refreshed++; }
+            });
+            if (rows.length > before || refreshed) await writeJSON(challengeStore, rows);
+            summary[label] = { added: rows.length - before, refreshed };
+        };
+        await sync('main', 'challenges', 'users', null, true);
+        for (const key of Object.keys(MODULE_STORES)) await sync(key, MODULE_STORES[key].challenges, MODULE_STORES[key].users, key, false);
+        return summary;
+    }
+}];
+
+async function runMigrations() {
+    for (const m of MIGRATIONS) {
+        try {
+            const summary = await withUserLock(0, async () => {
+                const ledger = await readJSON(MIGRATIONS_KEY);
+                const done = ledger && !Array.isArray(ledger) && ledger.done ? ledger.done : {};
+                if (done[m.id]) return null;
+                const result = await m.run();
+                await writeJSON(MIGRATIONS_KEY, { done: Object.assign({}, done, { [m.id]: Date.now() }) });
+                return result;
+            });
+            // Logged only once the lock section has committed.
+            if (summary) console.log('DigifinwizDB: migration ' + m.id + ' applied: ' + JSON.stringify(summary));
+        } catch (err) {
+            // The app is usable without it, so a failing migration must not take the
+            // deploy down; it is retried on the next boot.
+            console.error('DigifinwizDB: migration ' + m.id + ' failed (will retry on the next boot):', err.message);
+        }
+    }
 }
 
 async function start() {
@@ -4105,8 +4942,14 @@ async function start() {
     await seedDefaultModuleAdmin('utilitiesUsers', 'utilitiesChallenges', 'utilities');
     await seedDefaultBills();
     await seedDefaultProducts();
+    await runMigrations();
+    await warnIfDefaultAdminPassword().catch(err => console.error('Admin password check skipped:', err.message));
     startScheduledTransferSweep();
-    app.listen(PORT, () => {
+    app.listen(PORT, err => {
+        if (err) {   // e.g. the port is already in use: don't linger as a server that isn't listening
+            console.error('Failed to listen on port ' + PORT + ':', err.message);
+            process.exit(1);
+        }
         console.log('DigiFinWiz server running on http://localhost:' + PORT);
     });
 }

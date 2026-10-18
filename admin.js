@@ -1346,8 +1346,62 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (filterRole)   filterRole  .addEventListener('change', applyUsersFilter);
             }
             applyUsersFilter();
+            loadSubSiteAccounts();
 
         }).catch(function(err){ console.error('loadUsersPage:', err); });
+    }
+
+    // Banking / Ecommerce / Utilities accounts, read-only, with the main-site
+    // account each one belongs to.
+    var _subSiteAccounts = [];
+    var _subSiteWired = false;
+    var SUBSITE_LABEL = { banking: 'DigiBank', ecommerce: 'InStyl', utilities: 'DigiPay' };
+    function renderSubSiteTable() {
+        var tbody = document.getElementById('subsite-table-body');
+        if (!tbody) return;
+        var q = ((document.getElementById('subsite-search') || {}).value || '').trim().toLowerCase();
+        var site = (document.getElementById('subsite-filter') || {}).value || '';
+        var rows = _subSiteAccounts.filter(function(a) {
+            if (site && a.site !== site) return false;
+            return !q || [a.fullName, a.username, a.email].some(function(v) { return String(v || '').toLowerCase().indexOf(q) !== -1; });
+        });
+        setText('subsite-count-badge', rows.length);
+        if (!rows.length) { tbody.innerHTML = '<tr class="empty-row"><td colspan="9">No sub-site accounts match.</td></tr>'; return; }
+        var money = function(n) { return '\u0192' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+        tbody.innerHTML = rows.map(function(a) {
+            var last = a.lastLogin ? new Date(a.lastLogin).toLocaleDateString() : '\u2014';
+            var owners = a.mainAccounts && a.mainAccounts.length ? a.mainAccounts : (a.mainAccount ? [a.mainAccount] : []);
+            var main = owners.length
+                ? owners.map(function(o) { return '<span class="pill pill-green">' + escHtml(o.username) + '</span>'; }).join(' ')
+                : '<span class="pill pill-amber">not linked</span>';
+            return '<tr>' +
+                '<td><span class="pill pill-blue">' + escHtml(SUBSITE_LABEL[a.site] || a.site) + '</span></td>' +
+                '<td>' + escHtml(a.username) + '</td>' +
+                '<td>' + escHtml(a.fullName || '') + '</td>' +
+                '<td>' + escHtml(a.email || '') + '</td>' +
+                '<td>Lvl ' + escHtml(String(a.level)) + ' \u00b7 ' + Number(a.points || 0).toLocaleString() + ' XP</td>' +
+                '<td>' + money(a.checking) + '</td>' +
+                '<td>' + money(a.savings) + '</td>' +
+                '<td style="white-space:nowrap">' + escHtml(last) + '</td>' +
+                '<td>' + main + '</td>' +
+                '</tr>';
+        }).join('');
+    }
+    function loadSubSiteAccounts() {
+        DigifinwizDB.getSubSiteAccounts().then(function(accounts) {
+            _subSiteAccounts = accounts || [];
+            if (!_subSiteWired) {
+                _subSiteWired = true;
+                var s = document.getElementById('subsite-search'), f = document.getElementById('subsite-filter');
+                if (s) s.addEventListener('input', renderSubSiteTable);
+                if (f) f.addEventListener('change', renderSubSiteTable);
+            }
+            renderSubSiteTable();
+        }).catch(function(err) {
+            console.error('loadSubSiteAccounts:', err);
+            var tbody = document.getElementById('subsite-table-body');
+            if (tbody) tbody.innerHTML = '<tr class="empty-row"><td colspan="9">Could not load sub-site accounts.</td></tr>';
+        });
     }
 
     function renderPendingTable(pending, session) {
@@ -1523,6 +1577,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 var recipient = m.recipientId === 'all'
                     ? '<span class="pill pill-amber">All Users</span>'
                     : '<span class="pill pill-blue">User #' + escHtml(String(m.recipientId)) + '</span>';
+                if (m.sites && m.sites.length) recipient += ' <span class="pill pill-green" title="Also delivered to the linked accounts on: ' + escHtml(m.sites.map(function(k) { return SUBSITE_LABEL[k] || k; }).join(', ')) + '">+ ' + m.sites.length + ' site' + (m.sites.length === 1 ? '' : 's') + '</span>';
                 var readCount = (m.readBy || []).length;
                 return '<tr>' +
                     '<td><span class="pill ' + pill + '">' + label + '</span></td>' +
@@ -1540,11 +1595,28 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // ── BILLS PAGE ───────────────────────────────────────────────────────────
+    // Calls the bills API as the signed-in admin and throws the server's own
+    // message on any non-2xx answer, so a rejected change (403, 404, 500) can
+    // never be reported as a success.
+    function billsApi(method, path, body) {
+        const s = DigifinwizAuth.getSession();
+        if (!s) return Promise.reject(new Error('Your session has expired. Please sign in again.'));
+        const headers = { 'X-User-Id': String(s.userId), 'X-User-Role': s.role };
+        if (body !== undefined) headers['Content-Type'] = 'application/json';
+        return fetch((window.API_BASE_URL || '') + path, {
+            method,
+            headers,
+            body: body !== undefined ? JSON.stringify(body) : undefined
+        }).then(r => r.json().catch(() => ({})).then(data => {
+            if (!r.ok) throw new Error(data.error || ('Request failed (' + r.status + ')'));
+            return data;
+        }));
+    }
+
     function loadBillsPage() {
-        fetch((window.API_BASE_URL || '') + '/api/bills')
-            .then(r => r.json())
+        billsApi('GET', '/api/bills')
             .then(bills => renderBillsAdmin(bills))
-            .catch(() => renderBillsAdmin([]));
+            .catch(err => { showToast('Could not load bills: ' + err.message, 'error'); renderBillsAdmin([]); });
     }
 
     function renderBillsAdmin(bills) {
@@ -1585,8 +1657,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Expose to inline onclick handlers
     window.editBill = function(id) {
-        fetch((window.API_BASE_URL || '') + '/api/bills')
-            .then(r => r.json())
+        billsApi('GET', '/api/bills')
             .then(bills => {
                 const b = bills.find(x => x.id === id);
                 if (!b) return;
@@ -1611,17 +1682,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 document.getElementById('billSubmitBtn').textContent = 'Save Changes';
                 document.getElementById('billCancelBtn').style.display = '';
                 document.getElementById('billForm').scrollIntoView({ behavior: 'smooth' });
-            });
+            })
+            .catch(err => showToast('Could not load the bill: ' + err.message, 'error'));
     };
 
     window.deleteBill = function(id) {
         if (!confirm('Delete this bill?')) return;
-        const s = DigifinwizAuth.getSession();
-        fetch((window.API_BASE_URL || '') + '/api/bills/' + id, {
-            method: 'DELETE',
-            headers: { 'X-User-Id': String(s.userId), 'X-User-Role': s.role }
-        }).then(() => { showToast('Bill deleted.', 'info'); loadBillsPage(); })
-          .catch(() => showToast('Delete failed.', 'error'));
+        billsApi('DELETE', '/api/bills/' + id)
+            .then(() => { showToast('Bill deleted.', 'info'); loadBillsPage(); })
+            .catch(err => showToast('Delete failed: ' + err.message, 'error'));
     };
 
     window.cancelBillEdit = function() {
@@ -1635,7 +1704,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('billForm').addEventListener('submit', function(e) {
         e.preventDefault();
-        const s      = DigifinwizAuth.getSession();
         const editId = document.getElementById('billEditId').value;
         const billingType = document.getElementById('billBillingType').value;
         const payload = {
@@ -1661,17 +1729,11 @@ document.addEventListener('DOMContentLoaded', function () {
             payload.amount      = parseFloat(document.getElementById('billAmount').value) || 0;
             payload.unit = payload.ratePerUnit = payload.baseFee = payload.usageMin = payload.usageMax = null;
         }
-        const url    = (window.API_BASE_URL || '') + (editId ? '/api/bills/' + editId : '/api/bills');
-        const method = editId ? 'PUT' : 'POST';
-        fetch(url, {
-            method,
-            headers: { 'Content-Type': 'application/json', 'X-User-Id': String(s.userId), 'X-User-Role': s.role },
-            body: JSON.stringify(payload)
-        }).then(r => r.json()).then(() => {
+        billsApi(editId ? 'PUT' : 'POST', editId ? '/api/bills/' + editId : '/api/bills', payload).then(() => {
             showToast(editId ? 'Bill updated!' : 'Bill added!', 'success');
             cancelBillEdit();
             loadBillsPage();
-        }).catch(() => showToast('Save failed.', 'error'));
+        }).catch(err => showToast('Save failed: ' + err.message, 'error'));
     });
 
     // ── SETTINGS PAGE ────────────────────────────────────────────────────────
@@ -1866,13 +1928,15 @@ document.addEventListener('DOMContentLoaded', function () {
             var senderEmail = (document.getElementById('msg-sender-email').value || '').trim();
             var subject     = document.getElementById('msg-subject').value.trim();
             var body        = document.getElementById('msg-body').value.trim();
+            var audience    = (document.getElementById('msg-audience') || {}).value || 'main';
             if (!subject) { showToast('Subject is required.', 'error'); return; }
             if (!body)    { showToast('Message body is required.', 'error'); return; }
             var btn = document.getElementById('msg-send-btn');
             if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
-            DigifinwizDB.sendAdminMessage({ recipientId: recipId, type: type, senderEmail: senderEmail, subject: subject, body: body })
-                .then(function() {
-                    showToast('Message sent!', 'success');
+            DigifinwizDB.sendAdminMessage({ recipientId: recipId, type: type, senderEmail: senderEmail, subject: subject, body: body, audience: audience })
+                .then(function(sent) {
+                    var sites = (sent && sent.sites) || [];
+                    showToast(sites.length ? 'Message sent to the main site and ' + sites.map(function(k) { return SUBSITE_LABEL[k] || k; }).join(', ') + '!' : 'Message sent!', 'success');
                     msgForm.reset();
                     reloadMsgTable();
                 })

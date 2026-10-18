@@ -1541,6 +1541,50 @@
                 </div>
             </div>
 
+            <!-- Sub-site accounts panel -->
+            <div class="admin-panel" style="margin-top:var(--space-5)">
+                <div class="admin-panel-header">
+                    <h2>Sub-site Accounts</h2>
+                    <span class="pill pill-purple" id="subsite-count-badge">0</span>
+                </div>
+                <div class="admin-panel-body" style="padding-bottom:0">
+                    <p style="font-size:var(--text-sm);color:var(--color-text-muted);margin:0 0 var(--space-3)">
+                        Banking, Ecommerce and Utilities keep their own accounts. Each is matched to a main-site account by email or username.
+                    </p>
+                    <div style="display:flex;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-3)">
+                        <input id="subsite-search" type="search" placeholder="Search name, username, email…"
+                            style="flex:1;min-width:180px;padding:8px 12px;border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:var(--text-sm)">
+                        <select id="subsite-filter"
+                            style="padding:8px 12px;border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:var(--text-sm);color:var(--color-text);background:var(--color-surface)">
+                            <option value="">All Sites</option>
+                            <option value="banking">DigiBank (Banking)</option>
+                            <option value="ecommerce">InStyl (Ecommerce)</option>
+                            <option value="utilities">DigiPay (Utilities)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="admin-table-wrap">
+                    <table class="admin-table" id="subsiteTable">
+                        <thead>
+                            <tr>
+                                <th>Site</th>
+                                <th>Username</th>
+                                <th>Full Name</th>
+                                <th>Email</th>
+                                <th>Level / XP</th>
+                                <th>Checking</th>
+                                <th>Savings</th>
+                                <th>Last Login</th>
+                                <th>Main-site Account</th>
+                            </tr>
+                        </thead>
+                        <tbody id="subsite-table-body">
+                            <tr class="empty-row"><td colspan="9">Loading…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
         </section>
 
         <!-- ════════════════════════════════
@@ -1570,6 +1614,13 @@
                                     <option value="info">ℹ️ Info</option>
                                     <option value="warning">⚠️ Warning</option>
                                     <option value="email">✉️ Email</option>
+                                </select>
+                            </div>
+                            <div class="admin-form-group">
+                                <label for="msg-audience">Deliver To</label>
+                                <select id="msg-audience">
+                                    <option value="main">Main site only</option>
+                                    <option value="all">Main site + Banking, Ecommerce &amp; Utilities</option>
                                 </select>
                             </div>
                         </div>

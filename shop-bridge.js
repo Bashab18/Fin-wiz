@@ -208,6 +208,16 @@ const ShopBridge = (() => {
     // the server's error (e.g. "Email already registered") — callers must
     // surface it rather than reporting success.
     function saveProfile(data) {
+        if (data.phone !== undefined && data.phone !== '' && !/^\d{10}$/.test(String(data.phone))) {
+            return Promise.reject(new Error('Phone number must be exactly 10 digits.'));
+        }
+        if (data.birthdate) {
+            var today = new Date();
+            var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(data.birthdate) || data.birthdate > todayStr) {
+                return Promise.reject(new Error('Date of birth cannot be in the future.'));
+            }
+        }
         var core = {};
         if (data.fullName !== undefined) core.fullName = data.fullName;
         if (data.email    !== undefined) core.email    = data.email;
@@ -283,11 +293,6 @@ const ShopBridge = (() => {
 
     // ── Page chrome: header progress, badges, header icons ─────────────────
     function initChrome() {
-        var userBtn = document.querySelector('.shop-icon-btn.user');
-        if (userBtn && !userBtn.getAttribute('onclick')) {
-            userBtn.title = 'My Account';
-            userBtn.addEventListener('click', function() { window.location.href = 'shop-account.html'; });
-        }
         if (!isAvailable()) return;
         renderSavedBadge();
         refreshProgress();

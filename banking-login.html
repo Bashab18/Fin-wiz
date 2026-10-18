@@ -56,10 +56,11 @@
                     <p>Don't have a banking account? <a href="banking-register.html" style="color:#6366f1;font-weight:600">Sign up here</a></p>
                 </div>
 
-                <!-- Dev hint -->
-                <div class="auth-dev-hint">
+                <!-- Dev hint: shown only when running locally, never on a deployed site -->
+                <div class="auth-dev-hint" id="devHint" hidden>
                     Default admin: <strong>admin</strong> / <strong>Admin1234</strong>
                 </div>
+                <script>if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) document.getElementById('devHint').hidden = false;</script>
             </div>
         </div>
     </div>

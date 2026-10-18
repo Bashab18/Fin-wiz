@@ -37,13 +37,13 @@
                     <button class="shop-icon-btn home" onclick="window.location.href='shop-account.html'" title="Account Summary" aria-label="Account Summary">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
                     </button>
-                    <button class="shop-icon-btn user" onclick="window.location.href='shop-account.html'" title="My Account" aria-label="My Account"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg></button>
-                    <button class="shop-icon-btn bookmark" onclick="window.location.href='shop-saved-items.html'" title="Saved Items" aria-label="Saved Items">
+                    <button class="shop-icon-btn bookmark" onclick="window.location.href='shop-saved-items.html'" title="Wishlist" aria-label="Wishlist">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
                     <span class="amz-icon-badge" id="headerWishlistBadge" style="display:none">0</span>
                     </button>
                     <button class="shop-icon-btn cart" onclick="window.location.href='shop-cart.html'" title="View Cart" aria-label="View Cart"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg><span class="amz-icon-badge" id="headerCartBadge" style="display:none">0</span></button>
                 </div>
+                <a href="index.html" class="amz-header-logout" title="Back to the main site" style="margin-right:0.5rem">&larr; Main Site</a>
                 <a href="#" class="amz-header-logout" data-logout title="Logout">Logout</a>
             </div>
         </div>
@@ -60,7 +60,7 @@
                     <a href="shop-order-history.html" class="shop-nav-item">Order History</a>
                     <a href="shop-order-status.html" class="shop-nav-item">Order Status</a>
                     <a href="shop-wallet.html" class="shop-nav-item active">Wallet</a>
-                    <a href="shop-saved-items.html" class="shop-nav-item">Saved Items</a>
+                    <a href="shop-saved-items.html" class="shop-nav-item">Wishlist</a>
                     <a href="shop-cart.html" class="shop-nav-item">Cart</a>
                     <a href="shop-alerts.html" class="shop-nav-item">Alerts</a>
                     <a href="shop-messages.html" class="shop-nav-item">Messages <span class="shop-msg-badge" style="display:none;margin-left:6px;background:#f08804;color:#fff;border-radius:999px;font-size:0.72rem;font-weight:700;padding:1px 7px;vertical-align:1px">0</span></a>
@@ -173,7 +173,7 @@
         fc.innerHTML =
             '<div class="form-container" style="margin-bottom:24px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:24px">' +
             '<h3 style="margin:0 0 16px;font-size:1rem;font-weight:600">Add New Card</h3>' +
-            '<div class="form-group"><label>Card Number</label><input type="text" id="cf_number" placeholder="4111 1111 1111 1111" inputmode="numeric" maxlength="19"></div>' +
+            '<div class="form-group"><label>Card Number</label><input type="text" id="cf_number" placeholder="4111 1111 1111 1111" inputmode="numeric" maxlength="19"><div style="font-size:0.75rem;color:#64748b;margin-top:4px">Simulation only — use any test number that passes the card check, e.g. 4111 1111 1111 1111.</div></div>' +
             '<div class="form-group"><label>Cardholder Name</label><input type="text" id="cf_name" placeholder="Full name on card"></div>' +
             '<div class="form-row">' +
             '<div class="form-group"><label>Exp. Month</label><select id="cf_month">' +
@@ -205,6 +205,22 @@
 
         if (!cardNumber.replace(/\D/g,'') || !cardholderName.trim()) {
             showShopToast('Please fill in required fields.', true);
+            return;
+        }
+        // Same checks the server makes, so the mistake is reported instantly.
+        var digits = cardNumber.replace(/\D/g, '');
+        var sum = 0, dbl = false;
+        for (var i = digits.length - 1; i >= 0; i--) {
+            var d = parseInt(digits.charAt(i), 10);
+            if (dbl) { d *= 2; if (d > 9) d -= 9; }
+            sum += d; dbl = !dbl;
+        }
+        if (digits.length < 13 || digits.length > 19 || sum % 10 !== 0) {
+            showShopToast('Enter a valid card number (for example 4111 1111 1111 1111).', true);
+            return;
+        }
+        if (new Date(expYear, expMonth, 1).getTime() <= Date.now()) {
+            showShopToast('That card has expired — choose a later month or year.', true);
             return;
         }
 
