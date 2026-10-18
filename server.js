@@ -3854,6 +3854,17 @@ function challengeDefinition(row) {
     return def;
 }
 
+// The fields that make up a challenge's definition (with the defaults a new one gets),
+// as a string, so two definitions can be compared.
+function challengeDefinitionKey(d) {
+    return JSON.stringify([
+        d.description || '', d.category || 'general', d.active !== false, d.points || 0, d.florins || 0,
+        d.condition || 'manual', d.conditionValue !== undefined ? d.conditionValue : null,
+        d.customField || null, d.customOperator || null,
+        Array.isArray(d.extraConditions) ? d.extraConditions : [], d.conditionLogic || 'all'
+    ]);
+}
+
 // POST /api/admin/challenges — create a new challenge definition and push a
 // live instance of it to every approved participant, or, with `assignTo` (a
 // user id), to that one participant only. Challenges are stored
@@ -3876,17 +3887,27 @@ app.post('/api/admin/challenges', async (req, res) => {
         const approved     = users.filter(isApprovedParticipant);
         let participants   = approved;
         const challenges   = await readJSON(req.challengeStore);
+        // The title is what identifies a challenge (the admin list, edits and deletes all go
+        // by it), so a title that already exists can only be created again with the same
+        // settings: that fills in the people who lack it. Different settings would leave
+        // one title meaning two challenges.
+        const requestedKey = challengeDefinitionKey({ description, category, active, points, florins, condition, conditionValue, customField, customOperator, extraConditions, conditionLogic });
+        const sameTitle    = challenges.filter(c => c.title === title);
+        const differs      = sameTitle.length > 0 && !sameTitle.some(c => challengeDefinitionKey(c) === requestedKey);
+        const differsError = () => httpError(409, 'A challenge called "' + title + '" already exists with different settings. Edit that one, or choose a different title.');
         if (target !== null) {
             const user = approved.find(u => u.id === target);
             if (!user) throw httpError(404, 'That user is not an approved participant');
-            if (challenges.some(c => c.userId === target && c.title === title)) {
+            if (sameTitle.some(c => c.userId === target)) {
                 throw httpError(409, (user.fullName || user.username) + ' already has the challenge "' + title + '"');
             }
+            if (differs) throw differsError();
             participants = [user];
         } else {
+            if (differs) throw differsError();
             // Everyone, but never a second copy for someone who already holds the title: two
             // copies of one title are two rows to edit and to reward.
-            const holders = new Set(challenges.filter(c => c.title === title).map(c => c.userId));
+            const holders = new Set(sameTitle.map(c => c.userId));
             participants = approved.filter(u => !holders.has(u.id));
             if (approved.length > 0 && participants.length === 0) {
                 throw httpError(409, 'Every participant already has the challenge "' + title + '"');
