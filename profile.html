@@ -284,6 +284,8 @@
                     </div>
                 </div>
 
+                <div id="balBySite" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:0.75rem;margin:1rem 0 1.5rem"></div>
+
                 <div class="accounts-grid">
                     <div class="account-detail-card">
                         <div class="account-header">
@@ -635,7 +637,37 @@
         }
 
         // ── Information tab ───────────────────────────────────────────────
+        // Banking, Ecommerce and Utilities keep their own accounts, so the main
+        // account's own records are empty: the numbers on these tabs come from the
+        // linked sub-site accounts (GET /api/me/hub). With none linked they fall
+        // back to this account's own records, as before.
+        var SITE_META = {
+            banking:   { label: 'DigiBank', icon: '&#127970;', href: 'banking.html',   color: '#667eea' },
+            ecommerce: { label: 'InStyl',   icon: '&#128722;', href: 'ecommerce.html', color: '#f59e0b' },
+            utilities: { label: 'DigiPay',  icon: '&#9889;',   href: 'utilities.html', color: '#10b981' }
+        };
+        function loadHub() {
+            return (DigifinwizDB.getHub ? DigifinwizDB.getHub() : Promise.resolve(null)).catch(function() { return null; });
+        }
         DigifinwizDB.init().then(function() {
+            return loadHub();
+        }).then(function(hub) {
+            if (hub && hub.linkedCount > 0) {
+                var bk = hub.modules.banking, ec = hub.modules.ecommerce, ut = hub.modules.utilities;
+                return [
+                    bk.linked ? bk.balances.checking : null,
+                    bk.linked ? bk.balances.savings : null,
+                    ec.linked ? ec.purchases : [],
+                    hub.activity.slice(0, 8),
+                    bk.linked ? bk.transactions : [],
+                    ut.linked ? ut.payments : [],
+                    bk.linked ? (bk.creditCard || { active:false }) : { active:false },
+                    bk.linked ? (bk.loan || { active:false, paidOff:false }) : { active:false, paidOff:false },
+                    bk.linked ? bk.savingsGoals : [],
+                    ut.linked ? ut.bills : [],
+                    hub
+                ];
+            }
             return Promise.all([
                 DigifinwizDB.getBalance('checking'),
                 DigifinwizDB.getBalance('savings'),
@@ -647,25 +679,28 @@
                 DigifinwizDB.getLoan ? DigifinwizDB.getLoan() : Promise.resolve({ active:false, paidOff:false }),
                 DigifinwizDB.getSavingsGoals ? DigifinwizDB.getSavingsGoals() : Promise.resolve([]),
                 DigifinwizDB.getMyBills ? DigifinwizDB.getMyBills() : Promise.resolve([])
-            ]);
+            ]).then(function(r) { r.push(hub); return r; });
         }).then(function(r) {
             var checking  = r[0], savings = r[1], purchases = r[2]||[], activity = r[3]||[];
             var txns = r[4]||[], payments = r[5]||[];
             var creditCard = r[6] || { active:false }, loan = r[7] || { active:false, paidOff:false };
             var savingsGoals = r[8]||[], bills = r[9]||[];
+            var hub = r[10] && r[10].linkedCount > 0 ? r[10] : null;   // null: nothing linked, showing this account's own records
             var fmt = function(n){ return '\u0192' + Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+            var fmtOpt = function(n){ return n == null ? '\u2014' : fmt(n); };   // no DigiBank account linked: no balance to show
 
             // Information tab – cards
             var ce = document.getElementById('infoCheckingBal'), se = document.getElementById('infoSavingsBal');
-            if (ce) ce.textContent = fmt(checking);
-            if (se) se.textContent = fmt(savings);
+            if (ce) ce.textContent = fmtOpt(checking);
+            if (se) se.textContent = fmtOpt(savings);
 
-            // Balances tab — assets (checking + savings) minus real liabilities
-            // (an active credit-card balance, an active unpaid loan balance).
+            // Balances tab — assets (checking + savings, on every linked site) minus
+            // real liabilities (an active credit-card balance, an active unpaid loan).
             var assets = Number(checking||0) + Number(savings||0);
             var ccBalance = (creditCard && creditCard.active) ? Number(creditCard.balance||0) : 0;
             var loanBalance = (loan && loan.active && !loan.paidOff) ? Number(loan.balance||0) : 0;
             var liabilities = ccBalance + loanBalance;
+            if (hub) { assets = hub.totals.assets; liabilities = hub.totals.liabilities; }
             var netTotal = assets - liabilities;
             var balTotal = document.getElementById('balTotalAmount');
             if (balTotal) balTotal.textContent = (netTotal<0?'-':'') + '\u0192' + Math.round(Math.abs(netTotal)).toLocaleString();
@@ -677,13 +712,36 @@
                 balNote.style.color = netTotal < 0 ? '#dc2626' : '';
             }
             var bc = document.getElementById('balChecking'), bs = document.getElementById('balSavings');
-            if (bc) bc.textContent = fmt(checking);
-            if (bs) bs.textContent = fmt(savings);
+            if (bc) bc.textContent = fmtOpt(checking);
+            if (bs) bs.textContent = fmtOpt(savings);
+
+            // Per-site balances under the total, so the total can be traced.
+            var siteHost = document.getElementById('balBySite');
+            if (siteHost) {
+                siteHost.innerHTML = Object.keys(SITE_META).map(function(key) {
+                    var meta = SITE_META[key], site = hub ? hub.modules[key] : null;
+                    if (!site || !site.linked) {
+                        return '<div style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;padding:0.8rem 1rem">' +
+                            '<div style="font-weight:700;margin-bottom:0.25rem">' + meta.icon + ' ' + meta.label + '</div>' +
+                            '<div style="font-size:0.78rem;color:#64748b;margin-bottom:0.4rem">Not linked yet \u2014 no ' + meta.label + ' account uses your email or username.</div>' +
+                            '<a href="' + meta.href + '" target="_blank" rel="noopener" style="font-size:0.78rem;font-weight:600;color:' + meta.color + '">Open ' + meta.label + ' &#8599;</a></div>';
+                    }
+                    return '<div style="background:#fff;border:1px solid #e2e8f0;border-top:4px solid ' + meta.color + ';border-radius:12px;padding:0.8rem 1rem">' +
+                        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.35rem"><strong>' + meta.icon + ' ' + meta.label + '</strong>' +
+                        '<a href="' + meta.href + '" target="_blank" rel="noopener" style="font-size:0.75rem;font-weight:600;color:' + meta.color + '">Open &#8599;</a></div>' +
+                        '<div style="font-size:0.82rem;color:#475569;display:flex;justify-content:space-between"><span>Checking</span><strong>' + fmt(site.balances.checking) + '</strong></div>' +
+                        '<div style="font-size:0.82rem;color:#475569;display:flex;justify-content:space-between"><span>Savings</span><strong>' + fmt(site.balances.savings) + '</strong></div></div>';
+                }).join('');
+            }
 
             // Expenses / net worth
             var totalSpent = 0;
-            payments.forEach(function(p){ totalSpent += Number(p.amount||0); });
-            purchases.forEach(function(p){ if(p.items) p.items.forEach(function(it){ totalSpent += Number(it.price||0)*Number(it.quantity||1); }); });
+            if (hub) {
+                totalSpent = hub.totals.spentOnBills + hub.totals.spentOnPurchases;
+            } else {
+                payments.forEach(function(p){ totalSpent += Number(p.amount||0); });
+                purchases.forEach(function(p){ if(p.items) p.items.forEach(function(it){ totalSpent += Number(it.price||0)*Number(it.quantity||1); }); });
+            }
             var expEl = document.getElementById('balExpenses');
             if (expEl) expEl.textContent = fmt(totalSpent);
             var nwEl = document.getElementById('balNetWorth');
@@ -734,7 +792,7 @@
                     invContainer.innerHTML = '<div class="inventory-grid">' + allItems.slice(0,8).map(function(entry,i){
                         var it = entry.it;
                         var href = 'shop-order-detail.html?id=' + encodeURIComponent(entry.purchaseId);
-                        return '<a class="inventory-item" href="'+href+'" style="text-decoration:none;color:inherit;display:block"><div class="inventory-image" style="background:'+GRADS[i%GRADS.length]+'"><div class="placeholder-product" style="font-size:2rem">'+ICONS[i%ICONS.length]+'</div></div><h4>'+escP(it.name||it.title||'Item')+'</h4><p class="price">\u0192'+Number(it.price||0).toFixed(2)+'</p></a>';
+                        return '<a class="inventory-item" href="'+href+'" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;display:block"><div class="inventory-image" style="background:'+GRADS[i%GRADS.length]+'"><div class="placeholder-product" style="font-size:2rem">'+ICONS[i%ICONS.length]+'</div></div><h4>'+escP(it.name||it.title||'Item')+'</h4><p class="price">\u0192'+Number(it.price||0).toFixed(2)+'</p></a>';
                     }).join('') + '</div>';
                 }
             }
@@ -768,9 +826,14 @@
         }).catch(function(err){ console.error('profile info/balances load error:', err); });
 
         // ── Progress tab ──────────────────────────────────────────────────
-        DigifinwizDB.init().then(function(){ return DigifinwizDB.getStats(); }).then(function(stats) {
+        // Counts, totals and skills cover the linked sub-site accounts' activity
+        // (getCombinedStats); badges and the level skill use the highest level
+        // reached on any site.
+        DigifinwizDB.init().then(function(){ return DigifinwizDB.getCombinedStats ? DigifinwizDB.getCombinedStats() : DigifinwizDB.getStats(); }).then(function(stats) {
             var user = stats.user;
             if (!user) return;
+            var topLevel = stats.topLevel || user.level;
+            var levelUser = Object.assign({}, user, { level: topLevel });
             var lvlEl = document.querySelector('#tab-progress .level-number');
             if (lvlEl) lvlEl.textContent = user.level;
             var upEl = document.getElementById('userPoints');    if (upEl) upEl.textContent = user.points.toLocaleString();
@@ -793,21 +856,23 @@
                 setSkill(3, stats.planningSkill,  'Total activities: '+(stats.txCount+stats.payCount+stats.purchCount));
             }, 460);
             setTimeout(function() {
-                setSkill(4, stats.mgmtSkill,      'Level '+user.level+' / 20');
+                setSkill(4, stats.mgmtSkill,      'Level '+topLevel+' / 20');
             }, 580);
 
-            updateBadges(user, stats);
+            updateBadges(levelUser, stats);
 
             // ── Financial Health Score ─────────────────────────────────────
             // /api/me/stats has no completedChallenges field — count it from
             // the challenges list instead.
             DigifinwizDB.getChallenges().then(function(challenges) {
                 var completedCount = challenges.filter(function(c){ return c.active && c.completed; }).length;
-                computeHealthScore(user, stats, completedCount);
-            }).catch(function(){ computeHealthScore(user, stats, 0); });
+                computeHealthScore(levelUser, stats, completedCount);
+            }).catch(function(){ computeHealthScore(levelUser, stats, 0); });
         });
 
-        DigifinwizDB.getRecentActivity(8).then(function(events){ buildTimeline(events); });
+        DigifinwizDB.init().then(loadHub).then(function(hub) {
+            return hub && hub.linkedCount > 0 ? hub.activity.slice(0, 8) : DigifinwizDB.getRecentActivity(8);
+        }).then(function(events){ buildTimeline(events); });
 
         DigifinwizDB.getChallenges().then(function(challenges) {
             var CAT_ICONS = { banking:'&#127970;', ecommerce:'&#128722;', utilities:'&#9889;', general:'&#11088;' };

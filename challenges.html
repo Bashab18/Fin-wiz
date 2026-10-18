@@ -554,17 +554,39 @@
     function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
 
     // Extract data-loading into a named function so it can be called on load AND on tab return
+    // What the progress bars are measured against. Transfers, purchases and bill
+    // payments happen in the linked Banking / Ecommerce / Utilities accounts, so
+    // those are used when any are linked; otherwise this account's own records.
+    function loadProgressInputs() {
+        var hubP = DigifinwizDB.getHub ? DigifinwizDB.getHub().catch(function() { return null; }) : Promise.resolve(null);
+        return hubP.then(function(hub) {
+            if (hub && hub.linkedCount > 0) {
+                var sites = ['banking', 'ecommerce', 'utilities'].map(function(k) { return hub.modules[k]; }).filter(function(m) { return m.linked; });
+                var all = function(field) { return sites.reduce(function(rows, m) { return rows.concat(m[field] || []); }, []); };
+                var bk = hub.modules.banking;
+                return DigifinwizDB.getCombinedStats().then(function(stats) {
+                    return {
+                        stats: stats, txs: all('transactions'), pays: all('payments'), purchs: all('purchases'),
+                        balances: bk.linked ? [{ account: 'checking', amount: bk.balances.checking }, { account: 'savings', amount: bk.balances.savings }] : []
+                    };
+                });
+            }
+            return Promise.all([
+                DigifinwizDB.getStats(), DigifinwizDB.getTransactions(1000), DigifinwizDB.getPayments(1000),
+                DigifinwizDB.getPurchases(1000), DigifinwizDB.getAllBalances()
+            ]).then(function(r) { return { stats: r[0], txs: r[1] || [], pays: r[2] || [], purchs: r[3] || [], balances: r[4] || [] }; });
+        });
+    }
+
     function loadChallengesPage() {
-        return Promise.all([
-            DigifinwizDB.getStats(), DigifinwizDB.getChallenges(), DigifinwizDB.getTransactions(1000),
-            DigifinwizDB.getPayments(1000), DigifinwizDB.getPurchases(1000), DigifinwizDB.getAllBalances()
-        ]).then(function(results) {
-            var stats      = results[0];
+        return Promise.all([loadProgressInputs(), DigifinwizDB.getChallenges()]).then(function(results) {
+            var inputs     = results[0];
+            var stats      = inputs.stats;
             var challenges = results[1];
-            var txs        = results[2] || [];
-            var pays       = results[3] || [];
-            var purchs     = results[4] || [];
-            var balancesArr = results[5] || [];
+            var txs        = inputs.txs;
+            var pays       = inputs.pays;
+            var purchs     = inputs.purchs;
+            var balancesArr = inputs.balances;
             var user       = stats.user;
 
             // /api/me/stats has no "last transaction amount" field, so
@@ -865,8 +887,10 @@
     }
 
     function loadBadgesTab() {
-        DigifinwizDB.getStats().then(function(stats) {
-            var user   = stats.user || { level: 1 };
+        // Combined across the linked sub-site accounts: that is where transfers,
+        // purchases and bill payments happen.
+        (DigifinwizDB.getCombinedStats ? DigifinwizDB.getCombinedStats() : DigifinwizDB.getStats()).then(function(stats) {
+            var user   = Object.assign({ level: 1 }, stats.user, { level: stats.topLevel || (stats.user && stats.user.level) || 1 });
             var badges = document.querySelectorAll('#badges-dynamic-grid .badge-card');
             var defs = [
                 { icon:'&#127942;', name:'First Purchase',  desc:'Made your first ecommerce purchase',   earned:stats.purchCount>=1,    cur:stats.purchCount,    max:1 },

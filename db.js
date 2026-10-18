@@ -547,6 +547,12 @@ const DigifinwizDB = (() => {
         return _api('GET', '/api/admin/data-overview');
     }
 
+    // Admin-only: every Banking / Ecommerce / Utilities account and the main-site
+    // account it belongs to.
+    function getSubSiteAccounts() {
+        return _api('GET', '/api/admin/sub-site-accounts');
+    }
+
     // ── Stats & activity ──────────────────────────────────────────────────────
     function getStats() {
         return _api('GET', '/api/me/stats');
@@ -554,6 +560,46 @@ const DigifinwizDB = (() => {
 
     function getOverallProgress() {
         return _api('GET', '/api/me/overall-progress');
+    }
+
+    // Main Site only: the linked Banking / Ecommerce / Utilities accounts'
+    // balances, records and progress in one read-only call (see GET /api/me/hub).
+    // Cached briefly so the several panels of one page share a single request.
+    var _hubCache = null;
+    function getHub() {
+        var now = Date.now();
+        if (_hubCache && now - _hubCache.at < 5000) return _hubCache.promise;
+        var promise = _api('GET', '/api/me/hub');
+        _hubCache = { at: now, promise: promise };
+        promise.catch(function() { if (_hubCache && _hubCache.promise === promise) _hubCache = null; });
+        return promise;
+    }
+
+    // Same shape as getStats(), but on the Main Site the counts, totals and
+    // skills cover the linked sub-site accounts' activity, since that is where
+    // transfers, purchases and bill payments actually happen. Without any linked
+    // account (or on a sub-site page) it is just getStats().
+    function getCombinedStats() {
+        if (window.APP_MODULE) return getStats();
+        return Promise.all([getStats(), getHub().catch(function() { return null; })]).then(function(res) {
+            var stats = res[0], hub = res[1];
+            if (!hub || !hub.linkedCount) return stats;
+            var linked = ['banking', 'ecommerce', 'utilities'].map(function(k) { return hub.modules[k]; }).filter(function(m) { return m && m.linked; });
+            var sum = function(field) { return linked.reduce(function(n, m) { return n + (Number(m.stats[field]) || 0); }, 0); };
+            var out = Object.assign({}, stats);
+            ['txCount', 'payCount', 'purchCount', 'totalSpentEcommerce', 'totalSpentBills', 'totalTransferred', 'txPts', 'payPts', 'purchPts', 'totalPts']
+                .forEach(function(f) { out[f] = sum(f); });
+            var skill = function(k, f) { return hub.modules[k] && hub.modules[k].linked ? hub.modules[k].stats[f] : 0; };
+            out.bankingSkill   = skill('banking', 'bankingSkill');
+            out.ecommerceSkill = skill('ecommerce', 'ecommerceSkill');
+            out.billSkill      = skill('utilities', 'billSkill');
+            out.planningSkill  = Math.min(100, Math.round(((out.txCount + out.payCount + out.purchCount) / 30) * 100));
+            // Badges and the level skill look at the highest level reached on any site.
+            var top = linked.reduce(function(n, m) { return Math.max(n, Number(m.userData.level) || 1); }, Number(stats.user && stats.user.level) || 1);
+            out.topLevel  = top;
+            out.mgmtSkill = Math.min(100, Math.round((top / 20) * 100));
+            return out;
+        });
     }
 
     function getRecentActivity(limit) {
@@ -815,6 +861,7 @@ const DigifinwizDB = (() => {
         getAdminPayments,
         getAdminPurchases,
         getAdminDataOverview,
+        getSubSiteAccounts,
 
         // Stats & activity
         getStats,
@@ -841,6 +888,8 @@ const DigifinwizDB = (() => {
         getSavingsGoals,
         createSavingsGoal,
         getOverallProgress,
+        getHub,
+        getCombinedStats,
         contributeSavingsGoal,
         withdrawSavingsGoal,
         deleteSavingsGoal,
