@@ -196,7 +196,7 @@ function loadCCActivity() {
             return '<div class="transaction-item">' +
                 '<div style="width:40px;height:40px;border-radius:50%;background:' + (isPurchase ? '#fee2e2' : '#dcfce7') + ';display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">' + (isPurchase ? '🛍️' : '💵') + '</div>' +
                 '<div class="transaction-details" style="flex:1;min-width:0">' +
-                    '<div style="font-weight:600;font-size:0.875rem">' + escBA(isPurchase ? a.description : 'Card payment') + '</div>' +
+                    '<div style="font-weight:600;font-size:0.875rem">' + escBA(isPurchase ? a.description : 'Card payment' + (a.fromAccount === 'savings' ? ' from savings' : '')) + '</div>' +
                     '<div style="font-size:0.72rem;color:#94a3b8;margin-top:0.1rem">' + escBA(a.date) + '</div>' +
                 '</div>' +
                 '<div class="transaction-amount" style="color:' + (isPurchase ? '#dc2626' : '#059669') + '">' + (isPurchase ? '+' : '−') + fmtBA(a.amount) + '</div>' +

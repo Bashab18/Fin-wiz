@@ -1540,11 +1540,28 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // ── BILLS PAGE ───────────────────────────────────────────────────────────
+    // Calls the bills API as the signed-in admin and throws the server's own
+    // message on any non-2xx answer, so a rejected change (403, 404, 500) can
+    // never be reported as a success.
+    function billsApi(method, path, body) {
+        const s = DigifinwizAuth.getSession();
+        if (!s) return Promise.reject(new Error('Your session has expired. Please sign in again.'));
+        const headers = { 'X-User-Id': String(s.userId), 'X-User-Role': s.role };
+        if (body !== undefined) headers['Content-Type'] = 'application/json';
+        return fetch((window.API_BASE_URL || '') + path, {
+            method,
+            headers,
+            body: body !== undefined ? JSON.stringify(body) : undefined
+        }).then(r => r.json().catch(() => ({})).then(data => {
+            if (!r.ok) throw new Error(data.error || ('Request failed (' + r.status + ')'));
+            return data;
+        }));
+    }
+
     function loadBillsPage() {
-        fetch((window.API_BASE_URL || '') + '/api/bills')
-            .then(r => r.json())
+        billsApi('GET', '/api/bills')
             .then(bills => renderBillsAdmin(bills))
-            .catch(() => renderBillsAdmin([]));
+            .catch(err => { showToast('Could not load bills: ' + err.message, 'error'); renderBillsAdmin([]); });
     }
 
     function renderBillsAdmin(bills) {
@@ -1585,8 +1602,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Expose to inline onclick handlers
     window.editBill = function(id) {
-        fetch((window.API_BASE_URL || '') + '/api/bills')
-            .then(r => r.json())
+        billsApi('GET', '/api/bills')
             .then(bills => {
                 const b = bills.find(x => x.id === id);
                 if (!b) return;
@@ -1611,17 +1627,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 document.getElementById('billSubmitBtn').textContent = 'Save Changes';
                 document.getElementById('billCancelBtn').style.display = '';
                 document.getElementById('billForm').scrollIntoView({ behavior: 'smooth' });
-            });
+            })
+            .catch(err => showToast('Could not load the bill: ' + err.message, 'error'));
     };
 
     window.deleteBill = function(id) {
         if (!confirm('Delete this bill?')) return;
-        const s = DigifinwizAuth.getSession();
-        fetch((window.API_BASE_URL || '') + '/api/bills/' + id, {
-            method: 'DELETE',
-            headers: { 'X-User-Id': String(s.userId), 'X-User-Role': s.role }
-        }).then(() => { showToast('Bill deleted.', 'info'); loadBillsPage(); })
-          .catch(() => showToast('Delete failed.', 'error'));
+        billsApi('DELETE', '/api/bills/' + id)
+            .then(() => { showToast('Bill deleted.', 'info'); loadBillsPage(); })
+            .catch(err => showToast('Delete failed: ' + err.message, 'error'));
     };
 
     window.cancelBillEdit = function() {
@@ -1635,7 +1649,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('billForm').addEventListener('submit', function(e) {
         e.preventDefault();
-        const s      = DigifinwizAuth.getSession();
         const editId = document.getElementById('billEditId').value;
         const billingType = document.getElementById('billBillingType').value;
         const payload = {
@@ -1661,17 +1674,11 @@ document.addEventListener('DOMContentLoaded', function () {
             payload.amount      = parseFloat(document.getElementById('billAmount').value) || 0;
             payload.unit = payload.ratePerUnit = payload.baseFee = payload.usageMin = payload.usageMax = null;
         }
-        const url    = (window.API_BASE_URL || '') + (editId ? '/api/bills/' + editId : '/api/bills');
-        const method = editId ? 'PUT' : 'POST';
-        fetch(url, {
-            method,
-            headers: { 'Content-Type': 'application/json', 'X-User-Id': String(s.userId), 'X-User-Role': s.role },
-            body: JSON.stringify(payload)
-        }).then(r => r.json()).then(() => {
+        billsApi(editId ? 'PUT' : 'POST', editId ? '/api/bills/' + editId : '/api/bills', payload).then(() => {
             showToast(editId ? 'Bill updated!' : 'Bill added!', 'success');
             cancelBillEdit();
             loadBillsPage();
-        }).catch(() => showToast('Save failed.', 'error'));
+        }).catch(err => showToast('Save failed: ' + err.message, 'error'));
     });
 
     // ── SETTINGS PAGE ────────────────────────────────────────────────────────

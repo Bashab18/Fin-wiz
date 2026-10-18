@@ -494,6 +494,9 @@
 
         DigifinwizDB.init().then(function() {
             // ── Settings tab ─────────────────────────────────────────────
+            // This page is behind the login guard, so a session always exists
+            // here (the old no-session fallback read/wrote a profile blob that
+            // the server ignores).
             if (session && session.userId) {
                 return DigifinwizDB.getUserById(session.userId).then(function(user) {
                     if (!user) return;
@@ -517,22 +520,6 @@
                     ft('notif-achieve',    prefs.notifAchieve   !==false);
                     ft('priv-leaderboard', prefs.privLeaderboard!==false);
                     ft('priv-share',       prefs.privShare===true);
-                });
-            } else {
-                return DigifinwizDB.getProfileData().then(function(prof) {
-                    if (!prof) return;
-                    function fv(id,val){ var el=document.getElementById(id); if(el&&val!=null) el.value=val; }
-                    function ft(id,v)  { var el=document.getElementById(id); if(el) el.checked=v; }
-                    fv('prof-fullname',prof.fullName); fv('prof-username',prof.username);
-                    fv('prof-email',prof.email); fv('prof-phone',prof.phone); fv('prof-address',prof.address);
-                    var addrBoxEl = document.getElementById('infoAddressText');
-                    if (addrBoxEl) addrBoxEl.textContent = prof.address ? prof.address : 'No address on file yet — add one in the Settings tab above.';
-                    ft('notif-email',      prof.notifEmail     !==false);
-                    ft('notif-challenge',  prof.notifChallenge !==false);
-                    ft('notif-bills',      prof.notifBills     !==false);
-                    ft('notif-achieve',    prof.notifAchieve   !==false);
-                    ft('priv-leaderboard', prof.privLeaderboard!==false);
-                    ft('priv-share',       prof.privShare===true);
                 });
             }
         });
@@ -563,22 +550,7 @@
                     if (typeof DigifinwizAuth !== 'undefined' && DigifinwizAuth.updateSession) {
                         DigifinwizAuth.updateSession({ fullName: fullName });
                     }
-                }).catch(function() { showNotification('Save failed. Please try again.', 'error'); });
-            } else {
-                var data = {
-                    fullName: document.getElementById('prof-fullname').value.trim(),
-                    username: document.getElementById('prof-username').value.trim(),
-                    email:    document.getElementById('prof-email').value.trim(),
-                    phone:    document.getElementById('prof-phone') ? document.getElementById('prof-phone').value.trim() : '',
-                    address:  document.getElementById('prof-address') ? document.getElementById('prof-address').value.trim() : ''
-                };
-                DigifinwizDB.getProfileData().then(function(ex) {
-                    return DigifinwizDB.setProfileData(Object.assign({}, ex||{}, data));
-                }).then(function() {
-                    showNotification('Personal information saved!', 'success');
-                    var addrBoxEl = document.getElementById('infoAddressText');
-                    if (addrBoxEl) addrBoxEl.textContent = data.address ? data.address : 'No address on file yet — add one in the Settings tab above.';
-                }).catch(function() { showNotification('Save failed.', 'error'); });
+                }).catch(function(err) { showNotification(err && err.message ? err.message : 'Save failed. Please try again.', 'error'); });
             }
         });
 
@@ -599,14 +571,6 @@
                 }).catch(function(err) {
                     showNotification(err && err.message ? err.message : 'Update failed.', 'error');
                 });
-            } else {
-                DigifinwizDB.getProfileData().then(function(prof) {
-                    var stored = prof && prof.password;
-                    if (stored && stored !== cur) { showNotification('Current password is incorrect.', 'error'); return; }
-                    return DigifinwizDB.setProfileData(Object.assign({}, prof||{}, { password: np })).then(function() {
-                        showNotification('Password updated!', 'success'); sf.reset();
-                    });
-                }).catch(function() { showNotification('Update failed.', 'error'); });
             }
         });
 
@@ -622,11 +586,7 @@
                 DigifinwizDB.updateUser(session.userId, { prefs: prefs })
                     .then(function(){ showNotification('Preferences saved!','success'); })
                     .catch(function(){ showNotification('Save failed. Please try again.','error'); });
-                return;
             }
-            DigifinwizDB.getProfileData().then(function(ex){
-                return DigifinwizDB.setProfileData(Object.assign({},ex||{},prefs));
-            }).then(function(){ showNotification('Preferences saved!','success'); });
         }
         ['notif-email','notif-challenge','notif-bills','notif-achieve','priv-leaderboard','priv-share'].forEach(function(id){
             var el=document.getElementById(id); if(el) el.addEventListener('change',savePrefs);

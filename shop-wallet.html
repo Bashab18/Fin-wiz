@@ -173,7 +173,7 @@
         fc.innerHTML =
             '<div class="form-container" style="margin-bottom:24px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:24px">' +
             '<h3 style="margin:0 0 16px;font-size:1rem;font-weight:600">Add New Card</h3>' +
-            '<div class="form-group"><label>Card Number</label><input type="text" id="cf_number" placeholder="4111 1111 1111 1111" inputmode="numeric" maxlength="19"></div>' +
+            '<div class="form-group"><label>Card Number</label><input type="text" id="cf_number" placeholder="4111 1111 1111 1111" inputmode="numeric" maxlength="19"><div style="font-size:0.75rem;color:#64748b;margin-top:4px">Simulation only — use any test number that passes the card check, e.g. 4111 1111 1111 1111.</div></div>' +
             '<div class="form-group"><label>Cardholder Name</label><input type="text" id="cf_name" placeholder="Full name on card"></div>' +
             '<div class="form-row">' +
             '<div class="form-group"><label>Exp. Month</label><select id="cf_month">' +
@@ -205,6 +205,22 @@
 
         if (!cardNumber.replace(/\D/g,'') || !cardholderName.trim()) {
             showShopToast('Please fill in required fields.', true);
+            return;
+        }
+        // Same checks the server makes, so the mistake is reported instantly.
+        var digits = cardNumber.replace(/\D/g, '');
+        var sum = 0, dbl = false;
+        for (var i = digits.length - 1; i >= 0; i--) {
+            var d = parseInt(digits.charAt(i), 10);
+            if (dbl) { d *= 2; if (d > 9) d -= 9; }
+            sum += d; dbl = !dbl;
+        }
+        if (digits.length < 12 || digits.length > 19 || sum % 10 !== 0) {
+            showShopToast('Enter a valid card number (for example 4111 1111 1111 1111).', true);
+            return;
+        }
+        if (new Date(expYear, expMonth, 1).getTime() <= Date.now()) {
+            showShopToast('That card has expired — choose a later month or year.', true);
             return;
         }
 
