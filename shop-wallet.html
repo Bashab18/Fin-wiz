@@ -215,7 +215,7 @@
             if (dbl) { d *= 2; if (d > 9) d -= 9; }
             sum += d; dbl = !dbl;
         }
-        if (digits.length < 12 || digits.length > 19 || sum % 10 !== 0) {
+        if (digits.length < 13 || digits.length > 19 || sum % 10 !== 0) {
             showShopToast('Enter a valid card number (for example 4111 1111 1111 1111).', true);
             return;
         }
