@@ -843,6 +843,25 @@ async function seedChallengesForUser(userId, challengeStore = 'challenges', cate
     });
 }
 
+// Appends to `rows` every default challenge the user lacks (matched by title)
+// and returns how many it added. Sub-site accounts (category set) get their own
+// site's challenges plus the general ones, the same set seedChallengesForUser
+// gives a new account; main-site accounts (category null) get all of them.
+// `titles` limits it to some titles. Callers hold the lock.
+function addMissingChallenges(rows, userId, category, titles) {
+    const have = new Set(rows.filter(c => c.userId === userId).map(c => c.title));
+    const now = Date.now();
+    let added = 0;
+    ALL_DEFAULT_CHALLENGES.forEach(d => {
+        if (category && d.category !== category && d.category !== 'general') return;
+        if (titles && !titles.includes(d.title)) return;
+        if (have.has(d.title)) return;
+        rows.push(Object.assign({}, d, { id: nextId(rows), userId, createdAt: now, active: true, completed: false }));
+        added++;
+    });
+    return added;
+}
+
 // Context fields a "custom" condition is allowed to read — never eval
 // arbitrary admin input, only compare a whitelisted field by name.
 const CUSTOM_FIELD_WHITELIST = new Set([
@@ -1066,6 +1085,17 @@ Object.keys(MODULE_STORES).forEach(moduleKey => {
     });
 });
 
+// The store names a request works on, keyed by the req.<x>Store property
+// names: the main site's own (moduleKey null) or one sub-site's.
+function storesFor(moduleKey) {
+    const mod = moduleKey ? MODULE_STORES[moduleKey] : null;
+    const stores = {};
+    for (const literalName in PER_USER_STORE_PROPS) {
+        stores[PER_USER_STORE_PROPS[literalName]] = (mod && mod[literalName]) ? mod[literalName] : literalName;
+    }
+    return stores;
+}
+
 app.use((req, res, next) => {
     // Own-key check, not a plain lookup: 'constructor' or '__proto__' would
     // otherwise resolve to Object.prototype members, switch on module-only
@@ -1073,14 +1103,39 @@ app.use((req, res, next) => {
     const appHeader = req.headers['x-app'];
     const known = typeof appHeader === 'string' && Object.prototype.hasOwnProperty.call(MODULE_STORES, appHeader);
     if (appHeader !== undefined && !known) return res.status(400).json({ error: 'Unknown X-App value' });
-    const mod = known ? MODULE_STORES[appHeader] : null;
     req.appModule = known ? appHeader : null;
-    for (const literalName in PER_USER_STORE_PROPS) {
-        const prop = PER_USER_STORE_PROPS[literalName];
-        req[prop] = (mod && mod[literalName]) ? mod[literalName] : literalName;
-    }
+    Object.assign(req, storesFor(req.appModule));
     next();
 });
+
+// ── Main Site ↔ sub-sites ─────────────────────────────────────────────────────
+// Banking, E-Commerce and Utilities are standalone apps with their own
+// accounts and records, so what a person does there never touches their
+// main-site account. The two sides belong together by identity: a main-site
+// account and a sub-site account are the same person when they share an email
+// or a username (case-insensitive). The main site reads the linked accounts'
+// own stores to show the whole picture; nothing is copied between them.
+const sameText = v => String(v == null ? '' : v).trim().toLowerCase();
+
+// The sub-site account that belongs to a main-site account, or null. An email
+// match outranks a username match (usernames collide by accident more easily);
+// the first account wins a tie.
+function pickLinkedAccount(moduleUsers, me) {
+    const email = sameText(me.email), uname = sameText(me.username);
+    let best = null, bestScore = 0;
+    for (const u of moduleUsers) {
+        const score = (email && sameText(u.email) === email ? 2 : 0) + (uname && sameText(u.username) === uname ? 1 : 0);
+        if (score > bestScore) { best = u; bestScore = score; }
+    }
+    return best;
+}
+
+// { banking: account|null, ecommerce: account|null, utilities: account|null }
+async function linkedAccounts(me) {
+    const out = {};
+    for (const key of Object.keys(MODULE_STORES)) out[key] = pickLinkedAccount(await readJSON(MODULE_STORES[key].users), me);
+    return out;
+}
 
 // ── Health ────────────────────────────────────────────────────────────────────
 // Reports the database's state instead of always answering "ok". The answer is
@@ -2232,7 +2287,7 @@ app.get('/api/me/challenges/level1', async (req, res) => {
     // standalone single-module account — it has no way to ever satisfy the
     // other two, so treat it as already met.
     if (req.appModule) return res.json({ allMet: true, items: [] });
-    const challenges = await getChallengesForUser(req.userId, 'participant', req.challengeStore);
+    const challenges = await withSubSiteCompletions(req.userId, await getChallengesForUser(req.userId, 'participant', req.challengeStore));
     const defs = [
         { condition: 'first_transfer', title: 'Make your first bank transfer',          link: 'banking.html'   },
         { condition: 'first_purchase', title: 'Complete your first ecommerce purchase', link: 'ecommerce.html' },
@@ -2366,8 +2421,34 @@ app.post('/api/me/reset', async (req, res) => {
     }
 });
 
+// The main site keeps its own copy of every sub-site's challenges (e.g. "First
+// transfer"), but the activity that completes them happens in the sub-site, so
+// the main copy could never be completed. For a main-site participant those
+// copies are shown as done when the linked sub-site account has completed the
+// same-titled challenge. Read-only: stored rows and XP are not touched (the XP
+// was earned, and is counted, in the sub-site account).
+async function withSubSiteCompletions(mainUserId, mainChallenges, accounts) {
+    if (!accounts) {
+        const me = (await readJSON('users')).find(u => u.id === mainUserId);
+        if (!me) return mainChallenges;
+        accounts = await linkedAccounts(me);
+    }
+    const doneByCategory = new Map();
+    for (const key of Object.keys(MODULE_STORES)) {
+        if (!accounts[key]) continue;
+        const rows = await getChallengesForUser(accounts[key].id, 'participant', MODULE_STORES[key].challenges);
+        doneByCategory.set(key, new Map(rows.filter(c => c.completed).map(c => [c.title, c])));
+    }
+    return mainChallenges.map(c => {
+        const hit = !c.completed && doneByCategory.has(c.category) ? doneByCategory.get(c.category).get(c.title) : null;
+        return hit ? Object.assign({}, c, { completed: true, completedAt: hit.completedAt || null, mirroredFrom: c.category }) : c;
+    });
+}
+
 app.get('/api/me/challenges', async (req, res) => {
-    res.json(await getChallengesForUser(req.userId, req.userRole || 'participant', req.challengeStore));
+    const role = req.userRole || 'participant';
+    const own  = await getChallengesForUser(req.userId, role, req.challengeStore);
+    res.json(req.appModule || role !== 'participant' ? own : await withSubSiteCompletions(req.userId, own));
 });
 
 // ── Me: progress combined across Banking, E-Commerce and Utilities ───────────
@@ -2381,8 +2462,7 @@ app.get('/api/me/overall-progress', async (req, res) => {
     const users = await readJSON(req.userStore);
     const me = users.find(u => u.id === req.userId);
     if (!me) return res.status(404).json({ error: 'User not found' });
-    const email = String(me.email || '').trim().toLowerCase();
-    const uname = String(me.username || '').trim().toLowerCase();
+    const accounts = await linkedAccounts(me);
 
     const summarize = (userData, challenges) => {
         const ud = Object.assign({}, DEFAULT_USER_DATA, userData || {});
@@ -2399,17 +2479,16 @@ app.get('/api/me/overall-progress', async (req, res) => {
         };
     };
 
-    const mainChallenges = await getChallengesForUser(req.userId, 'participant', req.challengeStore);
+    // The main copies of a linked sub-site's challenges are counted under that
+    // sub-site (its own record is the real one), not twice.
+    const mainChallenges = (await getChallengesForUser(req.userId, 'participant', req.challengeStore))
+        .filter(c => !(Object.prototype.hasOwnProperty.call(accounts, c.category) && accounts[c.category]));
     const main = summarize(me.userData, mainChallenges);
     const modules = [];
     for (const key of Object.keys(MODULE_STORES)) {
-        const mod = MODULE_STORES[key];
-        const mUsers = await readJSON(mod.users);
-        const match = mUsers.find(u =>
-            (email && String(u.email || '').trim().toLowerCase() === email) ||
-            (uname && String(u.username || '').trim().toLowerCase() === uname));
+        const match = accounts[key];
         if (!match) { modules.push({ module: key, linked: false }); continue; }
-        const chals = await getChallengesForUser(match.id, 'participant', mod.challenges);
+        const chals = await getChallengesForUser(match.id, 'participant', MODULE_STORES[key].challenges);
         modules.push(Object.assign({
             module: key, linked: true, accountName: match.username,
             challenges: chals.filter(c => c.active !== false).map(c => ({
@@ -2430,6 +2509,79 @@ app.get('/api/me/overall-progress', async (req, res) => {
             linkedModules: linked.length,
             totalModules: modules.length
         }
+    });
+});
+
+// ── Me: everything the main site shows about a person's sub-site accounts ────
+// One read-only call (nothing here creates or changes a record) that gathers,
+// for each linked sub-site account, its balances, records and progress, plus
+// totals across them and one merged activity feed. Main-site accounts only.
+async function subSiteSnapshot(key, account) {
+    const stores = storesFor(key);
+    const uid = account.id;
+    const mine = rows => rows.filter(r => r.userId === uid);
+    const newest = (rows, n) => rows.slice().sort((a, b) => (b.timestamp || b.id || 0) - (a.timestamp || a.id || 0)).slice(0, n);
+    const [txs, pays, purchs, cards, loans, goals, cycles, messages, challenges, stats, activity] = await Promise.all([
+        readJSON(stores.transactionStore), readJSON(stores.paymentStore), readJSON(stores.purchaseStore),
+        readJSON(stores.creditCardStore), readJSON(stores.loanStore), readJSON(stores.savingsGoalStore),
+        readJSON(stores.billCycleStore), readJSON(stores.messageStore),
+        getChallengesForUser(uid, 'participant', stores.challengeStore),
+        buildStats(uid, stores), buildActivity(uid, stores)
+    ]);
+    const live = challenges.filter(c => c.active !== false);
+    const month = currentCycleMonth();
+    const balances = Object.assign({}, DEFAULT_BALANCES, account.balances || {});
+    return {
+        module: key, linked: true,
+        account: { id: account.id, username: account.username, fullName: account.fullName },
+        balances: { checking: balances.checking, savings: balances.savings },
+        userData: Object.assign({}, DEFAULT_USER_DATA, account.userData || {}),
+        stats,
+        transactions: newest(mine(txs), 100),
+        payments: newest(mine(pays), 100),
+        purchases: newest(mine(purchs), 200),
+        creditCard: mine(cards).find(c => c.active) || null,
+        loan: mine(loans).sort((a, b) => (b.openedAt || 0) - (a.openedAt || 0))[0] || null,
+        savingsGoals: mine(goals),
+        // Existing cycles only (GET /api/me/bills would also create this
+        // month's cycles and run auto-pay, which a read-only view must not).
+        bills: mine(cycles).filter(c => c.status !== 'paid' || c.cycleMonth === month)
+            .map(c => Object.assign({}, c, computeBillCycleStatus(c))).sort((a, b) => (a.dueDate || 0) - (b.dueDate || 0)),
+        activity: activity.slice(0, 30),
+        challenges: { total: live.length, completed: live.filter(c => c.completed).length },
+        unreadMessages: messages.filter(m => (m.recipientId === 'all' || m.recipientId === uid) && !(m.readBy || []).includes(uid)).length
+    };
+}
+
+app.get('/api/me/hub', async (req, res) => {
+    if (req.appModule) return res.status(400).json({ error: 'Main-site accounts only' });
+    const me = (await readJSON(req.userStore)).find(u => u.id === req.userId);
+    if (!me) return res.status(404).json({ error: 'User not found' });
+    const accounts = await linkedAccounts(me);
+    const modules = {};
+    for (const key of Object.keys(MODULE_STORES)) {
+        modules[key] = accounts[key] ? await subSiteSnapshot(key, accounts[key]) : { module: key, linked: false };
+    }
+    const linked = Object.keys(modules).map(k => modules[k]).filter(m => m.linked);
+    const sum = f => linked.reduce((n, m) => n + f(m), 0);
+    const checking = sum(m => m.balances.checking), savings = sum(m => m.balances.savings);
+    const liabilities = sum(m => (m.creditCard ? Number(m.creditCard.balance) || 0 : 0) +
+                                 (m.loan && m.loan.active && !m.loan.paidOff ? Number(m.loan.balance) || 0 : 0));
+    res.json({
+        linkedCount: linked.length,
+        modules,
+        totals: {
+            checking, savings, assets: checking + savings, liabilities, net: checking + savings - liabilities,
+            spentOnBills: sum(m => m.payments.reduce((s, p) => s + (Number(p.amount) || 0), 0)),
+            spentOnPurchases: sum(m => m.purchases.reduce((s, p) => s + (Number(p.total) || 0), 0)),
+            goalsSaved: sum(m => m.savingsGoals.reduce((s, g) => s + (Number(g.current) || 0), 0)),
+            goalsTarget: sum(m => m.savingsGoals.reduce((s, g) => s + (Number(g.target) || 0), 0)),
+            goalsCount: sum(m => m.savingsGoals.length),
+            unreadMessages: sum(m => m.unreadMessages)
+        },
+        // Every site's recent events in one feed, each tagged with its site.
+        activity: linked.reduce((all, m) => all.concat(m.activity.map(e => Object.assign({ module: m.module }, e))), [])
+            .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 50)
     });
 });
 
@@ -2503,9 +2655,41 @@ app.delete('/api/me/challenges/:id', async (req, res) => {
 });
 
 // ── Me: messages ──────────────────────────────────────────────────────────────
+// A main-site participant's inbox also holds the messages and alerts of their
+// linked sub-site accounts ("Large transaction", "Order shipped", ...), which
+// otherwise only show up inside that sub-site. Their ids are offset by site so
+// they never collide with main-site ids (every other piece of the inbox UI keeps
+// working on plain numbers), and readBy is rewritten to the main account's id so
+// the page's usual "unread" test works.
+const SUBSITE_MESSAGE_ID_BASE = 1e9;   // main-site message ids stay far below this
+const SITE_LABELS = { banking: 'DigiBank', ecommerce: 'InStyl', utilities: 'DigiPay' };
+
+async function subSiteMessagesFor(mainUser) {
+    const accounts = await linkedAccounts(mainUser);
+    const out = [];
+    const keys = Object.keys(MODULE_STORES);
+    for (let i = 0; i < keys.length; i++) {
+        const key = keys[i], account = accounts[key];
+        if (!account) continue;
+        const msgs = await readJSON(MODULE_STORES[key].messages);
+        // A copy an admin sent to the main site and the sub-sites together (mainMessageId) is
+        // the same message the main inbox already holds; don't list it again.
+        msgs.filter(m => !m.mainMessageId && (m.recipientId === 'all' || m.recipientId === account.id)).forEach(m => out.push(Object.assign({}, m, {
+            id: (i + 1) * SUBSITE_MESSAGE_ID_BASE + m.id,
+            module: key,
+            senderName: (SITE_LABELS[key] || key) + ' \u2014 ' + (m.senderName || 'System'),
+            readBy: (m.readBy || []).includes(account.id) ? [mainUser.id] : []
+        })));
+    }
+    return out;
+}
+
 app.get('/api/me/messages', async (req, res) => {
     const all = await readJSON(req.messageStore);
-    res.json(all.filter(m => m.recipientId === 'all' || m.recipientId === req.userId));
+    const own = all.filter(m => m.recipientId === 'all' || m.recipientId === req.userId);
+    if (req.appModule || (req.userRole || 'participant') !== 'participant') return res.json(own);
+    const me = (await readJSON(req.userStore)).find(u => u.id === req.userId);
+    res.json(me ? own.concat(await subSiteMessagesFor(me)) : own);
 });
 
 // Locked: rewrites the whole shared message array, which system alerts
@@ -2515,6 +2699,29 @@ app.get('/api/me/messages', async (req, res) => {
 app.patch('/api/me/messages/:id', async (req, res) => {
     const id = Number(req.params.id);
     try {
+        if (!req.appModule && id >= SUBSITE_MESSAGE_ID_BASE) {
+            // A sub-site message shown in the main inbox: mark it read on the
+            // linked sub-site account's own record.
+            const key = Object.keys(MODULE_STORES)[Math.floor(id / SUBSITE_MESSAGE_ID_BASE) - 1];
+            const msgId = id % SUBSITE_MESSAGE_ID_BASE;
+            const msg = await withUserLock(req.userId, async () => {
+                const me = key && (await readJSON(req.userStore)).find(u => u.id === req.userId);
+                const account = me && (await linkedAccounts(me))[key];
+                if (!account) throw httpError(404, 'Message not found');
+                const store = MODULE_STORES[key].messages;
+                const all = await readJSON(store);
+                const idx = all.findIndex(m => m.id === msgId && (m.recipientId === 'all' || m.recipientId === account.id));
+                if (idx === -1) throw httpError(404, 'Message not found');
+                const readBy = Array.from(all[idx].readBy || []);
+                if (!readBy.includes(account.id)) {
+                    readBy.push(account.id);
+                    all[idx] = Object.assign({}, all[idx], { readBy });
+                    await writeJSON(store, all);
+                }
+                return Object.assign({}, all[idx], { id, module: key, readBy: [req.userId] });
+            });
+            return res.json(msg);
+        }
         const msg = await withUserLock(req.userId, async () => {
             const all = await readJSON(req.messageStore);
             const idx = all.findIndex(m => m.id === id && (m.recipientId === 'all' || m.recipientId === req.userId));
@@ -3225,19 +3432,21 @@ app.get('/api/me/statement', async (req, res) => {
 });
 
 // ── Me: stats ─────────────────────────────────────────────────────────────────
-app.get('/api/me/stats', async (req, res) => {
-    const users    = await readJSON(req.userStore);
-    const user     = users.find(u => u.id === req.userId);
+// Counts, totals and skill percentages for one account, from the given stores
+// (the req.<x>Store names, or storesFor(...) for another site's).
+async function buildStats(userId, stores) {
+    const users    = await readJSON(stores.userStore);
+    const user     = users.find(u => u.id === userId);
     const userData = user ? (user.userData || Object.assign({}, DEFAULT_USER_DATA)) : Object.assign({}, DEFAULT_USER_DATA);
 
     const [allTxs, allPays, allPurchs] = await Promise.all([
-        readJSON(req.transactionStore), readJSON(req.paymentStore), readJSON(req.purchaseStore)
+        readJSON(stores.transactionStore), readJSON(stores.paymentStore), readJSON(stores.purchaseStore)
     ]);
     // Own-account moves (type 'internal') aren't transfers — they're
     // excluded from every transfer count/total/skill below.
-    const txs    = allTxs.filter(t => t.userId === req.userId && isExternalTransfer(t));
-    const pays   = allPays.filter(p => p.userId === req.userId);
-    const purchs = allPurchs.filter(p => p.userId === req.userId);
+    const txs    = allTxs.filter(t => t.userId === userId && isExternalTransfer(t));
+    const pays   = allPays.filter(p => p.userId === userId);
+    const purchs = allPurchs.filter(p => p.userId === userId);
 
     const totalSpentEcommerce = purchs.reduce((s, p) => s + (p.total   || 0), 0);
     const totalSpentBills     = pays.reduce((s, p)   => s + (p.amount  || 0), 0);
@@ -3254,28 +3463,32 @@ app.get('/api/me/stats', async (req, res) => {
     const planningSkill  = Math.min(100, Math.round(((txs.length + pays.length + purchs.length) / 30) * 100));
     const mgmtSkill      = userData ? Math.min(100, Math.round((userData.level / 20) * 100)) : 0;
 
-    res.json({
+    return {
         user: userData,
         txCount: txs.length, payCount: pays.length, purchCount: purchs.length,
         totalSpentEcommerce, totalSpentBills, totalTransferred,
         txPts, payPts, purchPts, totalPts,
         bankingSkill, ecommerceSkill, billSkill, planningSkill, mgmtSkill
-    });
+    };
+}
+
+app.get('/api/me/stats', async (req, res) => {
+    res.json(await buildStats(req.userId, req));
 });
 
 // ── Me: recent activity ───────────────────────────────────────────────────────
-app.get('/api/me/activity', async (req, res) => {
-    const limit  = req.query.limit ? parseInt(req.query.limit, 10) : null;
+// Every event that moved money or earned points for one account, newest first.
+async function buildActivity(userId, stores) {
     const [allTxs, allPays, allPurchs, allCreditActivity, allLoanPayments, allGoalActivity, allGoals] = await Promise.all([
-        readJSON(req.transactionStore), readJSON(req.paymentStore), readJSON(req.purchaseStore),
-        readJSON(req.creditActivityStore), readJSON(req.loanPaymentStore), readJSON(req.savingsGoalActivityStore), readJSON(req.savingsGoalStore)
+        readJSON(stores.transactionStore), readJSON(stores.paymentStore), readJSON(stores.purchaseStore),
+        readJSON(stores.creditActivityStore), readJSON(stores.loanPaymentStore), readJSON(stores.savingsGoalActivityStore), readJSON(stores.savingsGoalStore)
     ]);
-    const txs    = allTxs.filter(t => t.userId === req.userId);
-    const pays   = allPays.filter(p => p.userId === req.userId);
-    const purchs = allPurchs.filter(p => p.userId === req.userId);
-    const cardActivity = allCreditActivity.filter(a => a.userId === req.userId);
-    const loanPays      = allLoanPayments.filter(p => p.userId === req.userId);
-    const goalActivity  = allGoalActivity.filter(a => a.userId === req.userId);
+    const txs    = allTxs.filter(t => t.userId === userId);
+    const pays   = allPays.filter(p => p.userId === userId);
+    const purchs = allPurchs.filter(p => p.userId === userId);
+    const cardActivity = allCreditActivity.filter(a => a.userId === userId);
+    const loanPays      = allLoanPayments.filter(p => p.userId === userId);
+    const goalActivity  = allGoalActivity.filter(a => a.userId === userId);
     const goalNames     = {};
     allGoals.forEach(g => { goalNames[g.id] = g.name; });
 
@@ -3346,6 +3559,12 @@ app.get('/api/me/activity', async (req, res) => {
         });
     });
     events.sort((a, b) => b.timestamp - a.timestamp);
+    return events;
+}
+
+app.get('/api/me/activity', async (req, res) => {
+    const limit  = req.query.limit ? parseInt(req.query.limit, 10) : null;
+    const events = await buildActivity(req.userId, req);
     res.json(limit ? events.slice(0, limit) : events);
 });
 
@@ -3388,9 +3607,15 @@ app.get('/api/admin/messages', async (req, res) => {
     res.json(req.query.includeSystem ? all : all.filter(m => m.senderId !== 0));
 });
 
+// audience 'all' also delivers the message to the Banking, Ecommerce and
+// Utilities accounts: a broadcast goes to every account on each site, a message
+// to one person goes to that person's linked account on each site (and is skipped
+// where they have none). The main-site copy records which sites got one
+// (`sites`), and each sub-site copy points back at it (`mainMessageId`), so
+// deleting the message removes every copy.
 app.post('/api/admin/messages', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const { subject, body, recipientId, type, senderEmail, category } = req.body || {};
+    const { subject, body, recipientId, type, senderEmail, category, audience } = req.body || {};
     if (!subject || !body) return res.status(400).json({ error: 'subject and body required' });
     const record = await withUserLock(req.userId, async () => {
         const messages = await readJSON(req.messageStore);
@@ -3409,6 +3634,20 @@ app.post('/api/admin/messages', async (req, res) => {
             sentAt:      Date.now(),
             readBy:      []
         };
+        if (audience === 'all') {
+            const target   = recipientId === 'all' ? null : users.find(u => u.id === recipientId);
+            const accounts = target ? await linkedAccounts(target) : {};
+            const sites    = [];
+            for (const key of Object.keys(MODULE_STORES)) {
+                const to = recipientId === 'all' ? 'all' : (accounts[key] ? accounts[key].id : null);
+                if (to === null) continue;
+                const copies = await readJSON(MODULE_STORES[key].messages);
+                copies.push(Object.assign({}, rec, { id: nextId(copies), recipientId: to, mainMessageId: rec.id }));
+                await writeJSON(MODULE_STORES[key].messages, copies);
+                sites.push(key);
+            }
+            rec.sites = sites;
+        }
         messages.push(rec);
         await writeJSON(req.messageStore, messages);
         return rec;
@@ -3421,9 +3660,43 @@ app.delete('/api/admin/messages/:id', async (req, res) => {
     const id  = Number(req.params.id);
     await withUserLock(req.userId, async () => {
         const all = await readJSON(req.messageStore);
+        const target = all.find(m => m.id === id);
+        for (const key of (target && target.sites) || []) {
+            const copies = await readJSON(MODULE_STORES[key].messages);
+            await writeJSON(MODULE_STORES[key].messages, copies.filter(m => m.mainMessageId !== id));
+        }
         await writeJSON(req.messageStore, all.filter(m => m.id !== id));
     });
     res.json({ ok: true });
+});
+
+// GET /api/admin/sub-site-accounts — every Banking / Ecommerce / Utilities account,
+// with the main-site account it belongs to (same email/username rule as the rest of
+// the sync), so the admin panel can see them. Never includes password hashes.
+app.get('/api/admin/sub-site-accounts', async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const mainUsers = await readJSON('users');
+    const keys = Object.keys(MODULE_STORES);
+    const siteUsers = {};
+    for (const key of keys) siteUsers[key] = await readJSON(MODULE_STORES[key].users);
+    const owner = new Map();   // "site:accountId" -> the main-site account it belongs to
+    mainUsers.forEach(m => keys.forEach(key => {
+        const account = pickLinkedAccount(siteUsers[key], m);
+        if (account && !owner.has(key + ':' + account.id)) owner.set(key + ':' + account.id, m);
+    }));
+    const accounts = [];
+    keys.forEach(key => siteUsers[key].forEach(u => {
+        const m  = owner.get(key + ':' + u.id);
+        const ud = Object.assign({}, DEFAULT_USER_DATA, u.userData || {});
+        const bal = Object.assign({}, DEFAULT_BALANCES, u.balances || {});
+        accounts.push({
+            site: key, id: u.id, username: u.username, fullName: u.fullName, email: u.email,
+            createdAt: u.createdAt || null, lastLogin: u.lastLogin || null,
+            level: ud.level, points: ud.points, coins: ud.coins, checking: bal.checking, savings: bal.savings,
+            mainAccount: m ? { id: m.id, username: m.username, fullName: m.fullName } : null
+        });
+    }));
+    res.json(accounts);
 });
 
 // ── Admin: challenge management ───────────────────────────────────────────────
@@ -3537,30 +3810,26 @@ app.post('/api/admin/challenges/seed', async (req, res) => {
     res.json({ ok: true, seeded: participants.length });
 });
 
-// POST /api/admin/challenges/reseed — add any missing default challenges for every approved participant
+// POST /api/admin/challenges/reseed — add any missing default challenges for every approved
+// participant, and for every account on the three sub-sites (which keep their own challenges).
+// Answers the list of rows it added.
 app.post('/api/admin/challenges/reseed', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const added = await withUserLock(req.userId, async () => {
-        const challenges   = await readJSON(req.challengeStore);
-        const users        = await readJSON(req.userStore);
-        const participants = users.filter(u => u.role === 'participant' && u.status === 'approved');
-        const out          = [];
-        let   nextChalId   = nextId(challenges);
-        const now          = Date.now();
-
-        participants.forEach(u => {
-            const existing      = challenges.filter(c => c.userId === u.id);
-            const existingTitles = new Set(existing.map(c => c.title));
-            ALL_DEFAULT_CHALLENGES.forEach(c => {
-                if (!existingTitles.has(c.title)) {
-                    const rec = Object.assign({}, c, { id: nextChalId++, userId: u.id, createdAt: now, active: true, completed: false });
-                    challenges.push(rec);
-                    out.push(rec);
-                }
-            });
-        });
-
-        await writeJSON(req.challengeStore, challenges);
+        const out = [];
+        const reseed = async (challengeStore, userIds, category) => {
+            const rows = await readJSON(challengeStore);
+            const before = rows.length;
+            userIds.forEach(id => addMissingChallenges(rows, id, category));
+            if (rows.length > before) await writeJSON(challengeStore, rows);
+            out.push(...rows.slice(before));
+        };
+        const users = await readJSON(req.userStore);
+        await reseed(req.challengeStore, users.filter(u => u.role === 'participant' && u.status === 'approved').map(u => u.id), null);
+        for (const key of Object.keys(MODULE_STORES)) {
+            const mod = MODULE_STORES[key];
+            await reseed(mod.challenges, (await readJSON(mod.users)).map(u => u.id), key);
+        }
         return out;
     });
     res.json(added);
@@ -4524,6 +4793,62 @@ function startScheduledTransferSweep() {
     }, 5 * 60 * 1000);
 }
 
+// ── One-time data migrations ──────────────────────────────────────────────────
+// Changes to the stored data (not the schema) that must happen once on an
+// existing database. Each runs at boot inside one locked section together with
+// its entry in the ledger, so it either happens completely and is recorded, or
+// not at all and is retried on the next boot. The ledger is one plain object
+// stored under MIGRATIONS_KEY (not one of the array stores).
+const MIGRATIONS_KEY = '_migrations';
+
+// Audit findings F2/F3: nothing ever re-synced existing accounts' challenges with
+// the seed list. 'Video Learner' (added 2026-09-16) is missing for everyone seeded
+// before then, and 'Bank Explorer' still carries its pre-PR-26 description. Only
+// those two known differences are fixed: it never touches an admin's edits, and
+// it never re-adds a challenge an admin deleted.
+const LEGACY_BANK_EXPLORER_TEXT = 'Learn how banking works by reading the Information tab on your Profile page.';
+const MIGRATIONS = [{
+    id: '2026-10-challenge-definitions-sync',
+    run: async () => {
+        const bankExplorer = ALL_DEFAULT_CHALLENGES.find(c => c.title === 'Bank Explorer');
+        const summary = {};
+        const sync = async (label, challengeStore, userStore, category, onlyParticipants) => {
+            const [rows, users] = await Promise.all([readJSON(challengeStore), readJSON(userStore)]);
+            const seeded = users.filter(u => (!onlyParticipants || (u.role === 'participant' && u.status === 'approved')) && rows.some(c => c.userId === u.id));
+            const before = rows.length;
+            seeded.forEach(u => addMissingChallenges(rows, u.id, category, ['Video Learner']));
+            let refreshed = 0;
+            rows.forEach((c, i) => {
+                if (c.title === 'Bank Explorer' && c.description === LEGACY_BANK_EXPLORER_TEXT) { rows[i] = Object.assign({}, c, { description: bankExplorer.description }); refreshed++; }
+            });
+            if (rows.length > before || refreshed) await writeJSON(challengeStore, rows);
+            summary[label] = { added: rows.length - before, refreshed };
+        };
+        await sync('main', 'challenges', 'users', null, true);
+        for (const key of Object.keys(MODULE_STORES)) await sync(key, MODULE_STORES[key].challenges, MODULE_STORES[key].users, key, false);
+        return summary;
+    }
+}];
+
+async function runMigrations() {
+    for (const m of MIGRATIONS) {
+        try {
+            await withUserLock(0, async () => {
+                const ledger = await readJSON(MIGRATIONS_KEY);
+                const done = ledger && !Array.isArray(ledger) && ledger.done ? ledger.done : {};
+                if (done[m.id]) return;
+                const summary = await m.run();
+                await writeJSON(MIGRATIONS_KEY, { done: Object.assign({}, done, { [m.id]: Date.now() }) });
+                console.log('DigifinwizDB: migration ' + m.id + ' applied: ' + JSON.stringify(summary));
+            });
+        } catch (err) {
+            // The app is usable without it, so a failing migration must not take the
+            // deploy down; it is retried on the next boot.
+            console.error('DigifinwizDB: migration ' + m.id + ' failed (will retry on the next boot):', err.message);
+        }
+    }
+}
+
 async function start() {
     await initStorage();
     await seedDefaultAdmin();
@@ -4532,6 +4857,7 @@ async function start() {
     await seedDefaultModuleAdmin('utilitiesUsers', 'utilitiesChallenges', 'utilities');
     await seedDefaultBills();
     await seedDefaultProducts();
+    await runMigrations();
     await warnIfDefaultAdminPassword().catch(err => console.error('Admin password check skipped:', err.message));
     startScheduledTransferSweep();
     app.listen(PORT, err => {
