@@ -936,7 +936,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     return '<tr' + (done ? ' style="opacity:0.7"' : '') + '>' +
                         '<td style="color:var(--color-text-muted)">' + (i + 1) + '</td>' +
                         '<td style="max-width:180px"><strong>' + escHtml(c.title) + '</strong>' +
-                            '<div style="font-size:var(--text-xs);color:var(--color-text-muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px">' + escHtml(c.description) + '</div></td>' +
+                            '<div style="font-size:var(--text-xs);color:var(--color-text-muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px">' + escHtml(c.description) + '</div>' +
+                            assignPill(c) + '</td>' +
                         '<td><span class="pill ' + catPill + '">' + catLabel + '</span></td>' +
                         '<td><span class="pill pill-green">+' + (c.points || 0) + ' XP</span></td>' +
                         '<td>' + (c.florins ? 'ƒ' + Number(c.florins).toFixed(2) : '<span style="color:var(--color-text-muted)">Free</span>') + '</td>' +
@@ -980,14 +981,71 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         }
         reloadChallengesTable();
+        loadChallengeAssignees();
     }
 
     let chalCategoryFilter  = '';
     let chalStatusFilter    = '';
     let chalCompletedFilter = '';
 
+    // Who holds each challenge (title -> user ids) and the people to name them, from
+    // GET /api/admin/challenges/assignments. Empty until loaded, in which case the
+    // list simply shows no "assigned" pills.
+    let chalHolders = new Map();
+    let chalParticipantCount = 0;
+    let chalPeople = new Map();
+
+    function assignPill(c) {
+        const ids = chalHolders.get(c.title);
+        if (!ids || !chalParticipantCount || ids.length >= chalParticipantCount) return '';
+        if (ids.length === 1) {
+            const u = chalPeople.get(ids[0]);
+            return '<div><span class="pill pill-blue assign-pill" title="Only this user has the challenge">👤 Only ' +
+                escHtml(u ? (u.fullName || u.username) : 'user #' + ids[0]) + '</span></div>';
+        }
+        return '<div><span class="pill pill-blue assign-pill" title="Not every participant has this challenge">👥 ' +
+            ids.length + ' of ' + chalParticipantCount + ' users</span></div>';
+    }
+
+    // Fills the Create Challenge form's "Assign to" choices with the approved participants.
+    function loadChallengeAssignees() {
+        const select = document.getElementById('chal-assign-to');
+        if (!select) return;
+        DigifinwizDB.getAllUsers().then(users => {
+            const keep = select.value;
+            while (select.options.length > 1) select.remove(1);
+            users.filter(u => u.role === 'participant' && u.status === 'approved')
+                .sort((a, b) => (a.fullName || a.username).localeCompare(b.fullName || b.username))
+                .forEach(u => {
+                    const opt = document.createElement('option');
+                    opt.value = String(u.id);
+                    opt.textContent = (u.fullName || u.username) + ' (@' + u.username + ')';
+                    select.appendChild(opt);
+                });
+            select.value = Array.from(select.options).some(o => o.value === keep) ? keep : 'all';
+        }).catch(err => console.error('loadChallengeAssignees:', err));
+    }
+
+    // An existing challenge is edited for everyone who holds it, so its "Assign to"
+    // choice only applies while creating a new one.
+    function setChalAssignMode(editing) {
+        const select = document.getElementById('chal-assign-to');
+        const hint   = document.getElementById('chal-assign-hint');
+        if (select) { select.disabled = editing; if (editing) select.value = 'all'; }
+        if (hint) hint.textContent = editing
+            ? 'Editing changes the challenge for everyone who has it. To give it to someone else, open the user and use their Challenges tab.'
+            : 'New challenges go to everyone unless you pick one person.';
+    }
+
     function reloadChallengesTable() {
-        DigifinwizDB.getChallenges().then(list => {
+        Promise.all([
+            DigifinwizDB.getChallenges(),
+            DigifinwizDB.getChallengeAssignments().catch(() => null),   // only decorates the list
+            DigifinwizDB.getAllUsers().catch(() => [])
+        ]).then(([list, assignments, users]) => {
+            chalHolders = new Map(((assignments && assignments.challenges) || []).map(a => [a.title, a.userIds]));
+            chalParticipantCount = (assignments && assignments.participants) || 0;
+            chalPeople = new Map(users.map(u => [u.id, u]));
             let filtered = list;
             if (chalCategoryFilter) filtered = filtered.filter(c => c.category === chalCategoryFilter);
             if (chalStatusFilter !== '') {
@@ -1020,6 +1078,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const c = list.find(ch => ch.id === id);
             if (!c) return;
             chalEditingId = id;
+            setChalAssignMode(true);
             setText('chal-form-title', 'Edit Challenge');
             setVal('chal-edit-id',    id);
             setVal('chal-title',      c.title);
@@ -1112,6 +1171,7 @@ document.addEventListener('DOMContentLoaded', function () {
         chalEditingId = null;
         setText('chal-form-title', 'Create Challenge');
         document.getElementById('challengeForm').reset();
+        setChalAssignMode(false);
         setVal('chal-edit-id', '');
         syncConditionUI('manual');
         document.getElementById('chal-submit-btn').textContent = '➕ Create Challenge';
@@ -1265,9 +1325,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 .then(() => { showToast('Challenge updated!', 'success'); resetChallengeForm(); reloadChallengesTable(); })
                 .catch(() => showToast('Update failed.', 'error'));
         } else {
-            DigifinwizDB.adminCreateChallenge(payload)
-                .then(() => { showToast('Challenge created!', 'success'); resetChallengeForm(); reloadChallengesTable(); })
-                .catch(() => showToast('Create failed.', 'error'));
+            const assignTo = getVal('chal-assign-to') || 'all';
+            const chosen   = document.getElementById('chal-assign-to').selectedOptions[0];
+            const who      = assignTo === 'all' || !chosen ? null : chosen.textContent;
+            DigifinwizDB.adminCreateChallenge(Object.assign({ assignTo }, payload))
+                .then(() => { showToast(who ? 'Challenge assigned to ' + who + '!' : 'Challenge created!', 'success'); resetChallengeForm(); reloadChallengesTable(); })
+                .catch(err => showToast('Create failed' + (err && err.message ? ': ' + err.message : '.'), 'error'));
         }
     });
 
@@ -1613,10 +1676,43 @@ document.addEventListener('DOMContentLoaded', function () {
         }));
     }
 
+    // The DigiPay accounts a bill can be assigned to, by id (GET /api/admin/sub-site-accounts).
+    let billAccounts = new Map();
+
     function loadBillsPage() {
-        billsApi('GET', '/api/bills')
-            .then(bills => renderBillsAdmin(bills))
-            .catch(err => { showToast('Could not load bills: ' + err.message, 'error'); renderBillsAdmin([]); });
+        Promise.all([
+            billsApi('GET', '/api/bills'),
+            billsApi('GET', '/api/admin/sub-site-accounts').catch(() => [])   // only needed for the "Assign to" choices
+        ]).then(([bills, accounts]) => {
+            fillBillAssignees(accounts);
+            renderBillsAdmin(bills);
+        }).catch(err => { showToast('Could not load bills: ' + err.message, 'error'); renderBillsAdmin([]); });
+    }
+
+    function fillBillAssignees(accounts) {
+        const select = document.getElementById('billAssignTo');
+        if (!select) return;
+        const keep = select.value;
+        while (select.options.length > 1) select.remove(1);
+        billAccounts = new Map();
+        accounts.filter(a => a.site === 'utilities')
+            .sort((a, b) => (a.fullName || a.username).localeCompare(b.fullName || b.username))
+            .forEach(a => {
+                billAccounts.set(a.id, a);
+                const main = (a.mainAccounts && a.mainAccounts[0]) || a.mainAccount;
+                const opt = document.createElement('option');
+                opt.value = 'utilities:' + a.id;
+                opt.textContent = (a.fullName || a.username) + ' (@' + a.username + ')' + (main ? ' · Main: @' + main.username : '');
+                select.appendChild(opt);
+            });
+        select.value = Array.from(select.options).some(o => o.value === keep) ? keep : 'all';
+    }
+
+    function billAssigneeBadge(b) {
+        if (!b.assignedTo) return '';
+        const a = billAccounts.get(b.assignedTo.userId);
+        const name = a ? (a.fullName || a.username) : 'account #' + b.assignedTo.userId + ' (not found)';
+        return '<span class="pill pill-blue" style="font-size:0.65rem" title="Only this DigiPay account is issued this bill">👤 ' + escHtml(name) + '</span>';
     }
 
     function renderBillsAdmin(bills) {
@@ -1632,7 +1728,7 @@ document.addEventListener('DOMContentLoaded', function () {
             <div style="display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-border)">
                 <div style="width:40px;height:40px;border-radius:10px;background:${escHtml(b.gradient)};display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">${escHtml(b.icon || '🧾')}</div>
                 <div style="flex:1;min-width:0">
-                    <div style="font-weight:600;font-size:var(--text-sm)">${escHtml(b.name)} ${b.billingType === 'usage' ? '<span class="pill pill-purple" style="font-size:0.65rem">usage-based</span>' : ''}</div>
+                    <div style="font-weight:600;font-size:var(--text-sm)">${escHtml(b.name)} ${b.billingType === 'usage' ? '<span class="pill pill-purple" style="font-size:0.65rem">usage-based</span>' : ''} ${billAssigneeBadge(b)}</div>
                     <div style="font-size:var(--text-xs);color:var(--color-text-muted)">Acct: ${escHtml(b.accountNumber || '—')} &nbsp;·&nbsp; Due day: ${b.dueDateDay || '—'} &nbsp;·&nbsp; Late fee: ${Math.round((b.lateFeeRate||0)*100)}% after ${b.graceDays||0}d</div>
                 </div>
                 <div style="font-weight:700;color:var(--color-primary-600);margin-right:var(--space-3)">${b.billingType === 'usage' ? `ƒ${Number(b.ratePerUnit).toFixed(3)}/${escHtml(b.unit)}` : `ƒ${Number(b.amount).toFixed(2)}`}</div>
@@ -1677,6 +1773,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 document.getElementById('billUsageMax').value      = b.usageMax != null ? b.usageMax : '';
                 document.getElementById('billLateFeeRate').value   = b.lateFeeRate != null ? Math.round(b.lateFeeRate * 100) : 5;
                 document.getElementById('billGraceDays').value     = b.graceDays != null ? b.graceDays : 5;
+                const assignSelect = document.getElementById('billAssignTo');
+                const assignedTo   = b.assignedTo ? b.assignedTo.site + ':' + b.assignedTo.userId : 'all';
+                if (!Array.from(assignSelect.options).some(o => o.value === assignedTo)) {
+                    const opt = document.createElement('option');   // the account was deleted: keep the assignment visible
+                    opt.value = assignedTo;
+                    opt.textContent = 'Account #' + b.assignedTo.userId + ' (no longer exists)';
+                    assignSelect.appendChild(opt);
+                }
+                assignSelect.value = assignedTo;
                 toggleAdminBillingFields();
                 document.getElementById('billFormTitle').textContent = 'Edit Bill';
                 document.getElementById('billSubmitBtn').textContent = 'Save Changes';
@@ -1718,6 +1823,10 @@ document.addEventListener('DOMContentLoaded', function () {
             graceDays:     parseInt(document.getElementById('billGraceDays').value, 10) || 0,
             active:        true
         };
+        // 'all' = every DigiPay account (the default); 'utilities:<id>' = just that account.
+        const assignValue = document.getElementById('billAssignTo').value;
+        payload.assignedTo = assignValue === 'all' ? null
+            : { site: assignValue.split(':')[0], userId: Number(assignValue.split(':')[1]) };
         if (billingType === 'usage') {
             payload.unit        = document.getElementById('billUnit').value.trim();
             payload.ratePerUnit = parseFloat(document.getElementById('billRatePerUnit').value) || 0;
@@ -1729,8 +1838,9 @@ document.addEventListener('DOMContentLoaded', function () {
             payload.amount      = parseFloat(document.getElementById('billAmount').value) || 0;
             payload.unit = payload.ratePerUnit = payload.baseFee = payload.usageMin = payload.usageMax = null;
         }
+        const assignee = payload.assignedTo ? (billAccounts.get(payload.assignedTo.userId) || {}) : null;
         billsApi(editId ? 'PUT' : 'POST', editId ? '/api/bills/' + editId : '/api/bills', payload).then(() => {
-            showToast(editId ? 'Bill updated!' : 'Bill added!', 'success');
+            showToast((editId ? 'Bill updated' : 'Bill added') + (assignee ? ' for ' + (assignee.fullName || assignee.username || 'that account') : '') + '!', 'success');
             cancelBillEdit();
             loadBillsPage();
         }).catch(err => showToast('Save failed: ' + err.message, 'error'));
@@ -2003,7 +2113,10 @@ document.addEventListener('DOMContentLoaded', function () {
         var container = document.getElementById('mgmt-challenges-list');
         if (!container) return;
         container.innerHTML = '<p style="color:var(--color-text-muted)">Loading…</p>';
-        DigifinwizDB.getChallengesForUser(userId).then(function(challenges) {
+        Promise.all([DigifinwizDB.getChallengesForUser(userId), DigifinwizDB.getChallenges()]).then(function(res) {
+            var challenges = res[0];
+            if (mgmtUserId !== userId) return;   // the drawer has moved on to someone else
+            fillMgmtAssignSelect(challenges, res[1]);
             if (challenges.length === 0) {
                 container.innerHTML = '<p style="color:var(--color-text-muted)">No challenges for this user.</p>';
                 return;
@@ -2030,6 +2143,9 @@ document.addEventListener('DOMContentLoaded', function () {
                               'onclick="mgmtMarkChalComplete(' + c.id + ')">✓ Complete</button>'
                             : '<button class="btn" style="padding:2px 8px;font-size:var(--text-xs)" ' +
                               'onclick="mgmtMarkChalIncomplete(' + c.id + ')">↺ Reset</button>') +
+                        '<button class="btn btn-danger" style="padding:2px 8px;font-size:var(--text-xs)" title="Remove this challenge from this user only" ' +
+                            'data-title="' + escHtml(c.title) + '"' + (MGMT_LEVEL1_CONDITIONS.indexOf(c.condition) !== -1 ? ' data-level1="1"' : '') +
+                            ' onclick="mgmtRemoveChallenge(' + c.id + ', this)">✕ Remove</button>' +
                     '</div>' +
                     '</div>';
             }).join('');
@@ -2038,6 +2154,58 @@ document.addEventListener('DOMContentLoaded', function () {
             container.innerHTML = '<p style="color:var(--color-error)">Failed to load challenges.</p>';
         });
     }
+
+    // The three challenges that gate Level 2 (LEVEL_1_REQUIRED_CONDITIONS on the server).
+    var MGMT_LEVEL1_CONDITIONS = ['first_transfer', 'first_purchase', 'first_payment'];
+
+    // The challenges this user doesn't have yet (every definition minus the titles they hold).
+    function fillMgmtAssignSelect(owned, definitions) {
+        var select = document.getElementById('mgmt-assign-select');
+        var btn    = document.getElementById('mgmt-assign-btn');
+        if (!select || !btn) return;
+        var have = new Set(owned.map(function(c) { return c.title; }));
+        var missing = definitions.filter(function(d) { return !have.has(d.title); }).sort(function(a, b) {
+            return (a.category || '').localeCompare(b.category || '') || (a.title || '').localeCompare(b.title || '');
+        });
+        select.innerHTML = '';
+        var first = document.createElement('option');
+        first.value = '';
+        first.textContent = missing.length ? 'Choose a challenge to assign…' : 'This user already has every challenge';
+        select.appendChild(first);
+        missing.forEach(function(d) {
+            var opt = document.createElement('option');
+            opt.value = String(d.id);
+            opt.textContent = d.title + ' — ' + (CAT_LABELS[d.category] || d.category) + ', +' + (d.points || 0) + ' XP';
+            select.appendChild(opt);
+        });
+        select.disabled = btn.disabled = missing.length === 0;
+    }
+
+    window.mgmtAssignChallenge = function() {
+        var select = document.getElementById('mgmt-assign-select');
+        var chalId = select ? Number(select.value) : 0;
+        if (!mgmtUserId || !chalId) { showToast('Choose a challenge to assign first.', 'error'); return; }
+        var userId = mgmtUserId;
+        var title  = select.options[select.selectedIndex].textContent.split(' — ')[0];
+        DigifinwizDB.adminAssignChallenge(chalId, userId).then(function() {
+            showToast('Assigned "' + title + '".', 'success');
+            if (mgmtUserId === userId) loadMgmtChallenges(userId);
+        }).catch(function(err) { showToast('Assign failed: ' + (err && err.message ? err.message : 'try again.'), 'error'); });
+    };
+
+    window.mgmtRemoveChallenge = function(chalId, btn) {
+        if (!mgmtUserId) return;
+        var title  = btn ? btn.getAttribute('data-title') : 'this challenge';
+        var level1 = btn && btn.getAttribute('data-level1')
+            ? '\n\nThis is one of the three Level 1 requirements: without it this user cannot reach Level 2 until it is assigned again and completed.' : '';
+        if (!confirm('Remove "' + title + '" from this user?' + level1 + '\n\nEveryone else keeps it, and XP already earned stays. ' +
+                     '"Add Missing Default Challenges" would add a default challenge back.')) return;
+        var userId = mgmtUserId;
+        DigifinwizDB.adminRemoveUserChallenge(userId, chalId).then(function() {
+            showToast('Challenge removed from this user.', 'info');
+            if (mgmtUserId === userId) loadMgmtChallenges(userId);
+        }).catch(function(err) { showToast('Remove failed: ' + (err && err.message ? err.message : 'try again.'), 'error'); });
+    };
 
     window.saveUserXP = function() {
         if (!mgmtUserId) return;
