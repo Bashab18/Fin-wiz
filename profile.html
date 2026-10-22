@@ -1035,7 +1035,7 @@
     });
 
     function resetProgress() {
-        if (!confirm('Reset ALL progress on this Main Site account? This clears its own transactions, bills and challenges and resets its balances.\n\nYour Banking, Ecommerce and Utilities accounts keep their own progress; reset those inside each site.')) return;
+        if (!confirm('Reset ALL progress on this Main Site account? This clears its own transactions and bills, sets its challenges back to incomplete (any your admin gave you stay) and resets its balances.\n\nYour Banking, Ecommerce and Utilities accounts keep their own progress; reset those inside each site.')) return;
         // Single self-scoped server request — atomic from the client's point of
         // view, and can't accidentally touch another user's data (unlike the
         // old client-side sequence, which also referenced a DEFAULT_BALANCES

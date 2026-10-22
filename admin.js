@@ -152,7 +152,7 @@ document.addEventListener('DOMContentLoaded', function () {
             participants.forEach(function(u) {
                 var opt = document.createElement('option');
                 opt.value = u.id;
-                opt.textContent = escHtml(u.fullName || u.username) + ' (@' + escHtml(u.username) + ')';
+                opt.textContent = (u.fullName || u.username) + ' (@' + u.username + ')';   // textContent is already text: escaping it too would show &amp;
                 select.appendChild(opt);
             });
             // Restore previously selected user or pick first
@@ -1629,7 +1629,7 @@ document.addEventListener('DOMContentLoaded', function () {
                  .forEach(function(u) {
                      var opt = document.createElement('option');
                      opt.value = u.id;
-                     opt.textContent = escHtml(u.fullName || u.username) + ' (@' + escHtml(u.username) + ')';
+                     opt.textContent = (u.fullName || u.username) + ' (@' + u.username + ')';   // textContent is already text: escaping it too would show &amp;
                      select.appendChild(opt);
                  });
         });
@@ -2229,7 +2229,8 @@ document.addEventListener('DOMContentLoaded', function () {
             : '\n\nEveryone else keeps it, and XP already earned stays. "Add Missing Default Challenges" would add a default challenge back.';
         if (!confirm('Remove "' + title + '" from this user?' + level1 + keeps)) return;
         var userId = mgmtUserId;
-        DigifinwizDB.adminRemoveUserChallenge(userId, chalId).then(function() {
+        // The confirmation above already spelled out the Level 1 consequence, so that is the "force".
+        DigifinwizDB.adminRemoveUserChallenge(userId, chalId, !!(btn && btn.getAttribute('data-level1'))).then(function() {
             showToast('Challenge removed from this user.', 'info');
             if (mgmtUserId === userId) loadMgmtChallenges(userId);
         }).catch(function(err) { showToast('Remove failed: ' + (err && err.message ? err.message : 'try again.'), 'error'); });

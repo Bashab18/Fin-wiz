@@ -2397,14 +2397,24 @@ app.post('/api/me/challenges/purge', async (req, res) => {
 // (like every other /api/me/* route) so a participant can self-service reset
 // their challenges without needing the admin-only DELETE /api/admin/challenges,
 // which would otherwise wipe every user's challenges.
+// A participant's own reset: every one of their challenges goes back to incomplete and any
+// default they lack is added. The rows are kept rather than deleted and re-seeded, so the admin's
+// edits to a challenge, and the challenges the admin gave this user beyond the defaults
+// (custom or assigned), are not lost to a reset that only the participant pressed.
+function resetOwnChallengeRows(rows, userId, appModule) {
+    const out = rows.map(c => c.userId === userId && (c.completed || c.completedAt)
+        ? Object.assign({}, c, { completed: false, completedAt: null }) : c);
+    addMissingChallenges(out, userId, appModule || null);
+    return out;
+}
+
 app.post('/api/me/challenges/reset', async (req, res) => {
     await withUserLock(req.userId, async () => {
-        const all    = await readJSON(req.challengeStore);
-        const others = all.filter(c => c.userId !== req.userId);
-        // Before wiping, record every challenge this user already completed
+        const all = await readJSON(req.challengeStore);
+        // Before resetting, record every challenge this user already completed
         // in the once-per-title reward ledger (covers accounts that earned
-        // rewards before the ledger existed), so re-completing the reseeded
-        // copies can't pay the same rewards twice.
+        // rewards before the ledger existed), so completing them again
+        // can't pay the same rewards twice.
         const doneTitles = all.filter(c => c.userId === req.userId && c.completed).map(c => c.title || String(c.id));
         if (doneTitles.length) {
             const users = await readJSON(req.userStore);
@@ -2416,16 +2426,15 @@ app.post('/api/me/challenges/reset', async (req, res) => {
                 await writeJSON(req.userStore, users);
             }
         }
-        await writeJSON(req.challengeStore, others);
-        await seedChallengesForUser(req.userId, req.challengeStore, req.appModule);
+        await writeJSON(req.challengeStore, resetOwnChallengeRows(all, req.userId, req.appModule));
     });
     res.json({ ok: true });
 });
 
 // Resets the caller's own progress in one request: clears their transactions,
 // payments, purchases and cart, resets their balances and userData to
-// defaults, and re-seeds their challenges. Scoped to req.userId so this can't
-// affect any other user.
+// defaults, and sets their challenges back to incomplete (see resetOwnChallengeRows).
+// Scoped to req.userId so this can't affect any other user.
 app.post('/api/me/reset', async (req, res) => {
     try {
         // Locked: rewrites the users array and every per-user store, which
@@ -2457,9 +2466,7 @@ app.post('/api/me/reset', async (req, res) => {
             });
             await writeJSON(req.userStore, users);
 
-            const challenges = await readJSON(req.challengeStore);
-            await writeJSON(req.challengeStore, challenges.filter(c => c.userId !== req.userId));
-            await seedChallengesForUser(req.userId, req.challengeStore, req.appModule);
+            await writeJSON(req.challengeStore, resetOwnChallengeRows(await readJSON(req.challengeStore), req.userId, req.appModule));
         });
         res.json({ ok: true });
     } catch (err) {
@@ -3966,15 +3973,21 @@ app.post('/api/admin/challenges/:id/assign', async (req, res) => {
 
 // DELETE /api/users/:id/challenges/:challengeId — take a challenge away from this
 // one user (every copy of that title they hold). Everyone else keeps theirs, and
-// XP the user already earned stays with them.
+// XP the user already earned stays with them. A Level 1 requirement needs ?force=1.
 app.delete('/api/users/:id/challenges/:challengeId', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const userId      = Number(req.params.id);
     const challengeId = Number(req.params.challengeId);
+    const force       = req.query.force === '1' || req.query.force === 'true';
     const removed = await withUserLock(req.userId, async () => {
         const all = await readJSON(req.challengeStore);
         const row = all.find(c => c.id === challengeId && c.userId === userId);
         if (!row) return 0;
+        // The three Level 1 requirements gate a main-site account's first level-up, so taking one
+        // away has to be asked for explicitly (the admin page does, after its confirmation).
+        if (!req.appModule && !force && LEVEL_1_REQUIRED_CONDITIONS.includes(row.condition)) {
+            throw httpError(409, '"' + row.title + '" is one of the three Level 1 requirements: without it this user cannot reach Level 2 until it is assigned again and completed. Send force=1 to remove it anyway.');
+        }
         const rest = all.filter(c => !(c.userId === userId && c.title === row.title));
         await writeJSON(req.challengeStore, rest);
         return all.length - rest.length;

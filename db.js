@@ -455,9 +455,10 @@ const DigifinwizDB = (() => {
         return _api('POST', '/api/admin/challenges/' + challengeId + '/assign', { userId: userId });
     }
 
-    // Admin: take a challenge away from this one user (others keep theirs).
-    function adminRemoveUserChallenge(userId, challengeId) {
-        return _api('DELETE', '/api/users/' + userId + '/challenges/' + challengeId);
+    // Admin: take a challenge away from this one user (others keep theirs). `force` is
+    // needed for one of the three Level 1 requirements.
+    function adminRemoveUserChallenge(userId, challengeId, force) {
+        return _api('DELETE', '/api/users/' + userId + '/challenges/' + challengeId + (force ? '?force=1' : ''));
     }
 
     // Admin: { participants, challenges: [{ title, userIds }] } — who holds each challenge.
