@@ -97,7 +97,7 @@ A one-time migration at boot (recorded in `app_store` under `_migrations`) broug
 - **Transactions** — view all transfer activity
 - **Purchases** — view store purchase history
 - **Payments** — view bill payment history
-- **Challenges** — create, edit and delete challenges, and view completion status per user. A new challenge goes to every approved participant, or to one person chosen under **Assign to**. A user's **Challenges** tab (Users → Manage) can also give them any challenge they don't have yet, or take one away from them alone.
+- **Challenges** — create, edit and delete challenges, and view completion status per user. A new challenge goes to every approved participant who doesn't already have it, or to one person chosen under **Assign to**. The title identifies a challenge: creating a title that already exists is only accepted with the same settings (it then fills in whoever lacks it), and different settings are refused, so edit the existing one instead. A user's **Challenges** tab (Users → Manage) can also give them any challenge someone still has that they don't, or take one away from them alone. A challenge exists only as its holders' copies, so removing the last copy deletes it, and taking one of the three Level 1 requirements away from a user needs `?force=1` on the API (the page asks first). A participant's own *Reset Challenges* and *Reset Progress* (Profile) set their challenges back to incomplete and add any default they lack; the ones the admin gave them, and the admin's edits to a challenge, stay.
 - **Messages** — broadcast messages to participants
 - **Bills** — create, edit, and delete bill types shown on the Utilities page, for every DigiPay account or for one chosen account (**Assign to**)
 
@@ -109,9 +109,9 @@ Admins can manage bills via the **Bills** tab in the admin panel:
 - Add a new bill (name, icon, amount, account number, gradient colour, due date)
 - Edit any existing bill
 - Delete a bill
-- Assign a bill to one DigiPay account: only that account is issued it each month (the default, **Everyone**, issues it to every account). Changing the assignment only affects bills issued from then on; bills already issued stay with whoever has them.
+- Assign a bill to one DigiPay account: only that account is issued it each month (the default, **Everyone**, issues it to every account). Changing the assignment never touches bills already issued, and nobody is issued a bill for months before the change (putting a bill back to **Everyone** bills the others from that month on, not for the months it was one account's). Deleting a DigiPay account deletes the bills assigned to it.
 
-The Utilities page fetches `/api/bills` on load and renders bill cards dynamically.
+Each DigiPay account is issued its bills from this list when it opens its bills (`GET /api/me/bills`); the admin **Bills** tab is the only page that reads `/api/bills` itself.
 
 ## API Reference (key endpoints)
 
@@ -124,7 +124,7 @@ The Utilities page fetches `/api/bills` on load and renders bill cards dynamical
 | POST | `/api/transfer` | user | Make a transfer |
 | POST | `/api/purchase` | user | Buy from store |
 | POST | `/api/pay-bill` | user | Pay a bill |
-| GET | `/api/bills` | — | List active bills |
+| GET | `/api/bills` | — | List active bills (a bill assigned to one account is listed to admins only) |
 | POST | `/api/bills` | admin | Create a bill |
 | PUT | `/api/bills/:id` | admin | Update a bill |
 | DELETE | `/api/bills/:id` | admin | Delete a bill |

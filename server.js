@@ -961,7 +961,15 @@ async function checkAndCompleteChallengesForUser(userId, context, challengeStore
     // ledger lives on the user record (not userData, which the client can
     // overwrite via PUT /api/me/data); only a full /api/me/reset clears it.
     const alreadyRewarded = new Set(Array.isArray(user.rewardedChallenges) ? user.rewardedChallenges : []);
-    const rewardable   = completed.filter(c => !alreadyRewarded.has(c.title || String(c.id)));
+    // Two copies of one title completing in the same pass (duplicates an older
+    // create-for-everyone left behind) pay once, not twice.
+    const rewardKeys = new Set(alreadyRewarded);
+    const rewardable = completed.filter(c => {
+        const key = c.title || String(c.id);
+        if (rewardKeys.has(key)) return false;
+        rewardKeys.add(key);
+        return true;
+    });
     const bonusXP      = rewardable.reduce((s, c) => s + (c.points || 0), 0);
     const bonusFlorins = rewardable.reduce((s, c) => s + (c.florins || 0), 0);
     rewardable.forEach(c => alreadyRewarded.add(c.title || String(c.id)));
@@ -1529,6 +1537,14 @@ app.delete('/api/users/:id', async (req, res) => {
         ]) {
             const rows = await readJSON(store);
             await writeJSON(store, rows.filter(r => r.userId !== id));
+        }
+
+        // A bill assigned to this DigiPay account goes with it. Ids are reused after a
+        // delete, so it would otherwise be issued to whoever registers next with this id.
+        if (req.appModule === BILL_ASSIGNABLE_SITE) {
+            const bills = await readJSON('bills');
+            const rest  = bills.filter(b => !(b.assignedTo && b.assignedTo.site === BILL_ASSIGNABLE_SITE && b.assignedTo.userId === id));
+            if (rest.length !== bills.length) await writeJSON('bills', rest);
         }
 
         // Messages: delete direct, scrub readBy from broadcasts
@@ -2381,14 +2397,24 @@ app.post('/api/me/challenges/purge', async (req, res) => {
 // (like every other /api/me/* route) so a participant can self-service reset
 // their challenges without needing the admin-only DELETE /api/admin/challenges,
 // which would otherwise wipe every user's challenges.
+// A participant's own reset: every one of their challenges goes back to incomplete and any
+// default they lack is added. The rows are kept rather than deleted and re-seeded, so the admin's
+// edits to a challenge, and the challenges the admin gave this user beyond the defaults
+// (custom or assigned), are not lost to a reset that only the participant pressed.
+function resetOwnChallengeRows(rows, userId, appModule) {
+    const out = rows.map(c => c.userId === userId && (c.completed || c.completedAt)
+        ? Object.assign({}, c, { completed: false, completedAt: null }) : c);
+    addMissingChallenges(out, userId, appModule || null);
+    return out;
+}
+
 app.post('/api/me/challenges/reset', async (req, res) => {
     await withUserLock(req.userId, async () => {
-        const all    = await readJSON(req.challengeStore);
-        const others = all.filter(c => c.userId !== req.userId);
-        // Before wiping, record every challenge this user already completed
+        const all = await readJSON(req.challengeStore);
+        // Before resetting, record every challenge this user already completed
         // in the once-per-title reward ledger (covers accounts that earned
-        // rewards before the ledger existed), so re-completing the reseeded
-        // copies can't pay the same rewards twice.
+        // rewards before the ledger existed), so completing them again
+        // can't pay the same rewards twice.
         const doneTitles = all.filter(c => c.userId === req.userId && c.completed).map(c => c.title || String(c.id));
         if (doneTitles.length) {
             const users = await readJSON(req.userStore);
@@ -2400,16 +2426,15 @@ app.post('/api/me/challenges/reset', async (req, res) => {
                 await writeJSON(req.userStore, users);
             }
         }
-        await writeJSON(req.challengeStore, others);
-        await seedChallengesForUser(req.userId, req.challengeStore, req.appModule);
+        await writeJSON(req.challengeStore, resetOwnChallengeRows(all, req.userId, req.appModule));
     });
     res.json({ ok: true });
 });
 
 // Resets the caller's own progress in one request: clears their transactions,
 // payments, purchases and cart, resets their balances and userData to
-// defaults, and re-seeds their challenges. Scoped to req.userId so this can't
-// affect any other user.
+// defaults, and sets their challenges back to incomplete (see resetOwnChallengeRows).
+// Scoped to req.userId so this can't affect any other user.
 app.post('/api/me/reset', async (req, res) => {
     try {
         // Locked: rewrites the users array and every per-user store, which
@@ -2441,9 +2466,7 @@ app.post('/api/me/reset', async (req, res) => {
             });
             await writeJSON(req.userStore, users);
 
-            const challenges = await readJSON(req.challengeStore);
-            await writeJSON(req.challengeStore, challenges.filter(c => c.userId !== req.userId));
-            await seedChallengesForUser(req.userId, req.challengeStore, req.appModule);
+            await writeJSON(req.challengeStore, resetOwnChallengeRows(await readJSON(req.challengeStore), req.userId, req.appModule));
         });
         res.json({ ok: true });
     } catch (err) {
@@ -3838,6 +3861,17 @@ function challengeDefinition(row) {
     return def;
 }
 
+// The fields that make up a challenge's definition (with the defaults a new one gets),
+// as a string, so two definitions can be compared.
+function challengeDefinitionKey(d) {
+    return JSON.stringify([
+        d.description || '', d.category || 'general', d.active !== false, d.points || 0, d.florins || 0,
+        d.condition || 'manual', d.conditionValue !== undefined ? d.conditionValue : null,
+        d.customField || null, d.customOperator || null,
+        Array.isArray(d.extraConditions) ? d.extraConditions : [], d.conditionLogic || 'all'
+    ]);
+}
+
 // POST /api/admin/challenges — create a new challenge definition and push a
 // live instance of it to every approved participant, or, with `assignTo` (a
 // user id), to that one participant only. Challenges are stored
@@ -3857,15 +3891,34 @@ app.post('/api/admin/challenges', async (req, res) => {
 
     const created = await withUserLock(req.userId, async () => {
         const users        = await readJSON(req.userStore);
-        let participants   = users.filter(isApprovedParticipant);
+        const approved     = users.filter(isApprovedParticipant);
+        let participants   = approved;
         const challenges   = await readJSON(req.challengeStore);
+        // The title is what identifies a challenge (the admin list, edits and deletes all go
+        // by it), so a title that already exists can only be created again with the same
+        // settings: that fills in the people who lack it. Different settings would leave
+        // one title meaning two challenges.
+        const requestedKey = challengeDefinitionKey({ description, category, active, points, florins, condition, conditionValue, customField, customOperator, extraConditions, conditionLogic });
+        const sameTitle    = challenges.filter(c => c.title === title);
+        const differs      = sameTitle.length > 0 && !sameTitle.some(c => challengeDefinitionKey(c) === requestedKey);
+        const differsError = () => httpError(409, 'A challenge called "' + title + '" already exists with different settings. Edit that one, or choose a different title.');
         if (target !== null) {
-            const user = participants.find(u => u.id === target);
+            const user = approved.find(u => u.id === target);
             if (!user) throw httpError(404, 'That user is not an approved participant');
-            if (challenges.some(c => c.userId === target && c.title === title)) {
+            if (sameTitle.some(c => c.userId === target)) {
                 throw httpError(409, (user.fullName || user.username) + ' already has the challenge "' + title + '"');
             }
+            if (differs) throw differsError();
             participants = [user];
+        } else {
+            if (differs) throw differsError();
+            // Everyone, but never a second copy for someone who already holds the title: two
+            // copies of one title are two rows to edit and to reward.
+            const holders = new Set(sameTitle.map(c => c.userId));
+            participants = approved.filter(u => !holders.has(u.id));
+            if (approved.length > 0 && participants.length === 0) {
+                throw httpError(409, 'Every participant already has the challenge "' + title + '"');
+            }
         }
         let id      = nextId(challenges);
         const now   = Date.now();
@@ -3920,15 +3973,21 @@ app.post('/api/admin/challenges/:id/assign', async (req, res) => {
 
 // DELETE /api/users/:id/challenges/:challengeId — take a challenge away from this
 // one user (every copy of that title they hold). Everyone else keeps theirs, and
-// XP the user already earned stays with them.
+// XP the user already earned stays with them. A Level 1 requirement needs ?force=1.
 app.delete('/api/users/:id/challenges/:challengeId', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const userId      = Number(req.params.id);
     const challengeId = Number(req.params.challengeId);
+    const force       = req.query.force === '1' || req.query.force === 'true';
     const removed = await withUserLock(req.userId, async () => {
         const all = await readJSON(req.challengeStore);
         const row = all.find(c => c.id === challengeId && c.userId === userId);
         if (!row) return 0;
+        // The three Level 1 requirements gate a main-site account's first level-up, so taking one
+        // away has to be asked for explicitly (the admin page does, after its confirmation).
+        if (!req.appModule && !force && LEVEL_1_REQUIRED_CONDITIONS.includes(row.condition)) {
+            throw httpError(409, '"' + row.title + '" is one of the three Level 1 requirements: without it this user cannot reach Level 2 until it is assigned again and completed. Send force=1 to remove it anyway.');
+        }
         const rest = all.filter(c => !(c.userId === userId && c.title === row.title));
         await writeJSON(req.challengeStore, rest);
         return all.length - rest.length;
@@ -3939,12 +3998,15 @@ app.delete('/api/users/:id/challenges/:challengeId', async (req, res) => {
 
 // GET /api/admin/challenges/assignments — which approved participants hold each
 // challenge, so the admin list can tell one given to everyone from one given to a
-// few. `participants` is how many approved participants there are.
+// few. `participants` is how many approved participants there are, and `people`
+// names them (id, fullName, username only: the admin pages use it instead of
+// loading every account with its avatar).
 app.get('/api/admin/challenges/assignments', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const users = await readJSON(req.userStore);
     const all   = await readJSON(req.challengeStore);
-    const participantIds = new Set(users.filter(isApprovedParticipant).map(u => u.id));
+    const people = users.filter(isApprovedParticipant).map(u => ({ id: u.id, fullName: u.fullName, username: u.username }));
+    const participantIds = new Set(people.map(p => p.id));
     const byTitle = new Map();
     all.forEach(c => {
         if (!participantIds.has(c.userId)) return;
@@ -3953,6 +4015,7 @@ app.get('/api/admin/challenges/assignments', async (req, res) => {
     });
     res.json({
         participants: participantIds.size,
+        people,
         challenges: Array.from(byTitle, ([title, ids]) => ({ title, userIds: Array.from(ids) }))
     });
 });
@@ -4081,6 +4144,13 @@ function billIsFor(bill, site, userId) {
     return !bill.assignedTo || (bill.assignedTo.site === site && bill.assignedTo.userId === userId);
 }
 
+// Whether `raw` (an `assignedTo` from a request) names the audience the bill already has.
+function sameBillAssignment(current, raw) {
+    const everyone = raw === undefined || raw === null || raw === '' || raw === 'all';
+    if (!current) return everyone;
+    return !everyone && typeof raw === 'object' && raw.site === current.site && parseAssignee(raw.userId) === current.userId;
+}
+
 // null = everyone; otherwise the validated { site, userId } of an existing DigiPay account.
 async function parseBillAssignment(raw) {
     if (raw === undefined || raw === null || raw === '' || raw === 'all') return null;
@@ -4103,10 +4173,11 @@ app.get('/api/bills', async (req, res) => {
 app.post('/api/bills', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const bill = await withUserLock(req.userId, async () => {
-        const assignedTo = await parseBillAssignment(req.body && req.body.assignedTo);
+        const { assignmentSince: _ignored, ...body } = req.body || {};
+        const assignedTo = await parseBillAssignment(body.assignedTo);
         const bills = await readJSON('bills');
-        const rec   = Object.assign({ active: true }, req.body, { id: nextId(bills) });
-        if (assignedTo) rec.assignedTo = assignedTo; else delete rec.assignedTo;
+        const rec   = Object.assign({ active: true }, body, { id: nextId(bills) });
+        if (assignedTo) { rec.assignedTo = assignedTo; rec.assignmentSince = currentCycleMonth(); } else delete rec.assignedTo;
         bills.push(rec);
         await writeJSON('bills', bills);
         return rec;
@@ -4115,20 +4186,29 @@ app.post('/api/bills', async (req, res) => {
 });
 
 // PUT /api/bills/:id — admin only. Sending `assignedTo` (null for everyone) changes
-// who is issued new cycles; leaving it out keeps the current assignment.
+// who is issued new cycles; leaving it out, or sending the assignment the bill
+// already has, keeps it as it is (so a bill whose account is gone can still be edited).
+// A change stamps `assignmentSince` (the cycle month), and nobody is issued cycles
+// for months before it: putting a bill back to everyone must not bill the others for
+// the months it was somebody else's.
 app.put('/api/bills/:id', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const updated = await withUserLock(req.userId, async () => {
-        const body = req.body || {};
-        const reassigns  = Object.prototype.hasOwnProperty.call(body, 'assignedTo');
-        const assignedTo = reassigns ? await parseBillAssignment(body.assignedTo) : null;
+        const { assignmentSince: _ignored, ...body } = req.body || {};
         const bills = await readJSON('bills');
         const idx   = bills.findIndex(b => String(b.id) === String(req.params.id));
         if (idx === -1) return null;
-        bills[idx] = Object.assign({}, bills[idx], body, { id: bills[idx].id });
-        if (reassigns) { if (assignedTo) bills[idx].assignedTo = assignedTo; else delete bills[idx].assignedTo; }
+        const current   = bills[idx].assignedTo || null;
+        const reassigns = Object.prototype.hasOwnProperty.call(body, 'assignedTo') && !sameBillAssignment(current, body.assignedTo);
+        const assignedTo = reassigns ? await parseBillAssignment(body.assignedTo) : null;
+        const rec = Object.assign({}, bills[idx], body, { id: bills[idx].id });
+        if (reassigns) {
+            if (assignedTo) rec.assignedTo = assignedTo; else delete rec.assignedTo;
+            rec.assignmentSince = currentCycleMonth();
+        } else if (current) rec.assignedTo = current; else delete rec.assignedTo;
+        bills[idx] = rec;
         await writeJSON('bills', bills);
-        return bills[idx];
+        return rec;
     });
     if (!updated) return res.status(404).json({ error: 'Not found' });
     res.json(updated);
@@ -4210,7 +4290,11 @@ async function ensureCurrentBillCycles(userId, customBillStore = 'customBills', 
             const months = [];
             if (!latest) months.push(month);
             else if (latest.cycleMonth) {
-                for (let mo = addCycleMonths(latest.cycleMonth, 1); mo <= month; mo = addCycleMonths(mo, 1)) months.push(mo);
+                // A bill whose audience changed (assigned, reassigned, put back to everyone) is only
+                // issued for the months since the change: nobody is billed for months it was not theirs.
+                let from = addCycleMonths(latest.cycleMonth, 1);
+                if (def.assignmentSince && def.assignmentSince > from) from = def.assignmentSince;
+                for (let mo = from; mo <= month; mo = addCycleMonths(mo, 1)) months.push(mo);
             }
             for (const mo of months.slice(-MAX_BILL_BACKLOG_MONTHS)) {
                 const { usage, amount } = computeBillAmount(def);
