@@ -442,6 +442,7 @@
     <script>window.APP_MODULE = 'utilities';</script>
     <script src="module-auth.js"></script>
     <script src="db.js"></script>
+    <script src="scam.js"></script>
     <script src="script.js"></script>
     <script src="utilities.js"></script>
     <script>
@@ -943,8 +944,21 @@
                 autopayRow +
                 noteHtml +
                 actions +
+                (isPaid ? '' : '<div style="text-align:right;margin-top:0.5rem"><a role="button" tabindex="0" style="font-size:0.75rem;color:var(--color-gray-500);cursor:pointer;text-decoration:underline" ' +
+                    'onclick="reportBillAsScam(' + b.id + ')" onkeydown="if(event.key===\'Enter\'){reportBillAsScam(' + b.id + ')}">🚩 Don\'t recognise this bill? Report as scam</a></div>') +
             '</div>' +
         '</div>';
+    }
+
+    // "Report as scam" on a bill: the server says whether it was a practice scam.
+    var billReportInFlight = false;
+    function reportBillAsScam(cycleId) {
+        if (billReportInFlight) return;
+        billReportInFlight = true;
+        DigifinwizScam.reportBill(cycleId).then(function(result) {
+            billReportInFlight = false;
+            if (result && result.scam) { refreshUtilPage(); loadBills(); }
+        }).catch(function() { billReportInFlight = false; });
     }
 
     function renderBillsGrid() {
@@ -1666,10 +1680,22 @@
                     '<span class="util-msg-date">' + escHU(utilFormatMsgDate(m.sentAt)) + '</span>' +
                 '</div>' +
                 (open
-                    ? '<div class="util-msg-body">' + escHU(m.body || '') + '</div>' + action
+                    ? '<div class="util-msg-body">' + escHU(m.body || '') + '</div>' +
+                      (m.senderName && m.senderName !== 'System' ? '<div style="font-size:0.75rem;color:var(--color-gray-500);margin-top:6px">From ' + escHU(m.senderName) + (m.senderEmail ? ' &lt;' + escHU(m.senderEmail) + '&gt;' : '') + '</div>' : '') +
+                      action + DigifinwizScam.revealHtml(m) +
+                      (m.scamRevealed ? '' : '<div class="util-msg-action"><a onclick="event.stopPropagation();reportUtilMessage(' + Number(m.id) + ')">🚩 Report as scam</a></div>')
                     : '<div class="util-msg-preview">' + escHU(m.body || '') + '</div>') +
             '</div>';
         }).join('');
+    }
+
+    function reportUtilMessage(id) {
+        DigifinwizScam.reportMessage(id).then(function(result) {
+            var m = UTIL_MESSAGES.find(function(x) { return x.id === id; });
+            if (m && result && result.scam) m.scamRevealed = { redFlags: result.redFlags || [] };
+            renderMessagesList();
+            if (result && result.scam && result.xp > 0) refreshHeaderProgress();
+        }).catch(function() {});
     }
 
     function openUtilMessage(id) {

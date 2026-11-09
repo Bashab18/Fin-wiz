@@ -211,6 +211,8 @@
             ═══════════════════════════════════════════════════════ -->
             <div class="page-tab-panel active" id="panel-dashboard">
                 <div class="banking-section full-width" id="dashAccountsSummary"></div>
+                <!-- Requests for money from other people (shown only when there is one) -->
+                <div class="banking-section full-width" id="dashPaymentRequests" style="display:none"></div>
 
                 <div class="dash-grid" style="display:grid;grid-template-columns:2fr 1fr;gap:1.5rem;margin-top:1.5rem">
                     <div>
@@ -843,6 +845,7 @@
     <script>window.APP_MODULE = 'banking';</script>
     <script src="module-auth.js"></script>
     <script src="db.js"></script>
+    <script src="scam.js"></script>
     <script src="script.js"></script>
     <script src="banking.js"></script>
     <script src="banking-accounts.js"></script>

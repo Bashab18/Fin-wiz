@@ -615,6 +615,11 @@
             margin-bottom: var(--space-2);
         }
         .chal-preview-badges { display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; }
+        .admin-textarea {
+            padding: 0.5rem 0.75rem; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+            font-size: var(--text-sm); color: var(--color-text); background: var(--color-surface);
+            resize: vertical; width: 100%; box-sizing: border-box; font-family: inherit; line-height: 1.5;
+        }
     </style>
 </head>
 <body>
@@ -1660,6 +1665,136 @@
                             <button type="reset" class="btn">Clear</button>
                         </div>
                     </form>
+                </div>
+            </div>
+
+            <!-- Scam simulations: a practice scam for one user to spot and report -->
+            <div class="admin-panel" style="margin-bottom:var(--space-5)">
+                <div class="admin-panel-header">
+                    <h2>Send a Scam Simulation</h2>
+                    <span class="pill pill-red">One user</span>
+                </div>
+                <div class="admin-panel-body">
+                    <p style="margin:0 0 var(--space-4);font-size:var(--text-sm);color:var(--color-text-muted)">
+                        Sends a practice scam to one user. Nothing marks it as a scam: the user is meant to spot it and choose
+                        <strong>Report as scam</strong>, which earns the XP below and shows them the warning signs. A fake bill or
+                        payment request takes real florins from their account if they pay it.
+                    </p>
+                    <form id="scamForm">
+                        <div class="admin-form-grid" style="margin-bottom:var(--space-4)">
+                            <div class="admin-form-group">
+                                <label for="scam-recipient">Send To *</label>
+                                <select id="scam-recipient" required>
+                                    <option value="">Choose a user…</option>
+                                </select>
+                            </div>
+                            <div class="admin-form-group">
+                                <label for="scam-kind">Scam Type</label>
+                                <select id="scam-kind">
+                                    <option value="message">✉️ Fake message (inbox)</option>
+                                    <option value="bill">🧾 Fake bill (DigiPay)</option>
+                                    <option value="request">💸 Fake payment request (DigiBank)</option>
+                                </select>
+                            </div>
+                            <div class="admin-form-group">
+                                <label for="scam-template">Start From</label>
+                                <select id="scam-template"></select>
+                            </div>
+                        </div>
+
+                        <div id="scam-message-fields">
+                            <div class="admin-form-grid" style="margin-bottom:var(--space-4)">
+                                <div class="admin-form-group">
+                                    <label for="scam-sender-name">Sender Name *</label>
+                                    <input type="text" id="scam-sender-name" maxlength="60" placeholder="e.g. DigiBank Security Team">
+                                </div>
+                                <div class="admin-form-group">
+                                    <label for="scam-sender-email">Sender Email <span style="font-size:0.78rem;color:#94a3b8">(optional)</span></label>
+                                    <input type="text" id="scam-sender-email" maxlength="120" placeholder="e.g. security@digibnak-alerts.co">
+                                </div>
+                                <div class="admin-form-group">
+                                    <label for="scam-audience">Deliver To</label>
+                                    <select id="scam-audience">
+                                        <option value="main">Main site only</option>
+                                        <option value="all">Main site + their Banking, Ecommerce &amp; Utilities inboxes</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="admin-form-group" style="margin-bottom:var(--space-4)">
+                                <label for="scam-subject">Subject *</label>
+                                <input type="text" id="scam-subject" maxlength="120" placeholder="Message subject…">
+                            </div>
+                            <div class="admin-form-group" style="margin-bottom:var(--space-4)">
+                                <label for="scam-body">Message Body *</label>
+                                <textarea id="scam-body" rows="5" maxlength="2000" class="admin-textarea" placeholder="What the scam message says…"></textarea>
+                            </div>
+                        </div>
+
+                        <div id="scam-payment-fields" style="display:none">
+                            <div class="admin-form-grid" style="margin-bottom:var(--space-4)">
+                                <div class="admin-form-group">
+                                    <label for="scam-payee" id="scam-payee-label">Biller Name *</label>
+                                    <input type="text" id="scam-payee" maxlength="60" placeholder="e.g. City Utilities Recovery Unit">
+                                </div>
+                                <div class="admin-form-group">
+                                    <label for="scam-amount">Amount (ƒ) *</label>
+                                    <input type="number" id="scam-amount" min="0.01" max="1000000" step="0.01" placeholder="0.00">
+                                </div>
+                                <div class="admin-form-group">
+                                    <label for="scam-account">Account Number <span style="font-size:0.78rem;color:#94a3b8">(optional)</span></label>
+                                    <input type="text" id="scam-account" maxlength="40" placeholder="Made up if left empty">
+                                </div>
+                                <div class="admin-form-group" id="scam-due-group">
+                                    <label for="scam-due">Due In (days)</label>
+                                    <input type="number" id="scam-due" min="1" max="30" step="1" value="2">
+                                </div>
+                            </div>
+                            <div class="admin-form-group" id="scam-note-group" style="margin-bottom:var(--space-4)">
+                                <label for="scam-note">Note Shown With The Request <span style="font-size:0.78rem;color:#94a3b8">(optional)</span></label>
+                                <input type="text" id="scam-note" maxlength="200" placeholder="e.g. Move your money to this safe account now">
+                            </div>
+                        </div>
+
+                        <div class="admin-form-grid" style="margin-bottom:var(--space-4)">
+                            <div class="admin-form-group" style="grid-column:span 2">
+                                <label for="scam-flags">Warning Signs <span style="font-size:0.78rem;color:#94a3b8">(one per line, shown after the user reports or pays)</span></label>
+                                <textarea id="scam-flags" rows="4" class="admin-textarea" placeholder="e.g. The sender address is misspelt"></textarea>
+                            </div>
+                            <div class="admin-form-group">
+                                <label for="scam-xp">XP For Reporting It</label>
+                                <input type="number" id="scam-xp" min="0" max="500" step="1" value="50">
+                            </div>
+                        </div>
+                        <div class="admin-form-actions">
+                            <button type="submit" class="btn btn-primary" id="scam-send-btn">🚩 Send Scam</button>
+                            <button type="button" class="btn" id="scam-clear-btn">Clear</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Scams sent, and what each user did with theirs -->
+            <div class="admin-panel" style="margin-bottom:var(--space-5)">
+                <div class="admin-panel-header">
+                    <h2>Scams Sent</h2>
+                    <span class="pill pill-purple" id="scam-count-badge">0</span>
+                </div>
+                <div class="admin-table-wrap">
+                    <table class="admin-table" id="scamTable">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Scam</th>
+                                <th>Sent To</th>
+                                <th>Sent</th>
+                                <th>Outcome</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scam-table-body">
+                            <tr><td colspan="6" style="text-align:center;color:var(--color-text-muted);padding:var(--space-6)">No scams sent yet.</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 

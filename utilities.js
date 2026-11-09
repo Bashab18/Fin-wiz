@@ -296,7 +296,9 @@ function utilConfirmAndPay(cycle, expectedTotal, opts, notice) {
                 paymentInFlight = false;
                 UTIL_PAID_BY_PAGE[cycle.id] = true;
                 var charged = (result && result.payment && typeof result.payment.amount === 'number') ? result.payment.amount : expectedTotal;
-                utilAnnouncePayment(cycle, result, charged);
+                // A bill that was a practice scam: say so instead of celebrating the payment.
+                if (result && result.scam) DigifinwizScam.show(result.scam);
+                else utilAnnouncePayment(cycle, result, charged);
                 utilRunChallengeCheck();
                 return utilReloadAfterPayment().then(function() { return { paid: true, amount: charged }; });
             }, function(err) {
