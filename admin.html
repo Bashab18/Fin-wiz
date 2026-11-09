@@ -620,6 +620,109 @@
             font-size: var(--text-sm); color: var(--color-text); background: var(--color-surface);
             resize: vertical; width: 100%; box-sizing: border-box; font-family: inherit; line-height: 1.5;
         }
+
+        /* ══ 2026 refresh ══════════════════════════════════════════════════ */
+        .admin-sidebar { height: 100vh; min-height: 0; }
+        .admin-nav { overflow-y: auto; padding: var(--space-3) var(--space-3); }
+        .admin-nav-section { padding: var(--space-4) var(--space-3) var(--space-1); font-size: 0.68rem; }
+        .admin-nav-section:first-child { padding-top: var(--space-1); }
+        .admin-nav-item { border-radius: var(--radius-md); padding: 0.55rem var(--space-3); margin-bottom: 2px; }
+        .admin-nav-item.active { border-right: none; background: rgba(99,102,241,0.28); box-shadow: inset 3px 0 0 var(--color-primary-400); }
+        .admin-nav-item:focus-visible, .btn-icon:focus-visible, .uv-tab:focus-visible { outline: 2px solid var(--color-primary-400); outline-offset: 2px; }
+        .admin-nav-me { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
+        .admin-nav-avatar { width: 34px; height: 34px; border-radius: 50%; background: rgba(99,102,241,0.35); color: #fff; font-weight: 700;
+            font-size: var(--text-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .admin-nav-me-text { display: flex; flex-direction: column; min-width: 0; }
+        .admin-nav-me-text strong { color: #fff; font-size: var(--text-sm); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .admin-nav-me-text small { color: var(--color-gray-400); font-size: var(--text-xs); }
+
+        .admin-topbar { padding: var(--space-3) var(--space-6); }
+        .admin-topbar-titles { min-width: 0; }
+        .admin-topbar h1 { line-height: 1.25; }
+        #pageSubtitle { margin: 0; font-size: var(--text-xs); color: var(--color-text-muted); line-height: 1.4; }
+        #sidebarToggle { display: none; }
+
+        .admin-page { max-width: 1400px; width: 100%; box-sizing: border-box; }
+        .admin-main { min-width: 0; }
+        .admin-panel, .admin-page > div { min-width: 0; }
+        .admin-page > div[style*="display:grid"] > * { min-width: 0; }
+        .admin-panel, .admin-stat-card { box-shadow: 0 1px 2px rgba(15,23,42,0.04); }
+        .admin-panel-header { gap: var(--space-3); flex-wrap: wrap; }
+        .admin-table td { line-height: 1.45; }
+        .pill { white-space: nowrap; }
+        .admin-form-grid.fit { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+        .admin-form-actions { flex-wrap: wrap; }
+        .btn-xs { padding: 3px 9px; font-size: var(--text-xs); }
+
+        /* ── Confirm dialog ── */
+        .admin-dialog { position: fixed; inset: 0; z-index: 10000; background: rgba(15,23,42,0.55); display: flex; align-items: center; justify-content: center; padding: var(--space-4); }
+        .admin-dialog[hidden] { display: none; }
+        .admin-dialog-card { background: var(--color-surface); border-radius: var(--radius-xl); padding: var(--space-6); width: 100%; max-width: 440px; box-shadow: 0 24px 60px rgba(0,0,0,0.3); }
+        .admin-dialog-card h3 { margin: 0 0 var(--space-2); font-size: var(--text-lg); color: var(--color-text); }
+        .admin-dialog-card p { margin: 0; font-size: var(--text-sm); color: var(--color-text-muted); line-height: 1.55; white-space: pre-line; }
+        .admin-dialog-actions { display: flex; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-5); }
+
+        /* ── One user ── */
+        .uv-back { margin-bottom: var(--space-4); padding: 5px 12px; font-size: var(--text-sm); }
+        .uv-loading { padding: var(--space-8); text-align: center; color: var(--color-text-muted); }
+        .uv-head { display: flex; gap: var(--space-5); align-items: center; flex-wrap: wrap; padding: var(--space-5); }
+        .uv-avatar { width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+            font-size: 1.4rem; font-weight: 700; color: #fff; background: linear-gradient(135deg, var(--color-primary-500), var(--color-accent-500)); }
+        .uv-id { flex: 1; min-width: 220px; }
+        .uv-id h2 { margin: 0; font-size: var(--text-xl); color: var(--color-text); overflow-wrap: anywhere; }
+        .uv-id .uv-sub { font-size: var(--text-sm); color: var(--color-text-muted); margin-top: 2px; overflow-wrap: anywhere; }
+        .uv-id .uv-meta { display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; margin-top: var(--space-2); font-size: var(--text-xs); color: var(--color-text-muted); }
+        .uv-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+        .uv-actions .btn { padding: 7px 14px; font-size: var(--text-sm); }
+        .uv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-5); }
+        .uv-site { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-xl); padding: var(--space-5); border-top: 3px solid var(--uv-accent, var(--color-primary-500)); }
+        .uv-site.unlinked { border-top-color: var(--color-gray-300); background: var(--color-gray-50); }
+        .uv-site h3 { margin: 0; font-size: var(--text-base); color: var(--color-text); display: flex; align-items: center; gap: var(--space-2); justify-content: space-between; }
+        .uv-site .uv-acct { font-size: var(--text-xs); color: var(--color-text-muted); margin: 2px 0 var(--space-3); overflow-wrap: anywhere; }
+        .uv-kv { display: grid; grid-template-columns: 1fr auto; gap: 6px var(--space-3); font-size: var(--text-sm); margin: 0; }
+        .uv-kv dt { color: var(--color-text-muted); }
+        .uv-kv dd { margin: 0; font-weight: 600; color: var(--color-text); text-align: right; font-variant-numeric: tabular-nums; }
+        .uv-checks { display: flex; gap: var(--space-3); flex-wrap: wrap; padding: var(--space-4) var(--space-5); }
+        .uv-check { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); padding: 6px 12px; border-radius: var(--radius-full); background: var(--color-gray-100); color: var(--color-text-muted); }
+        .uv-check.done { background: #dcfce7; color: #166534; }
+        .uv-tabs { display: flex; gap: 2px; padding: 0 var(--space-3); border-bottom: 1px solid var(--color-border); overflow-x: auto; }
+        .uv-tab { border: none; background: none; padding: var(--space-3) var(--space-4); font-size: var(--text-sm); font-weight: 600; color: var(--color-text-muted);
+            cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; font-family: inherit; }
+        .uv-tab:hover { color: var(--color-text); }
+        .uv-tab.active { color: var(--color-primary-600); border-bottom-color: var(--color-primary-500); }
+        .uv-tab .uv-count { font-weight: 500; color: var(--color-text-muted); margin-left: 4px; }
+        .uv-empty { padding: var(--space-8) var(--space-5); text-align: center; color: var(--color-text-muted); font-size: var(--text-sm); }
+        .uv-feed { list-style: none; margin: 0; padding: var(--space-2) var(--space-5); }
+        .uv-feed li { display: flex; gap: var(--space-3); align-items: baseline; padding: var(--space-3) 0; border-bottom: 1px solid var(--color-border); font-size: var(--text-sm); }
+        .uv-feed li:last-child { border-bottom: none; }
+        .uv-feed .uv-feed-main { flex: 1; min-width: 0; color: var(--color-text); overflow-wrap: anywhere; }
+        .uv-feed .uv-feed-when { font-size: var(--text-xs); color: var(--color-text-muted); white-space: nowrap; }
+        .uv-name-link { background: none; border: none; padding: 0; font: inherit; font-weight: 700; color: var(--color-primary-600); cursor: pointer; text-align: left; }
+        .uv-name-link:hover { text-decoration: underline; }
+        /* The Actions column stays in view while a wide table scrolls sideways. */
+        .admin-table.pin-actions th:last-child, .admin-table.pin-actions td:last-child {
+            position: sticky; right: 0; background: var(--color-surface); box-shadow: -8px 0 8px -8px rgba(15,23,42,0.18);
+        }
+        .admin-table.pin-actions th:last-child { background: var(--color-gray-50); }
+        #uv-tab-body .admin-table { min-width: 560px; }
+        #uv-tab-body .admin-table td:first-child { min-width: 190px; }
+
+        @media (max-width: 768px) {
+            #sidebarToggle { display: flex; }
+            .admin-topbar { padding: var(--space-3) var(--space-4); }
+            .admin-topbar h1 { font-size: var(--text-lg); }
+            #pageSubtitle { display: none; }
+            .admin-page { padding: var(--space-4); }
+            .admin-panel-body { padding: var(--space-4); }
+            .admin-form-grid > * { grid-column: auto !important; }
+            .admin-page > div[style*="grid-template-columns:1fr 1fr"],
+            .admin-page > div[style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
+            .admin-table th, .admin-table td { padding: var(--space-2) var(--space-3); }
+            .uv-head { padding: var(--space-4); }
+            .uv-actions { width: 100%; }
+            .uv-actions .btn { flex: 1 1 auto; }
+            .admin-dialog-actions .btn { flex: 1; }
+        }
     </style>
 </head>
 <body>
@@ -634,16 +737,36 @@
             </div>
         </div>
 
-        <nav class="admin-nav">
+        <nav class="admin-nav" aria-label="Admin sections">
             <div class="admin-nav-section">Overview</div>
             <button class="admin-nav-item active" data-page="dashboard">
                 <span class="nav-icon">📊</span> Dashboard
             </button>
 
-            <div class="admin-nav-section">Data</div>
-            <button class="admin-nav-item" data-page="user">
-                <span class="nav-icon">👤</span> User Profile
+            <div class="admin-nav-section">People</div>
+            <button class="admin-nav-item" data-page="users">
+                <span class="nav-icon">👥</span> Users
+                <span class="pill pill-amber" id="pendingBadge" style="margin-left:auto;display:none;font-size:0.7rem;padding:1px 7px">0</span>
             </button>
+            <button class="admin-nav-item" data-page="user">
+                <span class="nav-icon">👤</span> Edit Profile
+            </button>
+
+            <div class="admin-nav-section">Teaching</div>
+            <button class="admin-nav-item" data-page="challenges">
+                <span class="nav-icon">🎯</span> Challenges
+            </button>
+            <button class="admin-nav-item" data-page="bills">
+                <span class="nav-icon">📋</span> Bills
+            </button>
+            <button class="admin-nav-item" data-page="messaging">
+                <span class="nav-icon">✉️</span> Messages
+            </button>
+            <button class="admin-nav-item" data-page="scams">
+                <span class="nav-icon">🚩</span> Scam Simulations
+            </button>
+
+            <div class="admin-nav-section">Activity</div>
             <button class="admin-nav-item" data-page="transactions">
                 <span class="nav-icon">💸</span> Transactions
             </button>
@@ -654,23 +777,6 @@
                 <span class="nav-icon">🛒</span> Purchases
             </button>
 
-            <button class="admin-nav-item" data-page="bills">
-                <span class="nav-icon">📋</span> Bills
-            </button>
-
-            <button class="admin-nav-item" data-page="challenges">
-                <span class="nav-icon">🎯</span> Challenges
-            </button>
-
-            <button class="admin-nav-item" data-page="users">
-                <span class="nav-icon">👥</span> Users
-                <span class="pill pill-amber" id="pendingBadge" style="margin-left:auto;display:none;font-size:0.7rem;padding:1px 7px">0</span>
-            </button>
-
-            <button class="admin-nav-item" data-page="messaging">
-                <span class="nav-icon">✉️</span> Messages
-            </button>
-
             <div class="admin-nav-section">System</div>
             <button class="admin-nav-item" data-page="settings">
                 <span class="nav-icon">⚙️</span> Settings
@@ -678,6 +784,10 @@
         </nav>
 
         <div class="admin-nav-footer">
+            <div class="admin-nav-me">
+                <span class="admin-nav-avatar" id="navAdminInitials">A</span>
+                <span class="admin-nav-me-text"><strong id="navAdminName">Administrator</strong><small>Signed in as admin</small></span>
+            </div>
             <a href="index.html">
                 <span>←</span> Back to App
             </a>
@@ -694,7 +804,10 @@
         <header class="admin-topbar">
             <div style="display:flex;align-items:center;gap:var(--space-3)">
                 <button class="btn-icon" id="sidebarToggle" title="Toggle sidebar">☰</button>
-                <h1 id="pageTitle">Dashboard</h1>
+                <div class="admin-topbar-titles">
+                    <h1 id="pageTitle">Dashboard</h1>
+                    <p id="pageSubtitle">What is happening across the platform right now.</p>
+                </div>
             </div>
             <div class="topbar-actions">
                 <span class="admin-badge">Admin</span>
@@ -1538,7 +1651,7 @@
                     </div>
                 </div>
                 <div class="admin-table-wrap">
-                    <table class="admin-table" id="usersMainTable">
+                    <table class="admin-table pin-actions" id="usersMainTable">
                         <thead>
                             <tr>
                                 <th>#</th>
@@ -1619,7 +1732,7 @@
                 </div>
                 <div class="admin-panel-body">
                     <form id="msgComposeForm">
-                        <div class="admin-form-grid" style="margin-bottom:var(--space-4)">
+                        <div class="admin-form-grid fit" style="margin-bottom:var(--space-4)">
                             <div class="admin-form-group">
                                 <label for="msg-recipient">Send To</label>
                                 <select id="msg-recipient">
@@ -1668,6 +1781,38 @@
                 </div>
             </div>
 
+            <!-- Sent messages log -->
+            <div class="admin-panel">
+                <div class="admin-panel-header">
+                    <h2>Sent Messages</h2>
+                    <span class="pill pill-purple" id="msg-count-badge">0</span>
+                </div>
+                <div class="admin-table-wrap">
+                    <table class="admin-table" id="msgTable">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Subject</th>
+                                <th>Recipient</th>
+                                <th>Sent</th>
+                                <th>Read By</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="msg-table-body">
+                            <tr><td colspan="6" style="text-align:center;color:var(--color-text-muted);padding:var(--space-6)">No messages sent yet.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ════════════════════════════════
+             PAGE: SCAM SIMULATIONS
+        ════════════════════════════════ -->
+        <section class="admin-page" id="page-scams">
+
             <!-- Scam simulations: a practice scam for one user to spot and report -->
             <div class="admin-panel" style="margin-bottom:var(--space-5)">
                 <div class="admin-panel-header">
@@ -1681,7 +1826,7 @@
                         payment request takes real florins from their account if they pay it.
                     </p>
                     <form id="scamForm">
-                        <div class="admin-form-grid" style="margin-bottom:var(--space-4)">
+                        <div class="admin-form-grid fit" style="margin-bottom:var(--space-4)">
                             <div class="admin-form-group">
                                 <label for="scam-recipient">Send To *</label>
                                 <select id="scam-recipient" required>
@@ -1703,7 +1848,7 @@
                         </div>
 
                         <div id="scam-message-fields">
-                            <div class="admin-form-grid" style="margin-bottom:var(--space-4)">
+                            <div class="admin-form-grid fit" style="margin-bottom:var(--space-4)">
                                 <div class="admin-form-group">
                                     <label for="scam-sender-name">Sender Name *</label>
                                     <input type="text" id="scam-sender-name" maxlength="60" placeholder="e.g. DigiBank Security Team">
@@ -1731,7 +1876,7 @@
                         </div>
 
                         <div id="scam-payment-fields" style="display:none">
-                            <div class="admin-form-grid" style="margin-bottom:var(--space-4)">
+                            <div class="admin-form-grid fit" style="margin-bottom:var(--space-4)">
                                 <div class="admin-form-group">
                                     <label for="scam-payee" id="scam-payee-label">Biller Name *</label>
                                     <input type="text" id="scam-payee" maxlength="60" placeholder="e.g. City Utilities Recovery Unit">
@@ -1755,7 +1900,7 @@
                             </div>
                         </div>
 
-                        <div class="admin-form-grid" style="margin-bottom:var(--space-4)">
+                        <div class="admin-form-grid fit" style="margin-bottom:var(--space-4)">
                             <div class="admin-form-group" style="grid-column:span 2">
                                 <label for="scam-flags">Warning Signs <span style="font-size:0.78rem;color:#94a3b8">(one per line, shown after the user reports or pays)</span></label>
                                 <textarea id="scam-flags" rows="4" class="admin-textarea" placeholder="e.g. The sender address is misspelt"></textarea>
@@ -1798,35 +1943,30 @@
                 </div>
             </div>
 
-            <!-- Sent messages log -->
-            <div class="admin-panel">
-                <div class="admin-panel-header">
-                    <h2>Sent Messages</h2>
-                    <span class="pill pill-purple" id="msg-count-badge">0</span>
-                </div>
-                <div class="admin-table-wrap">
-                    <table class="admin-table" id="msgTable">
-                        <thead>
-                            <tr>
-                                <th>Type</th>
-                                <th>Subject</th>
-                                <th>Recipient</th>
-                                <th>Sent</th>
-                                <th>Read By</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="msg-table-body">
-                            <tr><td colspan="6" style="text-align:center;color:var(--color-text-muted);padding:var(--space-6)">No messages sent yet.</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+        </section>
 
+        <!-- ════════════════════════════════
+             PAGE: ONE USER (opened from the Users table)
+        ════════════════════════════════ -->
+        <section class="admin-page" id="page-userview">
+            <button type="button" class="btn uv-back" onclick="adminBackToUsers()">← All users</button>
+            <div id="uv-root"><div class="uv-loading"><span class="spinner"></span> Loading…</div></div>
         </section>
 
     </div><!-- /admin-main -->
 </div><!-- /admin-wrapper -->
+
+<!-- ── Confirm dialog (replaces the browser's own pop-up) ── -->
+<div id="adminConfirm" class="admin-dialog" hidden>
+    <div class="admin-dialog-card" role="alertdialog" aria-modal="true" aria-labelledby="adminConfirmTitle" aria-describedby="adminConfirmText">
+        <h3 id="adminConfirmTitle">Are you sure?</h3>
+        <p id="adminConfirmText"></p>
+        <div class="admin-dialog-actions">
+            <button type="button" class="btn" id="adminConfirmCancel">Cancel</button>
+            <button type="button" class="btn btn-primary" id="adminConfirmOk">Continue</button>
+        </div>
+    </div>
+</div>
 
 <!-- ── Per-user Management Drawer ── -->
 <div id="userMgmtDrawer" class="mgmt-drawer" aria-hidden="true">

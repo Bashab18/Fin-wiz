@@ -2635,10 +2635,9 @@ async function mainOwnSnapshot(me) {
     };
 }
 
-app.get('/api/me/hub', async (req, res) => {
-    if (req.appModule) return res.status(400).json({ error: 'Main-site accounts only' });
-    const me = (await readJSON(req.userStore)).find(u => u.id === req.userId);
-    if (!me) return res.status(404).json({ error: 'User not found' });
+// Everything a main-site account has across the three sub-sites, in one object
+// (GET /api/me/hub for the learner, and the admin's per-user page).
+async function buildHub(me) {
     const accounts = await linkedAccounts(me);
     const modules = {};
     for (const key of Object.keys(MODULE_STORES)) {
@@ -2650,7 +2649,7 @@ app.get('/api/me/hub', async (req, res) => {
     const checking = sum(m => m.balances.checking), savings = sum(m => m.balances.savings);
     const liabilities = sum(m => (m.creditCard ? Number(m.creditCard.balance) || 0 : 0) +
                                  (m.loan && m.loan.active && !m.loan.paidOff ? Number(m.loan.balance) || 0 : 0));
-    res.json({
+    return {
         linkedCount: linked.length,
         modules,
         own,
@@ -2667,7 +2666,14 @@ app.get('/api/me/hub', async (req, res) => {
         // each sub-site event is tagged with its site.
         activity: linked.reduce((all, m) => all.concat(m.activity.map(e => Object.assign({ module: m.module }, e))), own.activity.slice())
             .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 50)
-    });
+    };
+}
+
+app.get('/api/me/hub', async (req, res) => {
+    if (req.appModule) return res.status(400).json({ error: 'Main-site accounts only' });
+    const me = (await readJSON(req.userStore)).find(u => u.id === req.userId);
+    if (!me) return res.status(404).json({ error: 'User not found' });
+    res.json(await buildHub(me));
 });
 
 // Admin-only: the only caller is admin.js's data import. Participants never
@@ -3926,12 +3932,11 @@ async function removeScamsOfAccount(site, userId) {
     await writeJSON('scams', scams.filter(s => !gone.includes(s)));
 }
 
-app.get('/api/admin/scams', async (req, res) => {
-    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
-    const scams = await readJSON('scams');
+// Scams with what happened to each (`status`, `opened`), newest first.
+async function scamsWithStatus(scams) {
     const stores = {};
     for (const site of [null].concat(Object.keys(MODULE_STORES))) stores[site || 'main'] = await readJSON(scamMessageStore(site));
-    res.json(scams.map(s => {
+    return scams.map(s => {
         let opened = false;
         if (s.kind === 'message') {
             for (const site of [null].concat(s.sites || [])) {
@@ -3942,7 +3947,44 @@ app.get('/api/admin/scams', async (req, res) => {
         const status = s.reportedAt ? (s.paidAt ? 'paid_then_reported' : 'reported') : s.paidAt ? 'paid'
             : s.declinedAt ? 'declined' : opened ? 'opened' : 'delivered';
         return Object.assign({}, s, { opened, status });
-    }).sort((a, b) => b.sentAt - a.sentAt));
+    }).sort((a, b) => b.sentAt - a.sentAt);
+}
+
+app.get('/api/admin/scams', async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    res.json(await scamsWithStatus(await readJSON('scams')));
+});
+
+// Everything about one main-site account on one page of the admin panel: the
+// account itself, its linked sub-site accounts with their balances, progress,
+// bills and history, its challenges, the messages sent to it and its scams.
+// Read-only: it creates no bill cycles and runs no auto-pay.
+app.get('/api/admin/users/:id/overview', async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const id = Number(req.params.id);
+    const me = (await readJSON('users')).find(u => u.id === id);
+    if (!me) return res.status(404).json({ error: 'User not found' });
+    const [hub, own, siteRows, allMessages, allScams] = await Promise.all([
+        buildHub(me), getChallengesForUser(id, me.role || 'participant', 'challenges'), subSiteChallengeRows(me),
+        readJSON('messages'), readJSON('scams')
+    ]);
+    const challenges = mirrorCompletions(own, siteRows).filter(c => c.active !== false);
+    const level1 = LEVEL_1_REQUIRED_CONDITIONS.map(cond => {
+        const row = challenges.find(c => c.condition === cond);
+        return { condition: cond, title: row ? row.title : null, completed: !!(row && row.completed) };
+    });
+    const messages = allMessages.filter(m => !m.scamId && m.senderId !== 0 && (m.recipientId === id || m.recipientId === 'all'))
+        .map(m => ({
+            id: m.id, subject: m.subject, body: m.body, type: m.type, sentAt: m.sentAt, senderName: m.senderName,
+            broadcast: m.recipientId === 'all', sites: m.sites || [], read: (m.readBy || []).includes(id)
+        })).sort((a, b) => b.sentAt - a.sentAt);
+    res.json({
+        user: publicUser(me),
+        userData: Object.assign({}, DEFAULT_USER_DATA, me.userData || {}),
+        hub, challenges, level1, messages,
+        unreadMessages: allMessages.filter(m => (m.recipientId === id || m.recipientId === 'all') && !(m.readBy || []).includes(id)).length,
+        scams: await scamsWithStatus(allScams.filter(sc => sc.userId === id))
+    });
 });
 
 app.post('/api/admin/scams', async (req, res) => {
