@@ -134,6 +134,7 @@
     </style>
 
     <script src="db.js"></script>
+    <script src="scam.js"></script>
     <script src="shop-bridge.js"></script>
     <script src="shopping-script.js"></script>
     <script>
@@ -204,7 +205,9 @@
                     '<span class="msg-date">' + _esc(formatDate(m.sentAt)) + '</span>' +
                 '</button>' +
                 '<div class="msg-body" id="msgBody' + Number(m.id) + '">' + _esc(body) +
-                    '<div class="msg-sender">From ' + _esc(m.senderName || 'InStyl') + ' &middot; ' + _esc(m.sentAt ? new Date(m.sentAt).toLocaleString() : '') + '</div>' +
+                    '<div class="msg-sender">From ' + _esc(m.senderName || 'InStyl') + (m.senderEmail ? ' &lt;' + _esc(m.senderEmail) + '&gt;' : '') + ' &middot; ' + _esc(m.sentAt ? new Date(m.sentAt).toLocaleString() : '') + '</div>' +
+                    DigifinwizScam.revealHtml(m) +
+                    (m.scamRevealed ? '' : '<button type="button" class="msg-report" style="margin-top:10px;background:none;border:1px solid #d5d9d9;border-radius:8px;padding:5px 12px;font-size:0.8rem;cursor:pointer;color:#0f1111">🚩 Report as scam</button>') +
                 '</div>' +
             '</div>';
         }).join('');
@@ -221,6 +224,24 @@
     }
 
     function onListClick(e) {
+        var report = e.target.closest('.msg-report');
+        if (report) {
+            var rid = Number(report.closest('.msg-row').dataset.id);
+            var rm = _messages.find(function(x) { return x.id === rid; });
+            if (!rm) return;
+            report.disabled = true;
+            DigifinwizScam.reportMessage(rid).then(function(result) {
+                if (result && result.scam) {
+                    rm.scamRevealed = { redFlags: result.redFlags || [] };
+                    renderMessages();
+                    var row = document.querySelector('.msg-row[data-id="' + rid + '"]');
+                    if (row) { row.classList.add('open'); row.querySelector('.msg-row-head').setAttribute('aria-expanded', 'true'); }
+                } else {
+                    report.disabled = false;
+                }
+            }).catch(function() { report.disabled = false; });
+            return;
+        }
         var head = e.target.closest('.msg-row-head');
         if (!head) return;
         var row = head.parentElement;

@@ -969,7 +969,87 @@ function loadDashboardTab() {
         renderDashGoalsSummary(results[3]);
         renderDashBranchLocator();
     }).catch(function(err) { console.error('loadDashboardTab:', err); });
+    loadPaymentRequests();
     if (typeof renderBankingGuideStatus === 'function') renderBankingGuideStatus();
+}
+
+/* ── Payment requests ───────────────────────────────────────────────────────
+   Someone asking this account for money. The learner can pay, decline, or
+   report the request as a scam; the server says afterwards what it was. */
+var paymentRequests = [];
+
+function loadPaymentRequests() {
+    return DigifinwizDB.getPaymentRequests().then(function(list) {
+        paymentRequests = list || [];
+        renderPaymentRequests();
+    }).catch(function(err) { console.error('loadPaymentRequests:', err); });
+}
+
+function renderPaymentRequests() {
+    var el = document.getElementById('dashPaymentRequests');
+    if (!el) return;
+    if (!paymentRequests.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    el.style.display = '';
+    el.innerHTML =
+        '<h3 style="margin:0 0 0.25rem">Payment requests <span style="font-size:0.75rem;font-weight:600;background:#fef3c7;color:#92400e;border-radius:999px;padding:2px 9px;vertical-align:middle">' + paymentRequests.length + '</span></h3>' +
+        '<p style="margin:0 0 0.9rem;font-size:0.82rem;color:var(--color-gray-500)">Someone is asking you for money. Pay only if you know who they are and why they are asking.</p>' +
+        paymentRequests.map(function(r) {
+            var id = Number(r.id);
+            return '<div style="border:1px solid var(--color-gray-200,#e5e7eb);border-radius:10px;padding:0.9rem 1rem;margin-bottom:0.7rem;display:flex;flex-wrap:wrap;gap:0.8rem;align-items:center">' +
+                '<div style="flex:1;min-width:220px">' +
+                    '<div style="font-weight:700">' + escBA(r.from) + ' is requesting ' + fmtMoneyB(r.amount) + '</div>' +
+                    (r.note ? '<div style="font-size:0.85rem;margin-top:2px">“' + escBA(r.note) + '”</div>' : '') +
+                    '<div style="font-size:0.75rem;color:var(--color-gray-500);margin-top:3px">To account ' + escBA(r.accountNumber) + ' · ' + escBA(new Date(r.requestedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })) + '</div>' +
+                '</div>' +
+                '<div style="display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center">' +
+                    '<select id="payReqFrom-' + id + '" aria-label="Pay from" style="padding:0.4rem 0.5rem;border:1px solid var(--color-gray-300,#d1d5db);border-radius:8px;font-size:0.82rem">' +
+                        '<option value="checking">From checking</option><option value="savings">From savings</option>' +
+                    '</select>' +
+                    '<button type="button" class="btn btn-primary btn-sm" onclick="payPaymentRequest(' + id + ', this)">Pay</button>' +
+                    '<button type="button" class="btn btn-sm" onclick="declinePaymentRequest(' + id + ', this)">Decline</button>' +
+                    '<button type="button" class="btn btn-sm" onclick="reportPaymentRequest(' + id + ', this)">🚩 Report as scam</button>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+}
+
+function findPaymentRequest(id) {
+    return paymentRequests.filter(function(r) { return Number(r.id) === id; })[0];
+}
+
+function payPaymentRequest(id, btn) {
+    var r = findPaymentRequest(id);
+    if (!r) return;
+    var from = (document.getElementById('payReqFrom-' + id) || {}).value || 'checking';
+    if (!confirm('Pay ' + fmtMoneyB(r.amount) + ' to ' + r.from + ' from your ' + from + ' account?')) return;
+    if (btn) btn.disabled = true;
+    DigifinwizDB.payPaymentRequest(id, from).then(function(result) {
+        refreshAfterMoneyAction();
+        if (result && result.scam) return DigifinwizScam.show(result.scam);
+        showNotification('Paid ' + fmtMoneyB(r.amount) + ' to ' + r.from + '.', 'success');
+    }).catch(function(err) {
+        if (btn) btn.disabled = false;
+        showNotification(err && err.message ? err.message : 'Payment failed. Please try again.', 'error');
+    });
+}
+
+function declinePaymentRequest(id, btn) {
+    if (btn) btn.disabled = true;
+    DigifinwizDB.declinePaymentRequest(id).then(function() {
+        showNotification('Request declined.', 'info');
+        loadPaymentRequests();
+    }).catch(function(err) {
+        if (btn) btn.disabled = false;
+        showNotification(err && err.message ? err.message : 'Could not decline the request.', 'error');
+    });
+}
+
+function reportPaymentRequest(id, btn) {
+    if (btn) btn.disabled = true;
+    DigifinwizScam.reportPaymentRequest(id).then(function() {
+        loadPaymentRequests();
+        if (typeof refreshBankingPage === 'function') refreshBankingPage();
+    }).catch(function() { if (btn) btn.disabled = false; });
 }
 
 function renderDashAccountsSummary(balances, session) {
@@ -1488,11 +1568,25 @@ function renderInbox() {
                     (m.senderName && m.senderName !== 'System' ? '<span class="db-inbox-tag">From ' + escBA(m.senderName) + '</span>' : '') +
                 '</div>' +
                 (open
-                    ? '<div class="db-inbox-body">' + escBA(m.body || '') + '</div>'
+                    ? '<div class="db-inbox-body">' + escBA(m.body || '') + '</div>' +
+                      (m.senderEmail ? '<div style="font-size:0.75rem;color:#64748b;margin-top:6px">Sent from ' + escBA(m.senderEmail) + '</div>' : '') +
+                      DigifinwizScam.revealHtml(m) +
+                      (m.scamRevealed ? '' : '<button type="button" class="btn btn-sm" style="margin-top:10px" onclick="event.stopPropagation();reportInboxMessage(' + idNum + ', this)">🚩 Report as scam</button>')
                     : '<div class="db-inbox-preview">' + escBA(preview) + '</div>') +
             '</div>' +
             '</div>';
     }).join('');
+}
+
+// "Report as scam" on an open message: the server says whether it was a practice scam.
+function reportInboxMessage(id, btn) {
+    if (btn) btn.disabled = true;
+    DigifinwizScam.reportMessage(id).then(function(result) {
+        var msg = inboxMessages.filter(function(m) { return Number(m.id) === id; })[0];
+        if (msg && result && result.scam) msg.scamRevealed = { redFlags: result.redFlags || [] };
+        renderInbox();
+        if (result && result.scam && result.xp > 0 && typeof refreshBankingPage === 'function') refreshBankingPage();
+    }).catch(function() { if (btn) btn.disabled = false; });
 }
 
 function openInboxMessage(id) {

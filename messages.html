@@ -286,6 +286,7 @@
     <script src="config.js"></script>
     <script src="auth.js"></script>
     <script src="db.js"></script>
+    <script src="scam.js"></script>
     <script src="script.js"></script>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -453,11 +454,24 @@
                                 (!isRead
                                     ? '<button class="btn btn-primary btn-sm" id="markReadBtn">Mark as Read</button>'
                                     : '<span style="font-size:0.75rem;color:#94a3b8">Read ✓</span>') +
+                                (m.scamRevealed ? '' : '<button class="btn btn-sm" id="reportScamBtn" title="Tell us if this message looks like a scam">🚩 Report as scam</button>') +
                                 '<button class="btn btn-sm" id="backBtn" style="display:none">← Back</button>' +
                             '</div>' +
                         '</div>' +
                     '</div>' +
-                    '<div class="email-reading-body">' + esc(m.body) + '</div>';
+                    '<div class="email-reading-body">' + esc(m.body) + DigifinwizScam.revealHtml(m) + '</div>';
+
+                // Report as scam: the server says whether it was a practice scam.
+                var reportBtn = document.getElementById('reportScamBtn');
+                if (reportBtn) {
+                    reportBtn.addEventListener('click', function() {
+                        reportBtn.disabled = true;
+                        DigifinwizScam.reportMessage(m.id).then(function(result) {
+                            if (result && result.scam) m.scamRevealed = { redFlags: result.redFlags || [] };
+                            if (selectedId === m.id) openMessage(m, session);
+                        }).catch(function() { reportBtn.disabled = false; });
+                    });
+                }
 
                 // Back button (mobile)
                 var backBtn = document.getElementById('backBtn');

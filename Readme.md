@@ -113,6 +113,23 @@ Admins can manage bills via the **Bills** tab in the admin panel:
 
 Each DigiPay account is issued its bills from this list when it opens its bills (`GET /api/me/bills`); the admin **Bills** tab is the only page that reads `/api/bills` itself.
 
+## Scam Simulations
+
+From **Messages → Send a Scam Simulation** an admin sends one user a practice scam to spot and report. Templates pre-fill the form; everything can be edited.
+
+| Type | Where the user sees it | If they pay |
+|---|---|---|
+| Fake message | Main inbox, optionally their linked DigiBank / InStyl / DigiPay inboxes too | – |
+| Fake bill | Among their DigiPay bills (needs a linked DigiPay account) | The florins leave their account; no XP, coins or challenge progress |
+| Fake payment request | A "Payment requests" card on their DigiBank dashboard (needs a linked DigiBank account) | Same; recorded as a `scam` transaction |
+
+- Nothing sent to the user marks the item as a scam. Every message and every unpaid bill has a **Report as scam** control, so the control itself gives nothing away; reporting something genuine just says so.
+- Reporting a scam shows its warning signs and pays the XP the admin set (default 50, once per scam, to the account that reported it). A report made after paying earns nothing.
+- Paying a scam shows the same warning signs and leaves a "You paid a scam" message in that site's inbox. The money is not returned.
+- **Scams Sent** lists each scam with its outcome: delivered, opened, reported, paid, or declined. Deleting a scam removes it from the user's inbox or bill list.
+
+Records live in the `scams` store. Endpoints: `GET/POST /api/admin/scams`, `DELETE /api/admin/scams/:id`, `POST /api/me/messages/:id/report`, `POST /api/me/bills/:cycleId/report`, `GET /api/me/payment-requests`, `POST /api/me/payment-requests/:id/(pay|decline|report)`.
+
 ## API Reference (key endpoints)
 
 | Method | Path | Auth | Description |

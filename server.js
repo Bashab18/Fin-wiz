@@ -193,7 +193,7 @@ function pgCommit(entries) {
 // drift from the maps the routes actually use: the shared catalogs, each
 // per-user store's main-site name, and every module's own copy of it.
 function allStoreNames() {
-    const names = new Set(['bills', 'products']);
+    const names = new Set(['bills', 'products', 'scams']);
     Object.keys(PER_USER_STORE_PROPS).forEach(n => names.add(n));
     Object.values(MODULE_STORES).forEach(mod => Object.values(mod).forEach(n => names.add(n)));
     return Array.from(names);
@@ -375,7 +375,7 @@ async function buildChallengeContext(userId, stores) {
     const balances = Object.assign({}, DEFAULT_BALANCES, user.balances || {});
 
     const transfers = allTxs.filter(t => t.userId === userId && isExternalTransfer(t));
-    const pays      = allPays.filter(p => p.userId === userId);
+    const pays      = allPays.filter(p => p.userId === userId && !p.scam);   // paying a scam bill is not a bill payment
     const purchs    = allPurchs.filter(p => p.userId === userId);
 
     const lastTx    = latestByTimestamp(transfers);
@@ -1558,6 +1558,9 @@ app.delete('/api/users/:id', async (req, res) => {
                 return m;
             })
         );
+
+        // Scams sent to this account go with it (ids are reused after a delete).
+        await removeScamsOfAccount(req.appModule, id);
 
         const users = await readJSON(req.userStore);
         await writeJSON(req.userStore, users.filter(u => u.id !== id));
@@ -2768,7 +2771,8 @@ async function subSiteMessagesFor(mainUser) {
 
 app.get('/api/me/messages', async (req, res) => {
     const all = await readJSON(req.messageStore);
-    const own = all.filter(m => m.recipientId === 'all' || m.recipientId === req.userId);
+    const mine = all.filter(m => m.recipientId === 'all' || m.recipientId === req.userId);
+    const own = mine.map(learnerMessage);
     if (req.appModule || (req.userRole || 'participant') !== 'participant') return res.json(own);
     const me = (await readIdentities(req.userStore)).find(u => u.id === req.userId);
     res.json(me ? own.concat(await subSiteMessagesFor(me)) : own);
@@ -2800,7 +2804,7 @@ app.patch('/api/me/messages/:id', async (req, res) => {
                     all[idx] = Object.assign({}, all[idx], { readBy });
                     await writeJSON(store, all);
                 }
-                return Object.assign({}, all[idx], { id, module: key, readBy: [req.userId] });
+                return Object.assign(learnerMessage(all[idx]), { id, module: key, readBy: [req.userId] });
             });
             return res.json(msg);
         }
@@ -2814,7 +2818,7 @@ app.patch('/api/me/messages/:id', async (req, res) => {
                 all[idx] = Object.assign({}, all[idx], { readBy });
                 await writeJSON(req.messageStore, all);
             }
-            return all[idx];
+            return learnerMessage(all[idx]);
         });
         res.json(msg);
     } catch (err) {
@@ -3686,7 +3690,9 @@ app.post('/api/admin/messages/system', async (req, res) => {
 app.get('/api/admin/messages', async (req, res) => {
     if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
     const all = await readJSON(req.messageStore);
-    res.json(req.query.includeSystem ? all : all.filter(m => m.senderId !== 0));
+    // Scam simulations have their own list (GET /api/admin/scams) and are deleted from there.
+    const sent = all.filter(m => !m.scamId);
+    res.json(req.query.includeSystem ? sent : sent.filter(m => m.senderId !== 0));
 });
 
 // audience 'all' also delivers the message to the Banking, Ecommerce and
@@ -3752,6 +3758,398 @@ app.delete('/api/admin/messages/:id', async (req, res) => {
         await writeJSON(req.messageStore, all.filter(m => m.id !== id));
     });
     res.json({ ok: true });
+});
+
+// ── Scam simulations ──────────────────────────────────────────────────────────
+// An admin sends one learner a practice scam, and the learner is meant to spot
+// and report it. Three kinds:
+//   message — a message in the learner's inbox (main site, optionally their
+//             linked sub-site inboxes too);
+//   bill    — a bill in their DigiPay account that no real biller issued;
+//   request — a request for money in their DigiBank account.
+// The 'scams' store holds one record per scam with what happened to it. What
+// the learner sees carries the scam's id only on the server: every response to
+// a learner has it removed, so nothing marks the item as a scam until they
+// report it (or pay it).
+const SCAM_KINDS        = new Set(['message', 'bill', 'request']);
+const SCAM_MESSAGE_TYPES = new Set(['announcement', 'info', 'warning', 'email']);
+const SCAM_DEFAULT_XP   = 50;
+const SCAM_MAX_XP       = 500;
+const SCAM_MAX_FLAGS    = 8;
+const SCAM_SITE         = { bill: 'utilities', request: 'banking' };
+const SCAM_DEFAULT_FLAGS = {
+    message: ['It pushes you to act straight away.', 'It asks for something a real sender would never ask for in a message.'],
+    bill:    ['You never signed up with this biller.', 'It gives very little time to pay.'],
+    request: ['You do not know who is asking for the money.', 'A real bank never asks you to move money to keep it "safe".']
+};
+
+function scamText(raw, max, label, required) {
+    if (raw === undefined || raw === null) raw = '';
+    if (typeof raw !== 'string') throw httpError(400, label + ' must be text');
+    const text = raw.trim();
+    if (required && !text) throw httpError(400, label + ' is required');
+    if (text.length > max) throw httpError(400, label + ' must be ' + max + ' characters or fewer');
+    return text;
+}
+
+// The message-store name of a site key (null = main site).
+const scamMessageStore = site => site ? MODULE_STORES[site].messages : 'messages';
+
+// What a learner is told once a scam is out in the open.
+function scamLesson(scam, extra) {
+    return Object.assign({
+        scam: true, kind: scam.kind, title: scam.kind === 'message' ? scam.subject : scam.payee,
+        redFlags: scam.redFlags || [], amount: scam.amount || null
+    }, extra);
+}
+
+// A message as a learner may see it: never the scam's id, only what a report revealed.
+function learnerMessage(m) {
+    if (!m.scamId) return m;
+    const out = Object.assign({}, m);
+    delete out.scamId;
+    return out;
+}
+
+// Adds XP to one account under the same level rules as every other reward
+// (1,000 XP a level; a main-site account leaves Level 1 only once its three
+// required challenges are done). Call inside a locked section.
+async function awardXp(req, userId, points) {
+    const users = await readJSON(req.userStore);
+    const idx   = users.findIndex(u => u.id === userId);
+    if (idx === -1 || !(points > 0)) return { leveledUp: false, newLevel: 0 };
+    const userData = Object.assign({}, DEFAULT_USER_DATA, users[idx].userData || {});
+    userData.points            = (userData.points || 0) + points;
+    userData.pointsToNextLevel = (userData.pointsToNextLevel != null ? userData.pointsToNextLevel : 1000) - points;
+    let leveledUp = false;
+    if (userData.pointsToNextLevel <= 0) {
+        let allowed = true;
+        if (userData.level === 1 && !req.appModule) {
+            const challenges = await readJSON(req.challengeStore);
+            allowed = LEVEL_1_REQUIRED_CONDITIONS.every(cond =>
+                challenges.some(c => c.userId === userId && c.condition === cond && c.completed));
+        }
+        if (allowed) {
+            userData.level++;
+            userData.pointsToNextLevel = 1000 + userData.pointsToNextLevel;
+            leveledUp = true;
+        } else {
+            userData.pointsToNextLevel = 0;
+        }
+    }
+    users[idx] = Object.assign({}, users[idx], { userData });
+    await writeJSON(req.userStore, users);
+    return { leveledUp, newLevel: leveledUp ? userData.level : 0 };
+}
+
+// Records a report of `scam` by the caller and returns the lesson. XP is paid
+// once per scam, and only for a report made before any money was paid. Call
+// inside a locked section; `scams` is the store's rows and is written back.
+async function reportScam(req, scams, scam) {
+    const first = !scam.reportedAt;
+    const xp    = first && !scam.paidAt ? (scam.xp || 0) : 0;
+    let level   = { leveledUp: false, newLevel: 0 };
+    if (first) {
+        const idx = scams.findIndex(s => s.id === scam.id);
+        scam = scams[idx] = Object.assign({}, scam, { reportedAt: Date.now(), reportedOn: req.appModule || 'main', xpAwarded: xp });
+        await writeJSON('scams', scams);
+        level = await awardXp(req, req.userId, xp);
+        // Every copy of a scam message now says what it was.
+        if (scam.kind === 'message') {
+            for (const site of [null].concat(scam.sites || [])) {
+                const store = scamMessageStore(site);
+                const rows  = await readJSON(store);
+                if (!rows.some(m => m.scamId === scam.id)) continue;
+                await writeJSON(store, rows.map(m => m.scamId === scam.id
+                    ? Object.assign({}, m, { scamRevealed: { reportedAt: scam.reportedAt, redFlags: scam.redFlags || [] } }) : m));
+            }
+        }
+        // A reported scam bill leaves the bill list (a paid one stays as payment history).
+        if (scam.kind === 'bill' && !scam.paidAt) {
+            const store = MODULE_STORES.utilities.billCycles;
+            const rows  = await readJSON(store);
+            await writeJSON(store, rows.filter(c => c.scamId !== scam.id));
+        }
+    }
+    return scamLesson(scam, {
+        firstReport: first, xp, afterPaying: !!scam.paidAt, leveledUp: level.leveledUp, newLevel: level.newLevel,
+        message: !first ? 'You already reported this one.'
+            : scam.paidAt ? 'This was a scam, and it was reported after the money was paid, so it earns no XP.'
+            : 'Well spotted. This was a scam.'
+    });
+}
+
+const NOT_A_SCAM = { scam: false, message: 'This one is genuine. Checking before you trust something is still the right habit.' };
+
+// Marks a scam as paid and tells the learner, in the inbox of the site where
+// they paid, what they missed. Call inside a locked section.
+async function recordScamPaid(req, scamId, amount) {
+    const scams = await readJSON('scams');
+    const idx   = scams.findIndex(s => s.id === scamId);
+    if (idx === -1) return null;
+    scams[idx] = Object.assign({}, scams[idx], { paidAt: Date.now(), paidAmount: amount });
+    await writeJSON('scams', scams);
+    const scam  = scams[idx];
+    const flags = (scam.redFlags || []).map(f => '• ' + f).join('\n');
+    await pushSystemMessage(req.userId, {
+        subject: 'You paid a scam: ' + scam.payee,
+        body: 'The ' + (scam.kind === 'bill' ? 'bill' : 'payment request') + ' from ' + scam.payee + ' was a practice scam, and ƒ' +
+              amount.toFixed(2) + ' left your account when you paid it.' + (flags ? '\n\nWarning signs you could have spotted:\n' + flags : '') +
+              '\n\nNext time, use "Report as scam" instead of paying.',
+        type: 'warning', category: SCAM_SITE[scam.kind]
+    }, req.messageStore);
+    return scamLesson(scam, { paid: true, amount, message: 'This was a practice scam, and the money has left your account.' });
+}
+
+// Removes everything a scam put in front of the learner (its messages and its
+// unpaid bill). Payments already made stay in the learner's history.
+async function removeScamDeliveries(scam) {
+    for (const site of [null].concat(Object.keys(MODULE_STORES))) {
+        const store = scamMessageStore(site);
+        const rows  = await readJSON(store);
+        if (rows.some(m => m.scamId === scam.id)) await writeJSON(store, rows.filter(m => m.scamId !== scam.id));
+    }
+    const store  = MODULE_STORES.utilities.billCycles;
+    const cycles = await readJSON(store);
+    if (cycles.some(c => c.scamId === scam.id && c.status !== 'paid')) {
+        await writeJSON(store, cycles.filter(c => !(c.scamId === scam.id && c.status !== 'paid')));
+    }
+}
+
+// Removes the scams sent to an account that is being deleted: `site` null for
+// a main-site account, else the sub-site whose account `userId` is.
+async function removeScamsOfAccount(site, userId) {
+    const scams = await readJSON('scams');
+    const gone  = scams.filter(s => site ? (s.accounts || {})[site] === userId && SCAM_SITE[s.kind] === site : s.userId === userId);
+    if (!gone.length) return;
+    for (const s of gone) await removeScamDeliveries(s);
+    await writeJSON('scams', scams.filter(s => !gone.includes(s)));
+}
+
+app.get('/api/admin/scams', async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const scams = await readJSON('scams');
+    const stores = {};
+    for (const site of [null].concat(Object.keys(MODULE_STORES))) stores[site || 'main'] = await readJSON(scamMessageStore(site));
+    res.json(scams.map(s => {
+        let opened = false;
+        if (s.kind === 'message') {
+            for (const site of [null].concat(s.sites || [])) {
+                const reader = site ? (s.accounts || {})[site] : s.userId;
+                if (stores[site || 'main'].some(m => m.scamId === s.id && (m.readBy || []).includes(reader))) opened = true;
+            }
+        }
+        const status = s.reportedAt ? (s.paidAt ? 'paid_then_reported' : 'reported') : s.paidAt ? 'paid'
+            : s.declinedAt ? 'declined' : opened ? 'opened' : 'delivered';
+        return Object.assign({}, s, { opened, status });
+    }).sort((a, b) => b.sentAt - a.sentAt));
+});
+
+app.post('/api/admin/scams', async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const b = req.body || {};
+    try {
+        if (!SCAM_KINDS.has(b.kind)) throw httpError(400, "kind must be 'message', 'bill' or 'request'");
+        const userId = parseAssignee(b.userId);
+        if (!userId) throw httpError(400, 'Choose the user to send the scam to');
+        const rec = { kind: b.kind, userId };
+        if (b.kind === 'message') {
+            rec.subject     = scamText(b.subject, 120, 'Subject', true);
+            rec.body        = scamText(b.body, 2000, 'Message body', true);
+            rec.senderName  = scamText(b.senderName, 60, 'Sender name', true);
+            rec.senderEmail = scamText(b.senderEmail, 120, 'Sender email') || null;
+            rec.type        = SCAM_MESSAGE_TYPES.has(b.type) ? b.type : 'email';
+            rec.audience    = b.audience === 'all' ? 'all' : 'main';
+        } else {
+            rec.payee         = scamText(b.payee, 60, b.kind === 'bill' ? 'Biller name' : 'Requester name', true);
+            rec.accountNumber = scamText(b.accountNumber, 40, 'Account number') || String(Math.floor(1000000 + Math.random() * 9000000));
+            rec.note          = scamText(b.note, 200, 'Note');
+            const parsed = parseMoneyAmount(b.amount);
+            if (parsed.error) throw httpError(400, parsed.error);
+            rec.amount = parsed.amount;
+            if (b.kind === 'bill') {
+                const days = b.dueInDays === undefined || b.dueInDays === null || b.dueInDays === '' ? 2 : Number(b.dueInDays);
+                if (!Number.isInteger(days) || days < 1 || days > 30) throw httpError(400, 'Due in days must be a whole number from 1 to 30');
+                rec.dueInDays = days;
+            }
+        }
+        if (b.redFlags !== undefined && !Array.isArray(b.redFlags)) throw httpError(400, 'redFlags must be a list');
+        rec.redFlags = (b.redFlags || []).map(f => scamText(f, 160, 'Each warning sign')).filter(Boolean);
+        if (rec.redFlags.length > SCAM_MAX_FLAGS) throw httpError(400, 'At most ' + SCAM_MAX_FLAGS + ' warning signs');
+        if (!rec.redFlags.length) rec.redFlags = SCAM_DEFAULT_FLAGS[b.kind];
+        const xp = b.xp === undefined || b.xp === null || b.xp === '' ? SCAM_DEFAULT_XP : Number(b.xp);
+        if (!Number.isInteger(xp) || xp < 0 || xp > SCAM_MAX_XP) throw httpError(400, 'XP must be a whole number from 0 to ' + SCAM_MAX_XP);
+        rec.xp = xp;
+
+        const saved = await withUserLock(req.userId, async () => {
+            const target = (await readJSON('users')).find(u => u.id === userId);
+            if (!target || target.role === 'admin') throw httpError(404, 'That user does not exist');
+            const linked = await linkedIdentities(target);
+            const accounts = {};
+            Object.keys(linked).forEach(k => { if (linked[k]) accounts[k] = linked[k].id; });
+            const site = SCAM_SITE[rec.kind];
+            if (site && !accounts[site]) {
+                throw httpError(409, (target.fullName || target.username) + ' has no ' + SITE_LABELS[site] + ' account, so there is nowhere to deliver this.');
+            }
+            const scams = await readJSON('scams');
+            const now   = Date.now();
+            Object.assign(rec, {
+                id: nextId(scams), recipientName: target.fullName || target.username, accounts,
+                sites: [], sentAt: now, sentBy: req.userId, reportedAt: null, paidAt: null, declinedAt: null
+            });
+            if (rec.kind === 'message') {
+                const message = {
+                    senderId: req.userId, senderName: rec.senderName, senderEmail: rec.senderEmail,
+                    subject: rec.subject, body: rec.body, type: rec.type, category: 'system',
+                    sentAt: now, readBy: [], scamId: rec.id
+                };
+                const main = await readJSON('messages');
+                const mainId = nextId(main);
+                main.push(Object.assign({ id: mainId, recipientId: userId }, message));
+                await writeJSON('messages', main);
+                if (rec.audience === 'all') {
+                    for (const key of Object.keys(accounts)) {
+                        const copies = await readJSON(MODULE_STORES[key].messages);
+                        copies.push(Object.assign({ id: nextId(copies), recipientId: accounts[key], mainMessageId: mainId, category: key }, message, { category: key }));
+                        await writeJSON(MODULE_STORES[key].messages, copies);
+                        rec.sites.push(key);
+                    }
+                }
+            } else if (rec.kind === 'bill') {
+                const store  = MODULE_STORES.utilities.billCycles;
+                const cycles = await readJSON(store);
+                cycles.push({
+                    id: nextId(cycles), userId: accounts.utilities, billDefKey: 'scam:' + rec.id,
+                    name: rec.payee, icon: '🧾', category: 'other', billingType: 'flat',
+                    unit: null, ratePerUnit: null, baseFee: null, accountNumber: rec.accountNumber,
+                    gradient: 'linear-gradient(135deg,#64748b,#334155)', usage: null, amount: rec.amount,
+                    cycleMonth: currentCycleMonth(), dueDate: now + rec.dueInDays * 24 * 60 * 60 * 1000,
+                    lateFeeRate: 0, graceDays: 0, status: 'open', createdAt: now, paidAt: null, scamId: rec.id
+                });
+                await writeJSON(store, cycles);
+                rec.sites.push('utilities');
+            } else {
+                rec.sites.push('banking');
+            }
+            scams.push(rec);
+            await writeJSON('scams', scams);
+            return rec;
+        });
+        res.status(201).json(saved);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+app.delete('/api/admin/scams/:id', async (req, res) => {
+    if (req.userRole !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const id = Number(req.params.id);
+    const found = await withUserLock(req.userId, async () => {
+        const scams = await readJSON('scams');
+        const scam  = scams.find(s => s.id === id);
+        if (!scam) return false;
+        await removeScamDeliveries(scam);
+        await writeJSON('scams', scams.filter(s => s.id !== id));
+        return true;
+    });
+    if (!found) return res.status(404).json({ error: 'Scam not found' });
+    res.json({ ok: true });
+});
+
+// "Report as scam" on a message. Every message has the button, so a report of
+// a genuine message is answered too (and costs nothing).
+app.post('/api/me/messages/:id/report', async (req, res) => {
+    const id = Number(req.params.id);
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            // A sub-site message shown in the main inbox is never a scam copy (those are hidden there).
+            if (!req.appModule && id >= SUBSITE_MESSAGE_ID_BASE) return NOT_A_SCAM;
+            const msg = (await readJSON(req.messageStore)).find(m => m.id === id && (m.recipientId === 'all' || m.recipientId === req.userId));
+            if (!msg) throw httpError(404, 'Message not found');
+            if (!msg.scamId) return NOT_A_SCAM;
+            const scams = await readJSON('scams');
+            const scam  = scams.find(s => s.id === msg.scamId);
+            return scam ? reportScam(req, scams, scam) : NOT_A_SCAM;
+        });
+        res.json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+// "Report as scam" on a bill.
+app.post('/api/me/bills/:cycleId/report', async (req, res) => {
+    const cycleId = Number(req.params.cycleId);
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const cycle = (await readJSON(req.billCycleStore)).find(c => c.id === cycleId && c.userId === req.userId);
+            if (!cycle) throw httpError(404, 'Bill not found');
+            if (!cycle.scamId || req.appModule !== 'utilities') return NOT_A_SCAM;
+            const scams = await readJSON('scams');
+            const scam  = scams.find(s => s.id === cycle.scamId);
+            return scam ? reportScam(req, scams, scam) : NOT_A_SCAM;
+        });
+        res.json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+// Requests for money waiting in the caller's DigiBank account.
+const openRequestsFor = (scams, req) => req.appModule !== 'banking' ? [] : scams.filter(s =>
+    s.kind === 'request' && (s.accounts || {}).banking === req.userId && !s.reportedAt && !s.paidAt && !s.declinedAt);
+
+app.get('/api/me/payment-requests', async (req, res) => {
+    res.json(openRequestsFor(await readJSON('scams'), req).map(s => ({
+        id: s.id, from: s.payee, accountNumber: s.accountNumber, amount: s.amount, note: s.note || '', requestedAt: s.sentAt
+    })));
+});
+
+app.post('/api/me/payment-requests/:id/:action', async (req, res) => {
+    const id = Number(req.params.id), action = req.params.action;
+    if (!['pay', 'decline', 'report'].includes(action)) return res.status(404).json({ error: 'API route not found' });
+    const fromAccount = (req.body && req.body.fromAccount) || 'checking';
+    if (action === 'pay' && !TRANSFER_ACCOUNTS.has(fromAccount)) return res.status(400).json({ error: "fromAccount must be 'checking' or 'savings'" });
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            const scams = await readJSON('scams');
+            const scam  = openRequestsFor(scams, req).find(s => s.id === id);
+            if (!scam) throw httpError(404, 'Payment request not found');
+            if (action === 'report') return reportScam(req, scams, scam);
+            if (action === 'decline') {
+                scams[scams.findIndex(s => s.id === id)] = Object.assign({}, scam, { declinedAt: Date.now() });
+                await writeJSON('scams', scams);
+                return { ok: true };
+            }
+            const users = await readJSON(req.userStore);
+            const idx   = users.findIndex(u => u.id === req.userId);
+            if (idx === -1) throw httpError(404, 'User not found');
+            const balances = Object.assign({}, DEFAULT_BALANCES, users[idx].balances || {});
+            const current  = Number(balances[fromAccount]) || 0;
+            if (scam.amount > current) throw httpError(400, 'Insufficient funds. Available in ' + fromAccount + ': ƒ' + current.toFixed(2));
+            const next = parseFloat((current - scam.amount).toFixed(2));
+            balances[fromAccount] = next;
+            const updatedUser = Object.assign({}, users[idx], { balances });
+            users[idx] = updatedUser;
+            await writeJSON(req.userStore, users);
+            // type 'scam': money that left the account, but not a transfer the
+            // learner chose to make, so it earns no XP and counts toward no challenge.
+            const txs = await readJSON(req.transactionStore);
+            const now = Date.now();
+            const transaction = {
+                id: nextId(txs), userId: req.userId, type: 'scam', recipient: scam.payee, account: scam.accountNumber,
+                fromAccount, amount: scam.amount, description: scam.note || 'Payment request',
+                date: new Date(now).toLocaleDateString(), timestamp: now, pointsEarned: 0
+            };
+            txs.push(transaction);
+            await writeJSON(req.transactionStore, txs);
+            await maybeFireBalanceAlerts(updatedUser, fromAccount, current, next, -scam.amount, 'banking', req.messageStore);
+            return { transaction, balance: next, scam: await recordScamPaid(req, id, scam.amount) };
+        });
+        res.status(action === 'pay' ? 201 : 200).json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
 });
 
 // GET /api/admin/sub-site-accounts — every Banking / Ecommerce / Utilities account,
@@ -4351,7 +4749,8 @@ async function notifyOverdueBillsForUser(userId, cycles, messageStore = 'message
     // caller's snapshot, so concurrent GETs can't both send the message.
     const all = await readJSON(billCycleStore);
     cycles = all.filter(c => c.userId === userId);
-    const overdueNow = cycles.filter(c => c.status !== 'paid' && !c.overdueNotified && computeBillCycleStatus(c).overdue);
+    // A scam bill gets no overdue notice: a notice from the system would vouch for it.
+    const overdueNow = cycles.filter(c => c.status !== 'paid' && !c.scamId && !c.overdueNotified && computeBillCycleStatus(c).overdue);
     if (overdueNow.length === 0) return cycles;
     overdueNow.forEach(c => {
         const idx = all.findIndex(x => x.id === c.id);
@@ -4421,14 +4820,16 @@ async function attemptPayBillCycle(userId, cycleId, req, opts = {}) {
         const next    = card ? current : parseFloat((current - totalDue).toFixed(2));
         if (!card) balances[account] = next;
 
+        // A scam bill (see "Scam simulations") takes the money like any bill but earns nothing.
+        const isScam       = !!cycle.scamId;
         const onTime       = !statusInfo.overdue;
-        const pointsEarned = 45 + (onTime ? 15 : 0);
-        const coinsEarned  = Math.floor(cycle.amount / 10); // base amount only, never the late fee
+        const pointsEarned = isScam ? 0 : 45 + (onTime ? 15 : 0);
+        const coinsEarned  = isScam ? 0 : Math.floor(cycle.amount / 10); // base amount only, never the late fee
 
         const userData = Object.assign({}, DEFAULT_USER_DATA, users[uidx].userData || {});
         userData.points            = (userData.points || 0) + pointsEarned;
         userData.pointsToNextLevel = (userData.pointsToNextLevel != null ? userData.pointsToNextLevel : 1000) - pointsEarned;
-        userData.completedTasks    = (userData.completedTasks || 0) + 1;
+        userData.completedTasks    = (userData.completedTasks || 0) + (isScam ? 0 : 1);
         userData.coins              = (userData.coins || 0) + coinsEarned;
         let leveledUp = false, newLevel = 0;
         if (userData.pointsToNextLevel <= 0) {
@@ -4473,15 +4874,18 @@ async function attemptPayBillCycle(userId, cycleId, req, opts = {}) {
             // Which bill this settled, and the reward breakdown, so history
             // can say "August 2026 bill · on time · +8 coins" without guessing.
             cycleId: cycle.id, cycleMonth: cycle.cycleMonth, billAmount: cycle.amount,
-            onTimeBonus: onTime, coinsEarned
+            onTimeBonus: onTime && !isScam, coinsEarned
         };
+        if (isScam) paymentRecord.scam = true;
         payments.push(paymentRecord);
         await writeJSON(req.paymentStore, payments);
+        const scam = isScam ? await recordScamPaid(req, cycle.scamId, totalDue) : null;
 
         return {
             ok: true,
-            cycle: Object.assign({}, cycles[idx], computeBillCycleStatus(cycles[idx])),
-            payment: paymentRecord, leveledUp, newLevel, account, balance: next, onTimeBonus: onTime, pointsEarned, coinsEarned
+            cycle: learnerMessage(Object.assign({}, cycles[idx], computeBillCycleStatus(cycles[idx]))),
+            payment: paymentRecord, leveledUp, newLevel, account, balance: next, onTimeBonus: onTime && !isScam, pointsEarned, coinsEarned,
+            scam: scam || undefined
         };
     });
 }
@@ -4538,7 +4942,7 @@ app.get('/api/me/bills', async (req, res) => {
     // older paid history lives in /api/me/payments.
     const month = currentCycleMonth();
     cycles = cycles.filter(c => c.status !== 'paid' || c.cycleMonth === month);
-    const enriched = cycles.map(c => Object.assign({}, c, computeBillCycleStatus(c)));
+    const enriched = cycles.map(c => learnerMessage(Object.assign({}, c, computeBillCycleStatus(c))));
     enriched.sort((a, b) => (a.dueDate || 0) - (b.dueDate || 0));
     res.json(enriched);
 });

@@ -530,6 +530,38 @@ const DigifinwizDB = (() => {
         return _api('PATCH', '/api/me/messages/' + messageId);
     }
 
+    // ── Scam simulations ──────────────────────────────────────────────────────
+    // "Report as scam": the answer says whether the item was a practice scam.
+    function reportMessage(messageId) {
+        return _api('POST', '/api/me/messages/' + messageId + '/report');
+    }
+    function reportBill(cycleId) {
+        return _api('POST', '/api/me/bills/' + cycleId + '/report');
+    }
+    // Requests for money waiting in a DigiBank account.
+    function getPaymentRequests() {
+        return _api('GET', '/api/me/payment-requests');
+    }
+    function payPaymentRequest(id, fromAccount) {
+        return _api('POST', '/api/me/payment-requests/' + id + '/pay', { fromAccount: fromAccount || 'checking' });
+    }
+    function declinePaymentRequest(id) {
+        return _api('POST', '/api/me/payment-requests/' + id + '/decline', {});
+    }
+    function reportPaymentRequest(id) {
+        return _api('POST', '/api/me/payment-requests/' + id + '/report', {});
+    }
+    // Admin only.
+    function getScams() {
+        return _api('GET', '/api/admin/scams');
+    }
+    function sendScam(opts) {
+        return _api('POST', '/api/admin/scams', opts);
+    }
+    function deleteScam(id) {
+        return _api('DELETE', '/api/admin/scams/' + id);
+    }
+
     function sendAdminMessage(opts) {
         return _api('POST', '/api/admin/messages', opts);
     }
@@ -879,6 +911,15 @@ const DigifinwizDB = (() => {
         getMessagesForUser,
         markMessageRead,
         sendAdminMessage,
+        reportMessage,
+        reportBill,
+        getPaymentRequests,
+        payPaymentRequest,
+        declinePaymentRequest,
+        reportPaymentRequest,
+        getScams,
+        sendScam,
+        deleteScam,
         sendSystemMessage,
         getAllSentMessages,
         deleteAdminMessage,

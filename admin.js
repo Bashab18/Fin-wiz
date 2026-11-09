@@ -1632,8 +1632,10 @@ document.addEventListener('DOMContentLoaded', function () {
                      opt.textContent = (u.fullName || u.username) + ' (@' + u.username + ')';   // textContent is already text: escaping it too would show &amp;
                      select.appendChild(opt);
                  });
+            loadScamRecipients(users);
         });
         reloadMsgTable();
+        reloadScamTable();
         return usersLoaded;
     }
 
@@ -2070,6 +2072,195 @@ document.addEventListener('DOMContentLoaded', function () {
                 .finally(function() {
                     if (btn) { btn.disabled = false; btn.textContent = '✉️ Send Message'; }
                 });
+        });
+    }
+
+    // ── SCAM SIMULATIONS ─────────────────────────────────────────────────────
+    // A practice scam sent to one user (POST /api/admin/scams). The templates
+    // only pre-fill the form; everything can be edited before sending.
+    var SCAM_TEMPLATES = {
+        message: [
+            { name: 'Bank account locked', senderName: 'DigiBank Security Team', senderEmail: 'security@digibnak-alerts.co',
+              subject: 'Urgent: your account has been locked',
+              body: 'Dear customer,\n\nWe noticed unusual activity and have locked your account. To unlock it, reply to this message with your username and password within 24 hours.\n\nIf we do not hear from you, your account will be closed and your balance held.\n\nDigiBank Security Team',
+              flags: ['The sender address is misspelt (digibnak, not digibank).', 'A bank never asks for your password in a message.', 'It sets a short deadline and threatens to close the account.', 'It says "Dear customer" and not your name.'] },
+            { name: 'Prize winner', senderName: 'National Prize Centre', senderEmail: 'claims@prize-centre-winners.net',
+              subject: 'Congratulations! You have won ƒ5,000',
+              body: 'You have been selected as this month\'s winner of ƒ5,000!\n\nTo release your prize, send a ƒ50 processing fee today and confirm your bank account number. Offer ends at midnight.',
+              flags: ['You cannot win a draw you never entered.', 'A real prize never costs a fee to receive.', 'It asks for your bank account number.', 'The offer "ends at midnight" to rush you.'] },
+            { name: 'Missed delivery fee', senderName: 'InStyl Delivery', senderEmail: 'parcels@instyl-redelivery.info',
+              subject: 'Your parcel could not be delivered',
+              body: 'We tried to deliver your InStyl order today but nobody was home. Pay the ƒ2.99 redelivery fee and confirm your card number, expiry date and security code to book a new slot.\n\nUnclaimed parcels are returned after 48 hours.',
+              flags: ['The address is not InStyl\'s own.', 'A shop never asks for your full card details in a message.', 'It does not name an order you actually placed.', 'It gives 48 hours to hurry you.'] },
+            { name: 'Overdue bill threat', senderName: 'DigiPay Collections', senderEmail: 'collections@digipay-recovery.org',
+              subject: 'Final notice: service will be disconnected today',
+              body: 'Your electricity account is overdue. Your service will be disconnected at 5 pm today unless you pay ƒ120 now.\n\nDo not use your usual bill page. Reply to this message for the new account number to pay into.',
+              flags: ['It tells you not to pay through your usual Bills page.', 'It wants the money sent to a "new account number".', 'Your Bills page shows no such overdue bill.', 'It threatens disconnection the same day.'] }
+        ],
+        bill: [
+            { name: 'Utility "recovery" charge', payee: 'City Utilities Recovery Unit', amount: 189.90, dueInDays: 2,
+              flags: ['You have never had an account with this biller.', 'It is due in two days, far sooner than a real bill.', 'A vague "recovery" charge with no usage or reading behind it.'] },
+            { name: 'Internet reactivation fee', payee: 'Internet Service Reactivation', amount: 49.99, dueInDays: 1,
+              flags: ['Your real Internet bill is already in your list.', 'A real provider adds charges to your normal bill, not a separate one.', 'It is due tomorrow.'] }
+        ],
+        request: [
+            { name: 'Safe account', payee: 'DigiBank Safe Account Team', amount: 500, note: 'Your account is at risk. Move your money to this safe account now.',
+              flags: ['A bank never asks you to move money to a "safe account".', 'It wants you to act now, before you can check.', 'The money would go to an account that is not yours.'] },
+            { name: 'Friend in trouble', payee: 'Alex (new number)', amount: 150, note: 'Hi it\'s me, lost my phone. Can you send this today? Will pay you back tomorrow.',
+              flags: ['You cannot tell who is really asking.', 'A "new number" story means you cannot call the old one to check.', 'It needs the money today.'] },
+            { name: 'Fee to release a refund', payee: 'Tax Refund Processing', amount: 35, note: 'Pay the processing fee to release your ƒ900 tax refund.',
+              flags: ['A real refund never needs a fee paid first.', 'You did not apply for a refund.', 'A small fee for a big payout is a classic hook.'] }
+        ]
+    };
+    var SCAM_KIND_LABEL = { message: '✉️ Message', bill: '🧾 DigiPay bill', request: '💸 DigiBank request' };
+
+    function scamEl(id) { return document.getElementById(id); }
+
+    // Shows the fields the chosen scam type uses and lists its templates.
+    function syncScamKind() {
+        var kind = scamEl('scam-kind').value;
+        scamEl('scam-message-fields').style.display = kind === 'message' ? '' : 'none';
+        scamEl('scam-payment-fields').style.display = kind === 'message' ? 'none' : '';
+        scamEl('scam-due-group').style.display  = kind === 'bill' ? '' : 'none';
+        scamEl('scam-note-group').style.display = kind === 'request' ? '' : 'none';
+        scamEl('scam-payee-label').textContent  = kind === 'bill' ? 'Biller Name *' : 'Requester Name *';
+        var tpl = scamEl('scam-template');
+        tpl.innerHTML = '<option value="">Blank (write your own)</option>';
+        SCAM_TEMPLATES[kind].forEach(function(t, i) {
+            var opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = t.name;
+            tpl.appendChild(opt);
+        });
+    }
+
+    function applyScamTemplate() {
+        var kind = scamEl('scam-kind').value;
+        var t = SCAM_TEMPLATES[kind][scamEl('scam-template').value] || {};
+        var set = function(id, v) { scamEl(id).value = v == null ? '' : v; };
+        if (kind === 'message') {
+            set('scam-sender-name', t.senderName); set('scam-sender-email', t.senderEmail);
+            set('scam-subject', t.subject);        set('scam-body', t.body);
+        } else {
+            set('scam-payee', t.payee); set('scam-amount', t.amount); set('scam-account', '');
+            set('scam-note', t.note);   set('scam-due', t.dueInDays || 2);
+        }
+        set('scam-flags', (t.flags || []).join('\n'));
+    }
+
+    function clearScamForm() {
+        var who = scamEl('scam-recipient').value, kind = scamEl('scam-kind').value;
+        scamEl('scamForm').reset();
+        scamEl('scam-recipient').value = who;   // keep the user and type: sending several to one person is common
+        scamEl('scam-kind').value = kind;
+        syncScamKind();
+    }
+
+    function loadScamRecipients(users) {
+        var select = scamEl('scam-recipient');
+        if (!select) return;
+        var keep = select.value;
+        select.innerHTML = '<option value="">Choose a user…</option>';
+        users.filter(function(u) { return u.role === 'participant' && u.status === 'approved'; })
+             .sort(function(a, b) { return (a.fullName || '').localeCompare(b.fullName || ''); })
+             .forEach(function(u) {
+                 var opt = document.createElement('option');
+                 opt.value = u.id;
+                 opt.textContent = (u.fullName || u.username) + ' (@' + u.username + ')';
+                 select.appendChild(opt);
+             });
+        select.value = keep;
+    }
+
+    function scamOutcomeHtml(s) {
+        var money = s.paidAmount != null ? 'ƒ' + Number(s.paidAmount).toFixed(2) : '';
+        switch (s.status) {
+            case 'reported':           return '<span class="pill pill-green">Reported' + (s.xpAwarded ? ' · +' + Number(s.xpAwarded) + ' XP' : '') + '</span>';
+            case 'paid':               return '<span class="pill pill-red">Paid ' + money + '</span>';
+            case 'paid_then_reported': return '<span class="pill pill-red">Paid ' + money + ', then reported</span>';
+            case 'declined':           return '<span class="pill pill-blue">Declined, not reported</span>';
+            case 'opened':             return '<span class="pill pill-blue">Opened, not reported</span>';
+            default:                   return '<span class="pill pill-amber">Delivered</span>';
+        }
+    }
+
+    function reloadScamTable() {
+        if (!scamEl('scam-table-body')) return Promise.resolve();
+        return DigifinwizDB.getScams().then(function(scams) {
+            scamEl('scam-count-badge').textContent = scams.length;
+            var tbody = scamEl('scam-table-body');
+            if (!scams.length) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--color-text-muted);padding:var(--space-6)">No scams sent yet.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = scams.map(function(s) {
+                var title  = s.kind === 'message' ? s.subject : s.payee + ' · ƒ' + Number(s.amount).toFixed(2);
+                var detail = s.kind === 'message' ? 'From ' + s.senderName + (s.senderEmail ? ' <' + s.senderEmail + '>' : '') : (s.note || 'Account ' + s.accountNumber);
+                var where  = s.kind === 'message' && s.sites && s.sites.length
+                    ? ' <span class="pill pill-green" title="Also delivered to: ' + escHtml(s.sites.map(function(k) { return SUBSITE_LABEL[k] || k; }).join(', ')) + '">+ ' + s.sites.length + ' site' + (s.sites.length === 1 ? '' : 's') + '</span>' : '';
+                var when   = s.reportedAt || s.paidAt || s.declinedAt;
+                return '<tr>' +
+                    '<td style="white-space:nowrap">' + (SCAM_KIND_LABEL[s.kind] || escHtml(s.kind)) + '</td>' +
+                    '<td style="max-width:240px"><strong>' + escHtml(title) + '</strong>' +
+                        '<div style="font-size:var(--text-xs);color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;max-width:230px">' + escHtml(detail) + '</div></td>' +
+                    '<td>' + escHtml(s.recipientName || ('User #' + s.userId)) + where + '</td>' +
+                    '<td style="font-size:var(--text-xs);white-space:nowrap">' + escHtml(new Date(s.sentAt).toLocaleString()) + '</td>' +
+                    '<td>' + scamOutcomeHtml(s) + (when ? '<div style="font-size:var(--text-xs);color:var(--color-text-muted);margin-top:2px">' + escHtml(new Date(when).toLocaleString()) + '</div>' : '') + '</td>' +
+                    '<td><button class="btn btn-danger" style="padding:3px 8px;font-size:var(--text-xs)" onclick="adminDeleteScam(' + Number(s.id) + ')">Delete</button></td>' +
+                    '</tr>';
+            }).join('');
+        }).catch(function(err) { console.error('reloadScamTable:', err); });
+    }
+
+    window.adminDeleteScam = function(id) {
+        if (!confirm('Delete this scam? The user will no longer see it. Money already paid to it is not returned.')) return;
+        DigifinwizDB.deleteScam(id)
+            .then(function() { showToast('Scam deleted.', 'info'); reloadScamTable(); })
+            .catch(function(err) { showToast('Delete failed: ' + err.message, 'error'); });
+    };
+
+    var scamForm = document.getElementById('scamForm');
+    if (scamForm) {
+        syncScamKind();
+        scamEl('scam-kind').addEventListener('change', function() { syncScamKind(); applyScamTemplate(); });
+        scamEl('scam-template').addEventListener('change', applyScamTemplate);
+        scamEl('scam-clear-btn').addEventListener('click', clearScamForm);
+        scamForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var kind = scamEl('scam-kind').value;
+            var val  = function(id) { return (scamEl(id).value || '').trim(); };
+            if (!val('scam-recipient')) { showToast('Choose the user to send the scam to.', 'error'); return; }
+            var payload = {
+                kind: kind, userId: parseInt(val('scam-recipient'), 10), xp: val('scam-xp') === '' ? undefined : Number(val('scam-xp')),
+                redFlags: scamEl('scam-flags').value.split('\n').map(function(l) { return l.trim(); }).filter(Boolean)
+            };
+            if (kind === 'message') {
+                if (!val('scam-sender-name')) { showToast('Sender name is required.', 'error'); return; }
+                if (!val('scam-subject'))     { showToast('Subject is required.', 'error'); return; }
+                if (!val('scam-body'))        { showToast('Message body is required.', 'error'); return; }
+                payload.senderName = val('scam-sender-name'); payload.senderEmail = val('scam-sender-email');
+                payload.subject = val('scam-subject');        payload.body = val('scam-body');
+                payload.audience = scamEl('scam-audience').value;
+            } else {
+                if (!val('scam-payee'))  { showToast((kind === 'bill' ? 'Biller' : 'Requester') + ' name is required.', 'error'); return; }
+                if (!val('scam-amount')) { showToast('Amount is required.', 'error'); return; }
+                payload.payee = val('scam-payee'); payload.amount = Number(val('scam-amount')); payload.accountNumber = val('scam-account');
+                if (kind === 'bill') payload.dueInDays = val('scam-due') === '' ? undefined : Number(val('scam-due'));
+                else payload.note = val('scam-note');
+            }
+            var btn = scamEl('scam-send-btn');
+            btn.disabled = true; btn.textContent = 'Sending…';
+            DigifinwizDB.sendScam(payload).then(function(sent) {
+                var where = sent.kind === 'bill' ? 'their DigiPay bills' : sent.kind === 'request' ? 'their DigiBank account'
+                    : (sent.sites && sent.sites.length ? 'their main inbox and ' + sent.sites.map(function(k) { return SUBSITE_LABEL[k] || k; }).join(', ') : 'their main inbox');
+                showToast('Scam sent to ' + (sent.recipientName || 'the user') + ': ' + where + '.', 'success');
+                clearScamForm();
+                reloadScamTable();
+            }).catch(function(err) {
+                showToast('Send failed: ' + err.message, 'error');
+            }).finally(function() {
+                btn.disabled = false; btn.textContent = '🚩 Send Scam';
+            });
         });
     }
 
