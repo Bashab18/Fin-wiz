@@ -598,6 +598,11 @@ const DigifinwizDB = (() => {
 
     // Admin-only: every Banking / Ecommerce / Utilities account and the main-site
     // account it belongs to.
+    // Admin-only: everything about one main-site user, for the admin's user page.
+    function getAdminUserOverview(userId) {
+        return _api('GET', '/api/admin/users/' + userId + '/overview');
+    }
+
     function getSubSiteAccounts() {
         return _api('GET', '/api/admin/sub-site-accounts');
     }
@@ -928,6 +933,7 @@ const DigifinwizDB = (() => {
         getAdminPurchases,
         getAdminDataOverview,
         getSubSiteAccounts,
+        getAdminUserOverview,
 
         // Stats & activity
         getStats,

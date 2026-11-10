@@ -11,17 +11,39 @@ document.addEventListener('DOMContentLoaded', function () {
         dashboard: 'Dashboard', user: 'User Profile',
         transactions: 'Transactions', payments: 'Bill Payments',
         purchases: 'Purchases', bills: 'Bill Management', challenges: 'Challenges',
-        users: 'User Management', messaging: 'Messaging', settings: 'Settings'
+        users: 'User Management', messaging: 'Messaging', scams: 'Scam Simulations', settings: 'Settings',
+        userview: 'User'
     };
+    const PAGE_SUBTITLES = {
+        dashboard: 'What is happening across the platform right now.',
+        users: 'Approve sign-ups and open any user to see everything about them.',
+        user: 'Change a user\'s name, level and balances directly.',
+        challenges: 'Create challenges and choose who gets them.',
+        bills: 'The bills DigiPay issues, and who each one is for.',
+        messaging: 'Send announcements and messages to users.',
+        scams: 'Send a practice scam to one user and see what they did with it.',
+        transactions: 'Every transfer made in DigiBank.',
+        payments: 'Every bill paid in DigiPay.',
+        purchases: 'Every order placed in InStyl.',
+        settings: 'Database, export and import, and reset tools.',
+        userview: 'Accounts, progress, bills, messages and scams for one user.'
+    };
+    // Pages that are not in the sidebar light up the item they belong to.
+    const NAV_PARENT = { userview: 'users' };
+    let currentPage = 'dashboard';
 
     function showPage(pageId) {
         pages.forEach(p => p.classList.remove('active'));
         navItems.forEach(n => n.classList.remove('active'));
         const page = document.getElementById('page-' + pageId);
         if (page) page.classList.add('active');
-        const nav = document.querySelector('.admin-nav-item[data-page="' + pageId + '"]');
+        const nav = document.querySelector('.admin-nav-item[data-page="' + (NAV_PARENT[pageId] || pageId) + '"]');
         if (nav) nav.classList.add('active');
+        currentPage = pageId;
         pageTitle.textContent = PAGE_TITLES[pageId] || pageId;
+        const sub = document.getElementById('pageSubtitle');
+        if (sub) sub.textContent = PAGE_SUBTITLES[pageId] || '';
+        window.scrollTo(0, 0);
         loadPage(pageId);
     }
 
@@ -42,8 +64,7 @@ document.addEventListener('DOMContentLoaded', function () {
         this.classList.remove('active');
     });
     document.getElementById('refreshBtn').addEventListener('click', function () {
-        const active = document.querySelector('.admin-nav-item.active');
-        if (active) loadPage(active.dataset.page);
+        loadPage(currentPage);
     });
 
     // ── Page loaders ────────────────────────────────────────────────────────
@@ -58,6 +79,8 @@ document.addEventListener('DOMContentLoaded', function () {
             case 'bills':        loadBillsPage(); break;
             case 'users':        loadUsersPage(); break;
             case 'messaging':    loadMessagingPage(); break;
+            case 'scams':        loadScamsPage(); break;
+            case 'userview':     loadUserView(); break;
             case 'settings':     loadSettingsPage(); break;
         }
     }
@@ -201,10 +224,10 @@ document.addEventListener('DOMContentLoaded', function () {
           .catch(err => { console.error(err); showToast('Save failed.', 'error'); });
     });
 
-    document.getElementById('resetUserBtn').addEventListener('click', function () {
+    document.getElementById('resetUserBtn').addEventListener('click', async function () {
         var id = _userPageSelectedId;
         if (!id) { showToast('Please select a user first.', 'error'); return; }
-        if (!confirm('Reset this user\'s profile to default values?')) return;
+        if (!await adminConfirm('Reset this user\'s profile to default values?')) return;
         DigifinwizDB.updateUser(id, { userData: { level:1, points:0, pointsToNextLevel:1000, challenges:0, completedTasks:0 } })
             .then(() => { showToast('Reset to defaults.', 'info'); _loadSelectedUserProfile(); });
     });
@@ -1109,7 +1132,7 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     window.adminDuplicateChallenge = function (id) {
-        DigifinwizDB.getChallenges().then(list => {
+        DigifinwizDB.getChallenges().then(async list => {
             const c = list.find(ch => ch.id === id);
             if (!c) return;
             // The copy goes to whoever holds the original: one person stays one person. A group
@@ -1118,7 +1141,7 @@ document.addEventListener('DOMContentLoaded', function () {
             let assignTo = 'all';
             if (chalParticipantCount && holders.length === 1) assignTo = String(holders[0]);
             else if (chalParticipantCount && holders.length > 1 && holders.length < chalParticipantCount &&
-                     !confirm('This challenge is held by ' + holders.length + ' of ' + chalParticipantCount + ' users. The copy will go to everyone. Continue?')) return;
+                     !await adminConfirm('This challenge is held by ' + holders.length + ' of ' + chalParticipantCount + ' users. The copy will go to everyone. Continue?')) return;
             const copy = {
                 assignTo,
                 title:           c.title + ' (Copy)',
@@ -1140,8 +1163,8 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     };
 
-    window.adminDeleteChallenge = function (id) {
-        if (!confirm('Delete this challenge? This cannot be undone.')) return;
+    window.adminDeleteChallenge = async function (id) {
+        if (!await adminConfirm('Delete this challenge? This cannot be undone.')) return;
         DigifinwizDB.adminDeleteChallenge(id).then(() => {
             showToast('Challenge deleted.', 'info');
             if (chalEditingId === id) resetChallengeForm();
@@ -1166,8 +1189,8 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     };
 
-    window.adminResetAllChallenges = function () {
-        if (!confirm('This will DELETE all challenges and re-seed the 23 default ones from scratch.\n\nAll completed state will be lost. Continue?')) return;
+    window.adminResetAllChallenges = async function () {
+        if (!await adminConfirm('This will DELETE all challenges and re-seed the 23 default ones from scratch.\n\nAll completed state will be lost. Continue?')) return;
         DigifinwizDB.clearStore('challenges').then(() => {
             return DigifinwizDB.seedDefaultChallenges();
         }).then(() => {
@@ -1531,14 +1554,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 actions += '<button class="btn" style="padding:2px 8px;font-size:var(--text-xs);color:#10b981;border-color:#10b981;margin-right:2px" ' +
                     'onclick="adminApproveUser(' + u.id + ')">↺ Approve</button>';
             }
+            actions += '<button class="btn btn-primary" style="padding:2px 8px;font-size:var(--text-xs);margin-right:2px" ' +
+                'onclick="adminViewUser(' + u.id + ')">View</button>';
             actions += '<button class="btn" style="padding:2px 8px;font-size:var(--text-xs);margin-right:2px;color:var(--color-primary-600);border-color:var(--color-primary-400)" ' +
-                'onclick="adminManageUser(' + u.id + ')">⚙ Manage</button>';
+                'onclick="adminManageUser(' + u.id + ')" title="Manage XP, balances and challenges" aria-label="Manage">⚙</button>';
             if (u.role === 'participant' && u.status === 'approved') {
                 actions += '<button class="btn" style="padding:2px 8px;font-size:var(--text-xs);margin-right:2px;color:#0891b2;border-color:#67e8f9" ' +
-                    'onclick="adminMessageUser(' + u.id + ')">✉️ Message</button>';
+                    'onclick="adminMessageUser(' + u.id + ')" title="Send a message" aria-label="Message">✉️</button>';
             }
             if (!isMe) {
-                actions += '<button class="btn btn-danger" style="padding:2px 8px;font-size:var(--text-xs)" ' +
+                actions += '<button class="btn btn-danger" style="padding:2px 8px;font-size:var(--text-xs)" title="Delete this user" aria-label="Delete" ' +
                     "onclick='adminDeleteUser(" + u.id + ', ' + jsAttr(u.username) + ")'>🗑</button>";
             } else {
                 actions += '<span style="font-size:var(--text-xs);color:var(--color-text-muted)">(you)</span>';
@@ -1546,7 +1571,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             return '<tr>' +
                 '<td style="color:var(--color-text-muted)">' + (i + 1) + '</td>' +
-                '<td><strong>' + escHtml(u.fullName || '—') + '</strong></td>' +
+                '<td><button type="button" class="uv-name-link" onclick="adminViewUser(' + u.id + ')">' + escHtml(u.fullName || u.username || '—') + '</button></td>' +
                 '<td><span style="font-family:monospace;font-size:var(--text-xs)">@' + escHtml(u.username) + '</span></td>' +
                 '<td style="font-size:var(--text-xs);color:var(--color-text-muted)">' + escHtml(u.email || '—') + '</td>' +
                 '<td><span class="pill ' + rolePill + '">' + escHtml(u.role) + '</span></td>' +
@@ -1576,8 +1601,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }).catch(function(err){ console.error(err); showToast('Approve failed.', 'error'); });
     };
 
-    window.adminRejectUser = function(id, username) {
-        if (!confirm('Reject registration for @' + username + '?')) return;
+    window.adminRejectUser = async function(id, username) {
+        if (!await adminConfirm('Reject registration for @' + username + '?')) return;
         DigifinwizDB.rejectUser(id).then(function() {
             showToast('User rejected.', 'info');
             // Notify the user their registration was not approved
@@ -1591,8 +1616,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }).catch(function(err){ console.error(err); showToast('Reject failed.', 'error'); });
     };
 
-    window.adminDeleteUser = function(id, username) {
-        if (!confirm('Permanently delete user @' + username + ' and all their data?\n\nThis cannot be undone.')) return;
+    window.adminDeleteUser = async function(id, username) {
+        if (!await adminConfirm('Permanently delete user @' + username + ' and all their data?\n\nThis cannot be undone.')) return;
         DigifinwizDB.deleteUser(id).then(function() {
             showToast('User deleted.', 'info');
             loadUsersPage();
@@ -1632,10 +1657,8 @@ document.addEventListener('DOMContentLoaded', function () {
                      opt.textContent = (u.fullName || u.username) + ' (@' + u.username + ')';   // textContent is already text: escaping it too would show &amp;
                      select.appendChild(opt);
                  });
-            loadScamRecipients(users);
         });
         reloadMsgTable();
-        reloadScamTable();
         return usersLoaded;
     }
 
@@ -1809,8 +1832,8 @@ document.addEventListener('DOMContentLoaded', function () {
             .catch(err => showToast('Could not load the bill: ' + err.message, 'error'));
     };
 
-    window.deleteBill = function(id) {
-        if (!confirm('Delete this bill?')) return;
+    window.deleteBill = async function(id) {
+        if (!await adminConfirm('Delete this bill?')) return;
         billsApi('DELETE', '/api/bills/' + id)
             .then(() => { showToast('Bill deleted.', 'info'); loadBillsPage(); })
             .catch(err => showToast('Delete failed: ' + err.message, 'error'));
@@ -1948,12 +1971,12 @@ document.addEventListener('DOMContentLoaded', function () {
         const file = e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = function (ev) {
+        reader.onload = async function (ev) {
             let data;
             try { data = JSON.parse(ev.target.result); } catch (err) {
                 showToast('Invalid JSON file.', 'error'); return;
             }
-            if (!confirm('Import data? This will OVERWRITE all current data.')) { e.target.value = ''; return; }
+            if (!await adminConfirm('Import data? This will OVERWRITE all current data.')) { e.target.value = ''; return; }
 
             const promises = [];
             if (data.userData) promises.push(DigifinwizDB.setUserData(data.userData));
@@ -1989,20 +2012,20 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // ── Danger Zone ──────────────────────────────────────────────────────────
-    document.getElementById('clearTransactionsBtn').addEventListener('click', function () {
-        if (!confirm('Delete ALL transactions?')) return;
+    document.getElementById('clearTransactionsBtn').addEventListener('click', async function () {
+        if (!await adminConfirm('Delete ALL transactions?')) return;
         DigifinwizDB.clearStore('transactions').then(() => { showToast('Cleared.', 'info'); txTable = null; loadSettingsPage(); });
     });
-    document.getElementById('clearPaymentsBtn').addEventListener('click', function () {
-        if (!confirm('Delete ALL bill payments?')) return;
+    document.getElementById('clearPaymentsBtn').addEventListener('click', async function () {
+        if (!await adminConfirm('Delete ALL bill payments?')) return;
         DigifinwizDB.clearStore('payments').then(() => { showToast('Cleared.', 'info'); payTable = null; loadSettingsPage(); });
     });
-    document.getElementById('clearPurchasesBtn').addEventListener('click', function () {
-        if (!confirm('Delete ALL purchases?')) return;
+    document.getElementById('clearPurchasesBtn').addEventListener('click', async function () {
+        if (!await adminConfirm('Delete ALL purchases?')) return;
         DigifinwizDB.clearStore('purchaseHistory').then(() => { showToast('Cleared.', 'info'); purchTable = null; loadSettingsPage(); });
     });
-    document.getElementById('resetAllBtn').addEventListener('click', function () {
-        if (!confirm('RESET EVERYTHING? All data will be deleted.')) return;
+    document.getElementById('resetAllBtn').addEventListener('click', async function () {
+        if (!await adminConfirm('RESET EVERYTHING? All data will be deleted.')) return;
         // This page has no participant selector, so "Reset Everything" has
         // only ever acted on the logged-in admin's own account — a single
         // self-scoped request keeps that behavior but resets balances/userData
@@ -2074,6 +2097,227 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
         });
     }
+
+    // ── CONFIRM DIALOG ───────────────────────────────────────────────────────
+    // In-page replacement for the browser's confirm(): resolves true or false.
+    // The button is red and named after the action when the question is about
+    // deleting or resetting something.
+    function adminConfirm(message, opts) {
+        opts = opts || {};
+        var box = document.getElementById('adminConfirm');
+        var ok = document.getElementById('adminConfirmOk'), cancel = document.getElementById('adminConfirmCancel');
+        var verb = (/^(delete|permanently delete|reset|remove|reject|import)\b/i.exec(message) || [])[1] || '';
+        var danger = opts.danger !== undefined ? opts.danger : /delete|reset|remove|reject|overwrite|cannot be undone/i.test(message);
+        var parts = String(message).split('\n\n');
+        document.getElementById('adminConfirmTitle').textContent = opts.title || parts[0];
+        document.getElementById('adminConfirmText').textContent = opts.title ? message : parts.slice(1).join('\n\n');
+        ok.textContent = opts.confirmLabel || (verb ? verb.replace(/^permanently /i, '').replace(/^./, function(c) { return c.toUpperCase(); }) : 'Continue');
+        ok.className = 'btn ' + (danger ? 'btn-danger' : 'btn-primary');
+        var opener = document.activeElement;
+        box.hidden = false;
+        cancel.focus();
+        return new Promise(function(resolve) {
+            function done(answer) {
+                box.hidden = true;
+                ok.removeEventListener('click', yes); cancel.removeEventListener('click', no);
+                box.removeEventListener('click', outside); document.removeEventListener('keydown', key);
+                if (opener && opener.focus && document.contains(opener)) opener.focus();
+                resolve(answer);
+            }
+            function yes() { done(true); }
+            function no() { done(false); }
+            function outside(e) { if (e.target === box) done(false); }
+            function key(e) {
+                if (e.key === 'Escape') done(false);
+                // Keep Tab inside the two buttons.
+                if (e.key === 'Tab') { e.preventDefault(); (document.activeElement === ok ? cancel : ok).focus(); }
+            }
+            ok.addEventListener('click', yes); cancel.addEventListener('click', no);
+            box.addEventListener('click', outside); document.addEventListener('keydown', key);
+        });
+    }
+
+    // ── ONE USER ─────────────────────────────────────────────────────────────
+    // Everything about one main-site user on one page (GET /api/admin/users/:id/overview),
+    // opened from the Users table.
+    var uvUserId = null, uvData = null, uvTab = 'challenges';
+    var UV_SITES = [
+        { key: 'banking',   label: 'DigiBank', icon: '🏦', accent: '#2563eb' },
+        { key: 'ecommerce', label: 'InStyl',   icon: '🛒', accent: '#d97706' },
+        { key: 'utilities', label: 'DigiPay',  icon: '⚡', accent: '#ea580c' }
+    ];
+    function uvMoney(n) { return 'ƒ' + (Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+    function uvWhen(ts) { return ts ? new Date(ts).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '—'; }
+    function uvDay(ts)  { return ts ? new Date(ts).toLocaleDateString([], { dateStyle: 'medium' }) : '—'; }
+
+    window.adminViewUser = function(id) {
+        uvUserId = id; uvData = null; uvTab = 'challenges';
+        showPage('userview');
+    };
+    window.adminBackToUsers = function() { showPage('users'); };
+
+    function loadUserView() {
+        var root = document.getElementById('uv-root');
+        if (!root) return Promise.resolve();
+        if (!uvUserId) { showPage('users'); return Promise.resolve(); }
+        var id = uvUserId;
+        if (!uvData) root.innerHTML = '<div class="uv-loading"><span class="spinner"></span> Loading…</div>';
+        return DigifinwizDB.getAdminUserOverview(id).then(function(data) {
+            if (uvUserId !== id) return;   // another user was opened meanwhile
+            uvData = data;
+            pageTitle.textContent = data.user.fullName || data.user.username;
+            renderUserView();
+        }).catch(function(err) {
+            if (uvUserId !== id) return;
+            root.innerHTML = '<div class="admin-panel"><div class="uv-empty">Could not load this user: ' + escHtml(err.message) + '</div></div>';
+        });
+    }
+
+    function uvSiteCard(site, m) {
+        if (!m || !m.linked) {
+            return '<div class="uv-site unlinked"><h3><span>' + site.icon + ' ' + site.label + '</span><span class="pill pill-amber">Not linked</span></h3>' +
+                '<p class="uv-acct">No ' + site.label + ' account uses this user\'s email or username, so nothing they do there is counted here.</p></div>';
+        }
+        var ud = m.userData || {}, st = m.stats || {}, rows = [];
+        rows.push(['Level', 'Lv.' + (ud.level || 1) + ' · ' + (ud.points || 0).toLocaleString() + ' XP']);
+        rows.push(['Challenges', (m.challenges ? m.challenges.completed + ' of ' + m.challenges.total : '—')]);
+        rows.push(['Checking', uvMoney(m.balances.checking)], ['Savings', uvMoney(m.balances.savings)]);
+        if (site.key === 'banking') {
+            rows.push(['Transfers', (m.transactions || []).filter(function(t) { return (t.type || 'transfer') === 'transfer'; }).length]);
+            if (m.creditCard) rows.push(['Credit card owed', uvMoney(m.creditCard.balance)]);
+            if (m.loan && m.loan.active && !m.loan.paidOff) rows.push(['Loan owed', uvMoney(m.loan.balance)]);
+            if ((m.savingsGoals || []).length) rows.push(['Savings goals', m.savingsGoals.length]);
+        } else if (site.key === 'ecommerce') {
+            rows.push(['Orders', (m.purchases || []).length], ['Spent', uvMoney(st.totalSpentEcommerce)]);
+        } else {
+            var unpaid = (m.bills || []).filter(function(b) { return b.status !== 'paid'; });
+            rows.push(['Unpaid bills', unpaid.length + (unpaid.some(function(b) { return b.overdue; }) ? ' (overdue)' : '')], ['Paid on bills', uvMoney(st.totalSpentBills)]);
+        }
+        if (m.unreadMessages) rows.push(['Unread messages', m.unreadMessages]);
+        return '<div class="uv-site" style="--uv-accent:' + site.accent + '"><h3><span>' + site.icon + ' ' + site.label + '</span><span class="pill pill-green">Linked</span></h3>' +
+            '<p class="uv-acct">' + escHtml(m.account.fullName || '') + ' (@' + escHtml(m.account.username) + ') · account #' + Number(m.account.id) + '</p>' +
+            '<dl class="uv-kv">' + rows.map(function(r) { return '<dt>' + r[0] + '</dt><dd>' + escHtml(String(r[1])) + '</dd>'; }).join('') + '</dl></div>';
+    }
+
+    function uvTable(head, rows, empty) {
+        if (!rows.length) return '<div class="uv-empty">' + empty + '</div>';
+        return '<div class="admin-table-wrap"><table class="admin-table"><thead><tr>' + head.map(function(h) { return '<th>' + h + '</th>'; }).join('') +
+            '</tr></thead><tbody>' + rows.join('') + '</tbody></table></div>';
+    }
+
+    function uvTabBody(d) {
+        if (uvTab === 'challenges') {
+            return uvTable(['Challenge', 'Area', 'Reward', 'Status'], d.challenges.map(function(c) {
+                var status = c.completed
+                    ? '<span class="pill pill-green">Done</span> <span style="font-size:var(--text-xs);color:var(--color-text-muted)">' + escHtml(uvDay(c.completedAt)) +
+                      (c.mirroredFrom ? ' · in ' + escHtml(SUBSITE_LABEL[c.mirroredFrom] || c.mirroredFrom) : '') + '</span>'
+                    : '<span class="pill pill-amber">Not yet</span>';
+                return '<tr><td><strong>' + escHtml(c.title) + '</strong><div style="font-size:var(--text-xs);color:var(--color-text-muted)">' + escHtml(c.description || '') + '</div></td>' +
+                    '<td>' + escHtml(CAT_LABELS[c.category] || c.category || '') + '</td>' +
+                    '<td style="white-space:nowrap">+' + (c.points || 0) + ' XP' + (c.florins ? ' · ƒ' + c.florins : '') + '</td><td>' + status + '</td></tr>';
+            }), 'This user has no challenges.');
+        }
+        if (uvTab === 'bills') {
+            var pay = d.hub.modules.utilities;
+            if (!pay || !pay.linked) return '<div class="uv-empty">Bills live in DigiPay, and this user has no linked DigiPay account.</div>';
+            return uvTable(['Bill', 'Month', 'Amount', 'Due', 'Status'], pay.bills.map(function(b) {
+                var status = b.status === 'paid' ? '<span class="pill pill-green">Paid ' + escHtml(uvMoney(b.paidAmount != null ? b.paidAmount : b.amount)) + '</span>'
+                    : b.overdue ? '<span class="pill pill-red">Overdue</span>'
+                    : b.inGracePeriod ? '<span class="pill pill-amber">Past due</span>' : '<span class="pill pill-blue">Due in ' + (b.daysUntilDue || 0) + ' days</span>';
+                return '<tr><td><strong>' + escHtml((b.icon || '') + ' ' + b.name) + '</strong>' + (b.scamId ? ' <span class="pill pill-red">Scam simulation</span>' : '') + '</td>' +
+                    '<td>' + escHtml(b.cycleMonth || '') + '</td><td style="white-space:nowrap">' + escHtml(uvMoney(b.status === 'paid' ? b.amount : b.totalDue)) + '</td>' +
+                    '<td style="white-space:nowrap">' + escHtml(uvDay(b.dueDate)) + '</td><td>' + status + '</td></tr>';
+            }), 'No bills have been issued to this user yet. They are created the first time the user opens DigiPay in a month.');
+        }
+        if (uvTab === 'messages') {
+            return uvTable(['Subject', 'Sent', 'To', 'Read'], d.messages.map(function(m) {
+                return '<tr><td style="max-width:320px"><strong>' + escHtml(m.subject) + '</strong><div style="font-size:var(--text-xs);color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHtml(m.body) + '</div></td>' +
+                    '<td style="white-space:nowrap;font-size:var(--text-xs)">' + escHtml(uvWhen(m.sentAt)) + '</td>' +
+                    '<td>' + (m.broadcast ? '<span class="pill pill-amber">Everyone</span>' : '<span class="pill pill-blue">This user</span>') +
+                        (m.sites.length ? ' <span class="pill pill-green">+ ' + m.sites.length + ' site' + (m.sites.length === 1 ? '' : 's') + '</span>' : '') + '</td>' +
+                    '<td>' + (m.read ? '<span class="pill pill-green">Read</span>' : '<span class="pill pill-amber">Unread</span>') + '</td></tr>';
+            }), 'No messages have been sent to this user.');
+        }
+        if (uvTab === 'scams') {
+            return uvTable(['Type', 'Scam', 'Sent', 'Outcome'], d.scams.map(function(sc) {
+                var title = sc.kind === 'message' ? sc.subject : sc.payee + ' · ' + uvMoney(sc.amount);
+                return '<tr><td style="white-space:nowrap">' + (SCAM_KIND_LABEL[sc.kind] || escHtml(sc.kind)) + '</td><td><strong>' + escHtml(title) + '</strong></td>' +
+                    '<td style="white-space:nowrap;font-size:var(--text-xs)">' + escHtml(uvWhen(sc.sentAt)) + '</td><td>' + scamOutcomeHtml(sc) + '</td></tr>';
+            }), 'No scam simulations have been sent to this user.');
+        }
+        var feed = d.hub.activity || [];
+        if (!feed.length) return '<div class="uv-empty">Nothing yet. Transfers, orders, bill payments and the like will show here.</div>';
+        return '<ul class="uv-feed">' + feed.map(function(e) {
+            return '<li><span aria-hidden="true">' + escHtml(e.icon || '•') + '</span><span class="uv-feed-main">' + escHtml(e.label || '') +
+                (e.detail ? ' <span style="color:var(--color-text-muted)">· ' + escHtml(e.detail) + '</span>' : '') +
+                (e.module ? ' <span class="pill pill-purple">' + escHtml(SUBSITE_LABEL[e.module] || e.module) + '</span>' : '') +
+                (e.pointsEarned ? ' <span class="pill pill-green">+' + Number(e.pointsEarned) + ' XP</span>' : '') +
+                '</span><span class="uv-feed-when">' + escHtml(uvWhen(e.timestamp)) + '</span></li>';
+        }).join('') + '</ul>';
+    }
+
+    function renderUserView() {
+        var d = uvData, u = d.user, ud = d.userData, root = document.getElementById('uv-root');
+        var participant = u.role === 'participant' && u.status === 'approved';
+        var name = u.fullName || u.username || 'User';
+        var initials = name.trim().split(/\s+/).map(function(w) { return w[0]; }).slice(0, 2).join('').toUpperCase();
+        var done = d.challenges.filter(function(c) { return c.completed; }).length;
+        var reported = d.scams.filter(function(sc) { return sc.status === 'reported'; }).length;
+        var fell = d.scams.filter(function(sc) { return sc.paidAt; }).length;
+        var pay = d.hub.modules.utilities;
+        var billCount = pay && pay.linked ? pay.bills.length : 0;
+        var tabs = [['challenges', 'Challenges', d.challenges.length], ['bills', 'Bills', billCount], ['messages', 'Messages', d.messages.length],
+                    ['scams', 'Scams', d.scams.length], ['activity', 'Activity', (d.hub.activity || []).length]];
+        var stat = function(accent, icon, value, label) {
+            return '<div class="admin-stat-card accent-' + accent + '"><div class="stat-icon">' + icon + '</div><div class="stat-value" style="font-size:var(--text-xl)">' + value + '</div><div class="stat-label">' + label + '</div></div>';
+        };
+        root.innerHTML =
+            '<div class="admin-panel"><div class="uv-head">' +
+                '<div class="uv-avatar" aria-hidden="true">' + escHtml(initials) + '</div>' +
+                '<div class="uv-id"><h2>' + escHtml(name) + '</h2>' +
+                    '<div class="uv-sub">@' + escHtml(u.username) + ' · ' + escHtml(u.email || 'no email') + '</div>' +
+                    '<div class="uv-meta"><span class="pill ' + (ROLE_PILL[u.role] || 'pill-blue') + '">' + escHtml(u.role) + '</span>' +
+                        '<span class="pill ' + (STATUS_PILL[u.status] || 'pill-amber') + '">' + escHtml(u.status) + '</span>' +
+                        '<span>Joined ' + escHtml(uvDay(u.createdAt)) + '</span><span>· Last sign-in ' + escHtml(uvWhen(u.lastLogin)) + '</span></div>' +
+                '</div>' +
+                '<div class="uv-actions">' +
+                    (participant ? '<button type="button" class="btn btn-primary" onclick="adminMessageUser(' + u.id + ')">✉️ Message</button>' +
+                                   '<button type="button" class="btn" onclick="adminScamUser(' + u.id + ')">🚩 Send scam</button>' +
+                                   '<button type="button" class="btn" onclick="adminManageUser(' + u.id + ', \'challenges\')">🎯 Assign challenge</button>' : '') +
+                    '<button type="button" class="btn" onclick="adminManageUser(' + u.id + ')">⚙ Manage</button>' +
+                '</div>' +
+            '</div></div>' +
+            '<div class="admin-stats">' +
+                stat('purple', '🏆', 'Lv.' + (ud.level || 1), 'Main-site level · ' + (ud.points || 0).toLocaleString() + ' XP') +
+                stat('teal', '🎯', done + ' of ' + d.challenges.length, 'Challenges done') +
+                stat('green', '💰', escHtml(uvMoney(d.hub.totals.net)), 'Net worth across ' + d.hub.linkedCount + ' linked site' + (d.hub.linkedCount === 1 ? '' : 's')) +
+                stat('amber', '🚩', d.scams.length ? reported + ' of ' + d.scams.length : '—', 'Scams reported' + (fell ? ' · ' + fell + ' paid' : '')) +
+            '</div>' +
+            (u.role === 'participant' ? '<div class="admin-panel"><div class="admin-panel-header"><h2>Level 1 requirements</h2>' +
+                '<span class="pill ' + (d.level1.every(function(r) { return r.completed; }) ? 'pill-green">All done' : 'pill-amber">' + d.level1.filter(function(r) { return r.completed; }).length + ' of 3') + '</span></div>' +
+                '<div class="uv-checks">' + d.level1.map(function(r) {
+                    return '<span class="uv-check' + (r.completed ? ' done' : '') + '">' + (r.completed ? '✓' : '○') + ' ' + escHtml(r.title || 'Not assigned') + '</span>';
+                }).join('') + '</div></div>' : '') +
+            '<div class="uv-grid">' + UV_SITES.map(function(site) { return uvSiteCard(site, d.hub.modules[site.key]); }).join('') + '</div>' +
+            '<div class="admin-panel"><div class="uv-tabs" role="tablist">' + tabs.map(function(t) {
+                return '<button type="button" role="tab" aria-selected="' + (uvTab === t[0]) + '" class="uv-tab' + (uvTab === t[0] ? ' active' : '') + '" onclick="adminUserTab(\'' + t[0] + '\')">' + t[1] + '<span class="uv-count">' + t[2] + '</span></button>';
+            }).join('') + '</div><div id="uv-tab-body">' + uvTabBody(d) + '</div></div>';
+    }
+
+    window.adminUserTab = function(tab) {
+        uvTab = tab;
+        if (uvData) renderUserView();
+    };
+
+    // Opens the Scam Simulations page with this user already chosen.
+    window.adminScamUser = function(id) {
+        showPage('scams');
+        DigifinwizDB.getAllUsers().then(function(users) {
+            loadScamRecipients(users);
+            var select = scamEl('scam-recipient');
+            if (select) { select.value = String(id); select.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        });
+    };
 
     // ── SCAM SIMULATIONS ─────────────────────────────────────────────────────
     // A practice scam sent to one user (POST /api/admin/scams). The templates
@@ -2172,6 +2416,12 @@ document.addEventListener('DOMContentLoaded', function () {
         select.value = keep;
     }
 
+    function loadScamsPage() {
+        var usersLoaded = DigifinwizDB.getAllUsers().then(loadScamRecipients);
+        reloadScamTable();
+        return usersLoaded;
+    }
+
     function scamOutcomeHtml(s) {
         var money = s.paidAmount != null ? 'ƒ' + Number(s.paidAmount).toFixed(2) : '';
         switch (s.status) {
@@ -2212,8 +2462,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }).catch(function(err) { console.error('reloadScamTable:', err); });
     }
 
-    window.adminDeleteScam = function(id) {
-        if (!confirm('Delete this scam? The user will no longer see it. Money already paid to it is not returned.')) return;
+    window.adminDeleteScam = async function(id) {
+        if (!await adminConfirm('Delete this scam? The user will no longer see it. Money already paid to it is not returned.')) return;
         DigifinwizDB.deleteScam(id)
             .then(function() { showToast('Scam deleted.', 'info'); reloadScamTable(); })
             .catch(function(err) { showToast('Delete failed: ' + err.message, 'error'); });
@@ -2264,15 +2514,15 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    window.adminDeleteMessage = function(id) {
-        if (!confirm('Delete this message? Recipients will no longer see it.')) return;
+    window.adminDeleteMessage = async function(id) {
+        if (!await adminConfirm('Delete this message? Recipients will no longer see it.')) return;
         DigifinwizDB.deleteAdminMessage(id)
             .then(function() { showToast('Message deleted.', 'info'); reloadMsgTable(); })
             .catch(function() { showToast('Delete failed.', 'error'); });
     };
 
     // ── Per-user Management Drawer ────────────────────────────────────────────
-    window.adminManageUser = function(id) {
+    window.adminManageUser = function(id, tab) {
         mgmtUserId = id;
         DigifinwizDB.getUserById(id).then(function(user) {
             // The drawer was closed, or another user opened, while this was loading: the answer is stale.
@@ -2293,7 +2543,7 @@ document.addEventListener('DOMContentLoaded', function () {
             setMgmtVal('mgmt-checking', (bal.checking !== undefined ? bal.checking : 0).toFixed(2));
             setMgmtVal('mgmt-savings',  (bal.savings  !== undefined ? bal.savings  : 0).toFixed(2));
 
-            switchMgmtTab('xp');
+            switchMgmtTab(tab || 'xp');
             document.getElementById('userMgmtDrawer').classList.add('open');
             loadMgmtChallenges(id);
         }).catch(function(err) { console.error(err); if (mgmtUserId === id) showToast('Could not load user.', 'error'); });
@@ -2302,6 +2552,8 @@ document.addEventListener('DOMContentLoaded', function () {
     window.closeUserMgmt = function() {
         document.getElementById('userMgmtDrawer').classList.remove('open');
         mgmtUserId = null;
+        // The user's page shows what the drawer edits (XP, balances, challenges).
+        if (currentPage === 'userview') loadUserView();
     };
 
     window.switchMgmtTab = function(tab) {
@@ -2408,7 +2660,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }).catch(function(err) { showToast('Assign failed: ' + (err && err.message ? err.message : 'try again.'), 'error'); });
     };
 
-    window.mgmtRemoveChallenge = function(chalId, btn) {
+    window.mgmtRemoveChallenge = async function(chalId, btn) {
         if (!mgmtUserId) return;
         var title  = btn ? btn.getAttribute('data-title') : 'this challenge';
         var level1 = btn && btn.getAttribute('data-level1')
@@ -2418,7 +2670,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var keeps  = sole
             ? '\n\nThis user is the only one who has it, so this deletes the challenge itself: it cannot be assigned to anyone again. XP already earned stays.'
             : '\n\nEveryone else keeps it, and XP already earned stays. "Add Missing Default Challenges" would add a default challenge back.';
-        if (!confirm('Remove "' + title + '" from this user?' + level1 + keeps)) return;
+        if (!await adminConfirm('Remove "' + title + '" from this user?' + level1 + keeps)) return;
         var userId = mgmtUserId;
         // The confirmation above already spelled out the Level 1 consequence, so that is the "force".
         DigifinwizDB.adminRemoveUserChallenge(userId, chalId, !!(btn && btn.getAttribute('data-level1'))).then(function() {
@@ -2481,6 +2733,13 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     // ── Init ──────────────────────────────────────────────────────────────────
+    (function showSignedInAdmin() {
+        var me = typeof DigifinwizAuth !== 'undefined' && DigifinwizAuth.getSession ? DigifinwizAuth.getSession() : null;
+        var name = (me && (me.fullName || me.username)) || 'Administrator';
+        setText('navAdminName', name);
+        setText('navAdminInitials', name.trim().charAt(0).toUpperCase() || 'A');
+    })();
+
     DigifinwizDB.init().then(() => loadPage('dashboard'))
         .catch(err => { console.error('DigifinwizDB init:', err); showToast('Database error.', 'error'); });
 });

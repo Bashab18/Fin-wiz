@@ -93,13 +93,15 @@ A one-time migration at boot (recorded in `app_store` under `_migrations`) broug
 
 ## Admin Panel Features
 
-- **Users** — approve/reject registrations, view balances and XP
+- **Users** — approve/reject registrations, view balances and XP. Clicking a user's name (or **View**) opens that user's own page: their identity and status, the three Level 1 requirements, one card per sub-site (linked or not, level, balances, site-specific totals), and tabs for their challenges, DigiPay bills, messages, scam simulations and recent activity across the sites. From there the admin can message them, send them a scam, assign a challenge, or open the Manage drawer. The page reads `GET /api/admin/users/:id/overview`, which changes nothing.
 - **Transactions** — view all transfer activity
 - **Purchases** — view store purchase history
 - **Payments** — view bill payment history
 - **Challenges** — create, edit and delete challenges, and view completion status per user. A new challenge goes to every approved participant who doesn't already have it, or to one person chosen under **Assign to**. The title identifies a challenge: creating a title that already exists is only accepted with the same settings (it then fills in whoever lacks it), and different settings are refused, so edit the existing one instead. A user's **Challenges** tab (Users → Manage) can also give them any challenge someone still has that they don't, or take one away from them alone. A challenge exists only as its holders' copies, so removing the last copy deletes it, and taking one of the three Level 1 requirements away from a user needs `?force=1` on the API (the page asks first). A participant's own *Reset Challenges* and *Reset Progress* (Profile) set their challenges back to incomplete and add any default they lack; the ones the admin gave them, and the admin's edits to a challenge, stay.
 - **Messages** — broadcast messages to participants
 - **Bills** — create, edit, and delete bill types shown on the Utilities page, for every DigiPay account or for one chosen account (**Assign to**)
+
+The sidebar groups the pages as Overview, People, Teaching, Activity and System. Questions such as "Delete this user?" are asked in an in-page dialog, not a browser pop-up.
 
 ## Bills Management
 
@@ -115,7 +117,7 @@ Each DigiPay account is issued its bills from this list when it opens its bills 
 
 ## Scam Simulations
 
-From **Messages → Send a Scam Simulation** an admin sends one user a practice scam to spot and report. Templates pre-fill the form; everything can be edited.
+From the **Scam Simulations** page an admin sends one user a practice scam to spot and report. Templates pre-fill the form; everything can be edited.
 
 | Type | Where the user sees it | If they pay |
 |---|---|---|
