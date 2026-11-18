@@ -430,6 +430,12 @@
                     </div>
                 </div>
 
+                <div class="achievements-section" id="scamSafetyCard">
+                    <h2>Scam Safety</h2>
+                    <p id="scamSafetyLine" style="margin:0 0 .8rem;color:#64748b">Loading…</p>
+                    <a class="btn btn-primary" href="scam-safety.html">Open my scam record</a>
+                </div>
+
                 <div class="challenges-section" style="margin-bottom:2rem">
                     <h2>Completed Challenges</h2>
                     <div id="completedChallengesList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem;margin-top:1rem">
@@ -1060,6 +1066,16 @@
             showNotification('Main Site challenges reset! They are all active again. (Banking, Ecommerce and Utilities were not changed.)', 'success');
         }).catch(function() { showNotification('Challenge reset failed.', 'error'); });
     }
+    </script>
+    <script>
+    // Scam Safety summary on the Progress tab.
+    DigifinwizDB.init().then(function() { return DigifinwizDB.getScamRecord(); }).then(function(r) {
+        var line = document.getElementById('scamSafetyLine');
+        if (!line) return;
+        line.textContent = r.score == null
+            ? 'Report anything that looks like a scam. Your spotter score and badges start with your first one.'
+            : 'Spotted ' + r.reported + ', fell for ' + r.fellFor + ' · spotter score ' + r.score + '% · ' + r.badges.filter(function(b) { return b.earned; }).length + ' of ' + r.badges.length + ' badges.';
+    }).catch(function() { var c = document.getElementById('scamSafetyCard'); if (c) c.style.display = 'none'; });
     </script>
 </body>
 </html>

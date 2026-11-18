@@ -1570,7 +1570,7 @@ function renderInbox() {
                 (open
                     ? '<div class="db-inbox-body">' + escBA(m.body || '') + '</div>' +
                       (m.senderEmail ? '<div style="font-size:0.75rem;color:#64748b;margin-top:6px">Sent from ' + escBA(m.senderEmail) + '</div>' : '') +
-                      DigifinwizScam.revealHtml(m) +
+                      DigifinwizScam.baitHtml(m) + DigifinwizScam.revealHtml(m) +
                       (m.scamRevealed ? '' : '<button type="button" class="btn btn-sm" style="margin-top:10px" onclick="event.stopPropagation();reportInboxMessage(' + idNum + ', this)">🚩 Report as scam</button>')
                     : '<div class="db-inbox-preview">' + escBA(preview) + '</div>') +
             '</div>' +
@@ -1588,6 +1588,14 @@ function reportInboxMessage(id, btn) {
         if (result && result.scam && result.xp > 0 && typeof refreshBankingPage === 'function') refreshBankingPage();
     }).catch(function() { if (btn) btn.disabled = false; });
 }
+
+// The link in a scam message was clicked: show what it was in place.
+document.addEventListener('dfw-scam-revealed', function(e) {
+    var msg = (typeof inboxMessages !== 'undefined' ? inboxMessages : []).filter(function(m) { return Number(m.id) === e.detail.id; })[0];
+    if (!msg || !e.detail.result || !e.detail.result.scam) return;
+    msg.scamRevealed = { how: 'clicked', redFlags: e.detail.result.redFlags || [] };
+    renderInbox();
+});
 
 function openInboxMessage(id) {
     inboxOpenId = (inboxOpenId === id) ? null : id;

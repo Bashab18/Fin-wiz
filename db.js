@@ -535,6 +535,14 @@ const DigifinwizDB = (() => {
     function reportMessage(messageId) {
         return _api('POST', '/api/me/messages/' + messageId + '/report');
     }
+    // Clicking the link in a scam message: the answer says what it was.
+    function clickMessage(messageId) {
+        return _api('POST', '/api/me/messages/' + messageId + '/click');
+    }
+    // The learner's scam-spotting score, badges and the scams they have already resolved.
+    function getScamRecord() {
+        return _api('GET', '/api/me/scam-record');
+    }
     function reportBill(cycleId) {
         return _api('POST', '/api/me/bills/' + cycleId + '/report');
     }
@@ -918,6 +926,8 @@ const DigifinwizDB = (() => {
         sendAdminMessage,
         reportMessage,
         reportBill,
+        clickMessage,
+        getScamRecord,
         getPaymentRequests,
         payPaymentRequest,
         declinePaymentRequest,

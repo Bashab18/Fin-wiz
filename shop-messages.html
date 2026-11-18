@@ -206,7 +206,7 @@
                 '</button>' +
                 '<div class="msg-body" id="msgBody' + Number(m.id) + '">' + _esc(body) +
                     '<div class="msg-sender">From ' + _esc(m.senderName || 'InStyl') + (m.senderEmail ? ' &lt;' + _esc(m.senderEmail) + '&gt;' : '') + ' &middot; ' + _esc(m.sentAt ? new Date(m.sentAt).toLocaleString() : '') + '</div>' +
-                    DigifinwizScam.revealHtml(m) +
+                    DigifinwizScam.baitHtml(m) + DigifinwizScam.revealHtml(m) +
                     (m.scamRevealed ? '' : '<button type="button" class="msg-report" style="margin-top:10px;background:none;border:1px solid #d5d9d9;border-radius:8px;padding:5px 12px;font-size:0.8rem;cursor:pointer;color:#0f1111">🚩 Report as scam</button>') +
                 '</div>' +
             '</div>';
@@ -222,6 +222,16 @@
             showShopToast((err && err.message) || 'Could not mark the message as read.', true);
         });
     }
+
+    // The link in a scam message was clicked: show what it was in place.
+    document.addEventListener('dfw-scam-revealed', function(e) {
+        var m = _messages.find(function(x) { return x.id === e.detail.id; });
+        if (!m || !e.detail.result || !e.detail.result.scam) return;
+        m.scamRevealed = { how: 'clicked', redFlags: e.detail.result.redFlags || [] };
+        renderMessages();
+        var row = document.querySelector('.msg-row[data-id="' + m.id + '"]');
+        if (row) { row.classList.add('open'); row.querySelector('.msg-row-head').setAttribute('aria-expanded', 'true'); }
+    });
 
     function onListClick(e) {
         var report = e.target.closest('.msg-report');

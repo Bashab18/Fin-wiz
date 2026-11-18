@@ -442,8 +442,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // ── CHALLENGES PAGE ──────────────────────────────────────────────────────
-    const CAT_PILL   = { banking: 'pill-blue', ecommerce: 'pill-green', utilities: 'pill-amber', general: 'pill-purple' };
-    const CAT_LABELS = { banking: 'Banking',   ecommerce: 'Ecommerce',  utilities: 'Utilities',  general: 'General'  };
+    const CAT_PILL   = { banking: 'pill-blue', ecommerce: 'pill-green', utilities: 'pill-amber', general: 'pill-purple', security: 'pill-red' };
+    const CAT_LABELS = { banking: 'Banking',   ecommerce: 'Ecommerce',  utilities: 'Utilities',  general: 'General',  security: 'Security' };
 
     // Condition labels map for human-readable display
     const COND_LABELS = {
@@ -463,6 +463,7 @@ document.addEventListener('DOMContentLoaded', function () {
         total_paid_bills:   'Total bills ≥ ƒ{v}',
         total_xp_earned:    'Total XP ≥ {v}',
         florin_balance:     'Florin balance ≥ ƒ{v}',
+        scams_reported:     'Scams reported ≥ {v}',
         checking_balance:       'Checking ≥ ƒ{v}',
         savings_balance:        'Savings ≥ ƒ{v}',
         unique_recipients:      'Recipients ≥ {v}',
@@ -475,7 +476,7 @@ document.addEventListener('DOMContentLoaded', function () {
         'transfer_amount', 'total_transferred', 'purchase_items', 'total_spent_ecom', 'payment_count',
         'transaction_count', 'reach_level', 'payment_amount', 'purchase_count', 'total_paid_bills',
         'total_xp_earned', 'florin_balance', 'checking_balance', 'savings_balance', 'unique_recipients',
-        'savings_transfer_count', 'transfer_to_beneficiary', 'custom'
+        'savings_transfer_count', 'transfer_to_beneficiary', 'scams_reported', 'custom'
     ]);
     const COND_VALUE_LABEL = {
         transfer_amount:   'Minimum florin amount (ƒ)',
@@ -490,6 +491,7 @@ document.addEventListener('DOMContentLoaded', function () {
         total_paid_bills:  'Cumulative bills paid (ƒ)',
         total_xp_earned:   'Total XP',
         florin_balance:    'Minimum florin balance (ƒ)',
+        scams_reported:    'Number of scams reported',
         checking_balance:       'Minimum checking balance (ƒ)',
         savings_balance:        'Minimum savings balance (ƒ)',
         unique_recipients:      'Number of unique recipients',
@@ -516,6 +518,7 @@ document.addEventListener('DOMContentLoaded', function () {
         total_paid_bills:   'total bills paid reaches ƒ{v}',
         total_xp_earned:    'total XP earned reaches {v}',
         florin_balance:     'florin wallet balance reaches ≥ ƒ{v}',
+        scams_reported:     'the user reports {v} scam(s) before falling for them',
         checking_balance:       'checking account balance is ≥ ƒ{v}',
         savings_balance:        'savings account balance is ≥ ƒ{v}',
         unique_recipients:      'the user has transferred to ≥ {v} unique recipients',
@@ -627,6 +630,7 @@ document.addEventListener('DOMContentLoaded', function () {
         total_paid_bills:   { category: 'utilities',  prefix: 'ƒ',  suffix: null,        step: 0.01, min: 0.01, max: null },
         total_xp_earned:    { category: 'general',    prefix: null, suffix: 'XP',        step: 1,    min: 1,    max: null },
         florin_balance:     { category: 'general',    prefix: 'ƒ',  suffix: null,        step: 0.01, min: 0.01, max: null },
+        scams_reported:     { category: 'security',   prefix: null, suffix: 'scams',     step: 1,    min: 1,    max: 999  },
         checking_balance:       { category: 'banking', prefix: 'ƒ',  suffix: null,          step: 0.01, min: 0.01, max: null },
         savings_balance:        { category: 'banking', prefix: 'ƒ',  suffix: null,          step: 0.01, min: 0.01, max: null },
         unique_recipients:      { category: 'banking', prefix: null, suffix: 'recipients', step: 1,    min: 1,    max: 999  },
@@ -780,6 +784,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 '<option value="reach_level">Reach level ≥ N</option>' +
                 '<option value="total_xp_earned">Total XP earned ≥ N</option>' +
                 '<option value="florin_balance">Florin wallet balance ≥ ƒ amount</option>' +
+            '</optgroup>' +
+            '<optgroup label="🔒 Security">' +
+                '<option value="scams_reported">Scams reported ≥ N</option>' +
             '</optgroup>' +
             '<optgroup label="🛠 Custom">' +
                 '<option value="custom">Custom condition…</option>' +
@@ -2336,6 +2343,30 @@ document.addEventListener('DOMContentLoaded', function () {
               subject: 'Your parcel could not be delivered',
               body: 'We tried to deliver your InStyl order today but nobody was home. Pay the ƒ2.99 redelivery fee and confirm your card number, expiry date and security code to book a new slot.\n\nUnclaimed parcels are returned after 48 hours.',
               flags: ['The address is not InStyl\'s own.', 'A shop never asks for your full card details in a message.', 'It does not name an order you actually placed.', 'It gives 48 hours to hurry you.'] },
+            { name: 'Verify your account (link)', senderName: 'DigiBank Security', senderEmail: 'security@digibank-verify.co',
+              subject: 'Action required: verify your account',
+              body: 'Dear customer,\n\nWe could not confirm your details after our latest security update. Use the button below to verify your account within 24 hours, or it will be suspended.\n\nDigiBank Security',
+              baitLabel: 'Verify my account', baitUrl: 'https://digibank-verify.co/login',
+              flags: ['The link goes to digibank-verify.co, not the bank\'s own address.', 'A real bank does not ask you to "verify" through a link in a message.', 'It threatens suspension within 24 hours.', 'It says "Dear customer" and not your name.'] },
+            { name: 'Free gift card (link)', senderName: 'InStyl Rewards', senderEmail: 'rewards@instyl-giftcards.win',
+              subject: 'You have been picked for a ƒ100 InStyl gift card',
+              body: 'Thanks for shopping with us! As a loyal customer you can claim a ƒ100 gift card today. Only 3 left.',
+              baitLabel: 'Claim my gift card', baitUrl: 'http://instyl-giftcards.win/claim',
+              flags: ['The address ends in .win and is not InStyl\'s.', 'A prize you never entered for.', '"Only 3 left" is there to hurry you.'] },
+            { name: 'Text message: parcel fee (SMS)', senderName: '+1 (555) 014-2290', senderEmail: '',
+              subject: 'Text message',
+              body: 'InStyl: your parcel is on hold. Pay the ƒ2.99 redelivery fee today or it is returned.',
+              baitLabel: 'Pay redelivery fee', baitUrl: 'instyl-redeliver.info/pay',
+              flags: ['It comes from a mobile number, not InStyl.', 'You cannot tell which order it is about.', 'It sets a same-day deadline.', 'It wants a fee paid through a link.'] },
+            { name: 'Voicemail transcript', senderName: 'Unknown number (voicemail)', senderEmail: '',
+              subject: 'Voicemail from your bank (0:42)',
+              body: 'Transcript: "Hello, this is the fraud department at your bank. We have blocked a payment on your account. Please call us back on 555 0199 as soon as you can and have your full card number and PIN ready to confirm it is you."',
+              flags: ['A bank never asks for your PIN, on a call or any other way.', 'The number is not the one printed on your card.', 'It pressures you to call straight back.'] },
+            { name: 'Refund owed (link)', senderName: 'InStyl Refunds', senderEmail: 'refunds@instyl-payouts.net',
+              subject: 'You are owed a ƒ48.50 refund',
+              body: 'A duplicate charge was found on your last order. To receive your ƒ48.50 refund, confirm where to send it.',
+              baitLabel: 'Claim my refund', baitUrl: 'https://instyl-payouts.net/refund',
+              flags: ['There was no duplicate charge on your order history.', 'The address is not InStyl\'s.', 'It asks you to confirm payout details through a link.'] },
             { name: 'Overdue bill threat', senderName: 'DigiPay Collections', senderEmail: 'collections@digipay-recovery.org',
               subject: 'Final notice: service will be disconnected today',
               body: 'Your electricity account is overdue. Your service will be disconnected at 5 pm today unless you pay ƒ120 now.\n\nDo not use your usual bill page. Reply to this message for the new account number to pay into.',
@@ -2385,6 +2416,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (kind === 'message') {
             set('scam-sender-name', t.senderName); set('scam-sender-email', t.senderEmail);
             set('scam-subject', t.subject);        set('scam-body', t.body);
+            set('scam-bait-label', t.baitLabel);   set('scam-bait-url', t.baitUrl);
         } else {
             set('scam-payee', t.payee); set('scam-amount', t.amount); set('scam-account', '');
             set('scam-note', t.note);   set('scam-due', t.dueInDays || 2);
@@ -2416,6 +2448,128 @@ document.addEventListener('DOMContentLoaded', function () {
         select.value = keep;
     }
 
+    var scamCache = [];
+
+    // ── Scam results ────────────────────────────────────────────────────────
+    // Worked out in the page from the list GET /api/admin/scams returns.
+    var scamFell = function(s) { return !!(s.paidAt || s.clickedAt); };
+    var scamCaught = function(s) { return !!s.reportedAt && !scamFell(s); };
+
+    function scamTally(list) {
+        var t = { sent: list.length, caught: 0, fell: 0, declined: 0, waiting: 0, lost: 0, secs: 0 };
+        list.forEach(function(s) {
+            if (scamCaught(s)) { t.caught++; t.secs += Math.max(0, (s.reportedAt - s.sentAt) / 1000); }
+            else if (scamFell(s)) t.fell++;
+            else if (s.declinedAt) t.declined++;
+            else t.waiting++;
+            t.lost += Number(s.paidAmount) || 0;
+        });
+        t.avgSecs = t.caught ? t.secs / t.caught : null;
+        return t;
+    }
+
+    function scamResults(scams) {
+        var groupBy = function(keyOf) {
+            var groups = {};
+            scams.forEach(function(s) { var k = keyOf(s); (groups[k] = groups[k] || []).push(s); });
+            return Object.keys(groups).sort(function(a, b) { return groups[b].length - groups[a].length || a.localeCompare(b); })
+                .map(function(k) { return { key: k, tally: scamTally(groups[k]) }; });
+        };
+        var days = [];
+        for (var i = 13; i >= 0; i--) {
+            var d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i);
+            days.push({ start: d.getTime(), end: d.getTime() + 86400000, label: d.toLocaleDateString([], { month: 'short', day: 'numeric' }) });
+        }
+        return {
+            total: scamTally(scams),
+            byType: groupBy(function(s) { return s.kind === 'message' ? (s.baitLabel ? 'Message with a link' : 'Message') : s.kind === 'bill' ? 'DigiPay bill' : 'DigiBank payment request'; }),
+            byTemplate: groupBy(function(s) { return s.template || 'Written from scratch'; }),
+            byUser: groupBy(function(s) { return s.recipientName || ('User #' + s.userId); }),
+            byDay: days.map(function(d) { return { label: d.label, tally: scamTally(scams.filter(function(s) { return s.sentAt >= d.start && s.sentAt < d.end; })) }; })
+        };
+    }
+    window.scamResultsFor = scamResults;   // also what the tests read
+
+    function srDuration(secs) {
+        if (secs == null) return '—';
+        if (secs < 90) return Math.round(secs) + ' sec';
+        if (secs < 5400) return Math.round(secs / 60) + ' min';
+        if (secs < 172800) return (secs / 3600).toFixed(1) + ' h';
+        return (secs / 86400).toFixed(1) + ' days';
+    }
+    function srBar(t) {
+        var n = t.sent || 1;
+        return '<div class="sr-bar" title="' + t.caught + ' reported · ' + t.fell + ' fell for it · ' + (t.declined + t.waiting) + ' no answer">' +
+            '<i class="sr-good" style="width:' + (100 * t.caught / n) + '%"></i><i class="sr-bad" style="width:' + (100 * t.fell / n) + '%"></i><i class="sr-wait" style="width:' + (100 * (t.declined + t.waiting) / n) + '%"></i></div>';
+    }
+    function srTable(el, firstHead, rows) {
+        el.innerHTML = '<thead><tr><th>' + firstHead + '</th><th>Sent</th><th>Reported</th><th>Fell for it</th><th>No answer</th><th>Avg. time to report</th><th style="min-width:110px">Split</th></tr></thead><tbody>' +
+            (rows.length ? rows.map(function(r) {
+                var t = r.tally;
+                return '<tr><td><strong>' + escHtml(r.key) + '</strong></td><td>' + t.sent + '</td><td>' + t.caught + (t.sent ? ' <span style="color:var(--color-text-muted);font-size:var(--text-xs)">(' + Math.round(100 * t.caught / t.sent) + '%)</span>' : '') + '</td>' +
+                    '<td>' + t.fell + (t.lost ? ' <span class="pill pill-red">ƒ' + t.lost.toFixed(2) + '</span>' : '') + '</td><td>' + (t.declined + t.waiting) + '</td><td>' + srDuration(t.avgSecs) + '</td><td>' + srBar(t) + '</td></tr>';
+            }).join('') : '<tr class="empty-row"><td colspan="7">No scams sent yet.</td></tr>') + '</tbody>';
+    }
+
+    function renderScamResults() {
+        var cards = scamEl('scam-res-cards');
+        if (!cards) return;
+        var r = scamResults(scamCache), t = r.total;
+        var card = function(accent, icon, value, label) {
+            return '<div class="admin-stat-card accent-' + accent + '"><div class="stat-icon">' + icon + '</div><div class="stat-value">' + value + '</div><div class="stat-label">' + label + '</div></div>';
+        };
+        cards.innerHTML =
+            card('purple', '🚩', t.sent, 'Scams sent') +
+            card('green', '✅', t.caught + (t.sent ? ' <span style="font-size:var(--text-sm);color:var(--color-text-muted)">' + Math.round(100 * t.caught / t.sent) + '%</span>' : ''), 'Reported before falling for it') +
+            card('amber', '⚠️', t.fell + (t.lost ? ' <span style="font-size:var(--text-sm);color:var(--color-text-muted)">ƒ' + t.lost.toFixed(2) + ' lost</span>' : ''), 'Fell for it (paid or clicked)') +
+            card('teal', '⏱', srDuration(t.avgSecs), 'Average time to report');
+        srTable(scamEl('scam-res-types'), 'Type', r.byType);
+        srTable(scamEl('scam-res-templates'), 'Template', r.byTemplate);
+        srTable(scamEl('scam-res-users'), 'User', r.byUser);
+        var max = Math.max.apply(null, r.byDay.map(function(d) { return d.tally.sent; }).concat([1]));
+        scamEl('scam-res-chart').innerHTML = t.sent
+            ? '<div class="sr-chart" role="img" aria-label="Scams sent per day over the last 14 days">' + r.byDay.map(function(d) {
+                var x = d.tally, h = function(n) { return (100 * n / max) + '%'; };
+                return '<div class="sr-day" title="' + escHtml(d.label) + ': ' + x.sent + ' sent, ' + x.caught + ' reported, ' + x.fell + ' fell for it"><b>' + (x.sent || '') + '</b><div class="stack">' +
+                    '<i class="sr-good" style="height:' + h(x.caught) + '"></i><i class="sr-bad" style="height:' + h(x.fell) + '"></i><i class="sr-wait" style="height:' + h(x.declined + x.waiting) + '"></i></div><small>' + escHtml(d.label) + '</small></div>';
+            }).join('') + '</div><div class="sr-legend"><span style="--c:#16a34a">Reported</span><span style="--c:#dc2626">Fell for it</span><span style="--c:#94a3b8">No answer yet</span></div>'
+            : '<p style="margin:0;color:var(--color-text-muted)">No scams sent yet.</p>';
+    }
+
+    window.adminScamView = function(view) {
+        var results = view === 'results';
+        scamEl('scam-view-send').hidden = results;
+        scamEl('scam-view-results').hidden = !results;
+        ['send', 'results'].forEach(function(v) {
+            var tab = scamEl('scam-tab-' + v);
+            tab.classList.toggle('active', v === view);
+            tab.setAttribute('aria-selected', v === view ? 'true' : 'false');
+        });
+        if (results) reloadScamTable();
+    };
+
+    // The results as a spreadsheet, one row per scam. Cells that start with = + - or @ get a
+    // leading quote so a spreadsheet never runs them as a formula.
+    window.adminScamExport = function() {
+        var cell = function(v) {
+            var t = v == null ? '' : String(v);
+            if (/^[=+\-@\t\r]/.test(t)) t = "'" + t;
+            return /[",\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+        };
+        var iso = function(ts) { return ts ? new Date(ts).toISOString() : ''; };
+        var rows = [['id', 'type', 'template', 'sent_to', 'sent_at', 'outcome', 'reported_at', 'paid_at', 'clicked_at', 'amount_paid', 'xp_awarded', 'minutes_to_report']].concat(scamCache.map(function(s) {
+            return [s.id, s.kind + (s.baitLabel ? ' with link' : ''), s.template || '', s.recipientName || s.userId, iso(s.sentAt), s.status, iso(s.reportedAt), iso(s.paidAt), iso(s.clickedAt),
+                    s.paidAmount != null ? s.paidAmount : '', s.xpAwarded != null ? s.xpAwarded : '', s.reportedAt ? Math.round((s.reportedAt - s.sentAt) / 60000) : ''];
+        }));
+        var blob = new Blob([rows.map(function(r) { return r.map(cell).join(','); }).join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'scam-results.csv';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function() { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+    };
+
     function loadScamsPage() {
         var usersLoaded = DigifinwizDB.getAllUsers().then(loadScamRecipients);
         reloadScamTable();
@@ -2428,6 +2582,8 @@ document.addEventListener('DOMContentLoaded', function () {
             case 'reported':           return '<span class="pill pill-green">Reported' + (s.xpAwarded ? ' · +' + Number(s.xpAwarded) + ' XP' : '') + '</span>';
             case 'paid':               return '<span class="pill pill-red">Paid ' + money + '</span>';
             case 'paid_then_reported': return '<span class="pill pill-red">Paid ' + money + ', then reported</span>';
+            case 'clicked':            return '<span class="pill pill-red">Clicked the link</span>';
+            case 'clicked_then_reported': return '<span class="pill pill-red">Clicked, then reported</span>';
             case 'declined':           return '<span class="pill pill-blue">Declined, not reported</span>';
             case 'opened':             return '<span class="pill pill-blue">Opened, not reported</span>';
             default:                   return '<span class="pill pill-amber">Delivered</span>';
@@ -2437,6 +2593,8 @@ document.addEventListener('DOMContentLoaded', function () {
     function reloadScamTable() {
         if (!scamEl('scam-table-body')) return Promise.resolve();
         return DigifinwizDB.getScams().then(function(scams) {
+            scamCache = scams;
+            renderScamResults();
             scamEl('scam-count-badge').textContent = scams.length;
             var tbody = scamEl('scam-table-body');
             if (!scams.length) {
@@ -2480,7 +2638,9 @@ document.addEventListener('DOMContentLoaded', function () {
             var kind = scamEl('scam-kind').value;
             var val  = function(id) { return (scamEl(id).value || '').trim(); };
             if (!val('scam-recipient')) { showToast('Choose the user to send the scam to.', 'error'); return; }
+            var tplSel = scamEl('scam-template');
             var payload = {
+                template: tplSel.value === '' ? '' : tplSel.options[tplSel.selectedIndex].textContent,
                 kind: kind, userId: parseInt(val('scam-recipient'), 10), xp: val('scam-xp') === '' ? undefined : Number(val('scam-xp')),
                 redFlags: scamEl('scam-flags').value.split('\n').map(function(l) { return l.trim(); }).filter(Boolean)
             };
@@ -2491,6 +2651,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 payload.senderName = val('scam-sender-name'); payload.senderEmail = val('scam-sender-email');
                 payload.subject = val('scam-subject');        payload.body = val('scam-body');
                 payload.audience = scamEl('scam-audience').value;
+                payload.baitLabel = val('scam-bait-label'); payload.baitUrl = val('scam-bait-url');
             } else {
                 if (!val('scam-payee'))  { showToast((kind === 'bill' ? 'Biller' : 'Requester') + ' name is required.', 'error'); return; }
                 if (!val('scam-amount')) { showToast('Amount is required.', 'error'); return; }
@@ -2587,7 +2748,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 container.innerHTML = '<p style="color:var(--color-text-muted)">No challenges for this user.</p>';
                 return;
             }
-            var CAT_ICON = { banking: '🏦', ecommerce: '🛒', utilities: '⚡', general: '🎯' };
+            var CAT_ICON = { banking: '🏦', ecommerce: '🛒', utilities: '⚡', general: '🎯', security: '🔒' };
             container.innerHTML = challenges.map(function(c) {
                 var icon      = CAT_ICON[c.category] || '🎯';
                 var completed = c.completed;

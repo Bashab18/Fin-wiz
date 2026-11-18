@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digifinwiz - Scam Safety</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .ss-wrap { max-width: 920px; margin: 0 auto; padding: 2rem 1rem 4rem; }
+        .ss-hero h1 { margin: 0 0 .25rem; font-size: 1.8rem; }
+        .ss-hero p { margin: 0; color: #64748b; }
+        .ss-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+        .ss-stat { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1.1rem 1.2rem; border-top: 4px solid #6366f1; }
+        .ss-stat strong { display: block; font-size: 1.7rem; color: #0f172a; }
+        .ss-stat span { font-size: .85rem; color: #64748b; }
+        .ss-stat.good { border-top-color: #16a34a; } .ss-stat.bad { border-top-color: #dc2626; }
+        .ss-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1.3rem 1.4rem; margin-bottom: 1.3rem; }
+        .ss-card h2 { margin: 0 0 .8rem; font-size: 1.15rem; }
+        .ss-badges { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .9rem; }
+        .ss-badge { border: 1px solid #e2e8f0; border-radius: 12px; padding: .9rem 1rem; text-align: center; background: #f8fafc; }
+        .ss-badge.earned { background: #f0fdf4; border-color: #86efac; }
+        .ss-badge .ic { font-size: 2rem; filter: grayscale(1); opacity: .5; } .ss-badge.earned .ic { filter: none; opacity: 1; }
+        .ss-badge h3 { margin: .3rem 0 .15rem; font-size: 1rem; } .ss-badge p { margin: 0; font-size: .8rem; color: #64748b; }
+        .ss-bar { height: 6px; background: #e2e8f0; border-radius: 99px; margin-top: .6rem; overflow: hidden; }
+        .ss-bar i { display: block; height: 100%; background: #6366f1; }
+        .ss-history { list-style: none; margin: 0; padding: 0; }
+        .ss-history > li { padding: .9rem 0; border-bottom: 1px solid #e2e8f0; }
+        .ss-history > li:last-child { border-bottom: none; }
+        .ss-history .top { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+        .ss-pill { display: inline-block; font-size: .72rem; font-weight: 700; padding: 2px 10px; border-radius: 99px; }
+        .ss-pill.good { background: #dcfce7; color: #166534; } .ss-pill.bad { background: #fee2e2; color: #991b1b; }
+        .ss-history ul { margin: .5rem 0 0 1.1rem; padding: 0; color: #475569; font-size: .88rem; line-height: 1.5; }
+        .ss-empty { color: #64748b; font-size: .92rem; margin: 0; }
+        .ss-signs { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+        .ss-sign { background: #f8fafc; border-radius: 10px; padding: .9rem 1rem; }
+        .ss-sign h3 { margin: 0 0 .25rem; font-size: .98rem; } .ss-sign p { margin: 0; font-size: .86rem; color: #475569; line-height: 1.5; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">Digifinwiz</div>
+            <button class="nav-toggle" aria-label="Toggle navigation"><span></span><span></span><span></span></button>
+            <ul class="nav-menu">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="tutorials.html">Tutorials</a></li>
+                <li><a href="challenges.html">Challenges</a></li>
+                <li><a href="about.html">About Us</a></li>
+                <li><a href="messages.html">Messages</a></li>
+                <li><a href="profile.html">Profile</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="ss-wrap">
+        <div class="ss-hero">
+            <h1>🛡️ Scam Safety</h1>
+            <p>Your record at spotting scams, and what to look for. Report a suspicious message or bill instead of acting on it.</p>
+        </div>
+        <div id="ssBody"><p class="ss-empty" style="margin-top:2rem">Loading…</p></div>
+
+        <section class="ss-card">
+            <h2>Common warning signs</h2>
+            <div class="ss-signs">
+                <div class="ss-sign"><h3>⏰ It rushes you</h3><p>"Within 24 hours", "final notice", "today only". Scammers want you to act before you think.</p></div>
+                <div class="ss-sign"><h3>🔑 It asks for secrets</h3><p>A real bank or shop never asks for your password, PIN or full card details in a message.</p></div>
+                <div class="ss-sign"><h3>✉️ The sender looks slightly wrong</h3><p>Misspelt names (digibnak), odd domains, or a number you do not recognise. Check the address, not the display name.</p></div>
+                <div class="ss-sign"><h3>🔗 A link you did not expect</h3><p>Do not click it. Go to the site yourself, the way you normally do, and check there.</p></div>
+                <div class="ss-sign"><h3>💸 Pay first, get paid later</h3><p>Fees to release a prize or refund, "safe accounts", and requests from "a friend with a new number" are classic traps.</p></div>
+                <div class="ss-sign"><h3>🧾 A bill you do not recognise</h3><p>If you never signed up with the biller, or the amount has no meter reading behind it, do not pay it.</p></div>
+            </div>
+        </section>
+    </main>
+
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
+    <script src="db.js"></script>
+    <script src="script.js"></script>
+    <script>
+    (function() {
+        function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+        var OUTCOME = {
+            reported:              ['good', 'Reported it'],
+            paid:                  ['bad',  'Paid it'],
+            paid_then_reported:    ['bad',  'Paid, then reported'],
+            clicked:               ['bad',  'Clicked the link'],
+            clicked_then_reported: ['bad',  'Clicked, then reported']
+        };
+        var KIND = { message: '✉️ Message', bill: '🧾 Bill', request: '💸 Payment request' };
+        function when(ts) { return new Date(ts).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }); }
+
+        DigifinwizDB.init().then(function() {
+            var session = typeof DigifinwizAuth !== 'undefined' ? DigifinwizAuth.getSession() : null;
+            if (!session || !session.loggedIn) { window.location.replace('login.html'); return; }
+            return DigifinwizDB.getScamRecord().then(render);
+        }).catch(function(err) {
+            document.getElementById('ssBody').innerHTML = '<p class="ss-empty" style="color:#dc2626">Could not load your record: ' + esc(err.message) + '</p>';
+        });
+
+        function render(r) {
+            var body = document.getElementById('ssBody');
+            var stats =
+                '<div class="ss-stats">' +
+                    '<div class="ss-stat good"><strong>' + r.reported + '</strong><span>Scams reported before falling for them</span></div>' +
+                    '<div class="ss-stat bad"><strong>' + r.fellFor + '</strong><span>Scams fallen for' + (r.lost ? ' · ƒ' + r.lost.toFixed(2) + ' lost' : '') + '</span></div>' +
+                    '<div class="ss-stat"><strong>' + (r.score == null ? '—' : r.score + '%') + '</strong><span>Spotter score' + (r.score == null ? ' (starts with your first scam)' : '') + '</span></div>' +
+                '</div>';
+            var badges = '<section class="ss-card"><h2>Badges</h2><div class="ss-badges">' + r.badges.map(function(b) {
+                return '<div class="ss-badge' + (b.earned ? ' earned' : '') + '"><div class="ic">' + esc(b.icon) + '</div><h3>' + esc(b.name) + '</h3><p>' + esc(b.desc) + '</p>' +
+                    '<div class="ss-bar"><i style="width:' + Math.round(100 * b.progress / b.goal) + '%"></i></div></div>';
+            }).join('') + '</div></section>';
+            var history = '<section class="ss-card"><h2>What you have spotted</h2>' + (r.history.length
+                ? '<ul class="ss-history">' + r.history.map(function(h) {
+                    var o = OUTCOME[h.outcome] || ['good', h.outcome];
+                    return '<li><div class="top"><span><strong>' + esc(h.title) + '</strong> <span style="color:#64748b;font-size:.82rem">' + (KIND[h.kind] || '') + '</span></span>' +
+                        '<span><span class="ss-pill ' + o[0] + '">' + o[1] + '</span>' + (h.xp ? ' <span class="ss-pill good">+' + h.xp + ' XP</span>' : '') + (h.lost ? ' <span class="ss-pill bad">ƒ' + h.lost.toFixed(2) + ' lost</span>' : '') + '</span></div>' +
+                        '<div style="font-size:.78rem;color:#94a3b8;margin-top:2px">' + esc(when(h.when)) + '</div>' +
+                        (h.redFlags.length ? '<ul>' + h.redFlags.map(function(f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>' : '') + '</li>';
+                }).join('') + '</ul>'
+                : '<p class="ss-empty">Nothing yet. If a message, bill or payment request in any Digifinwiz site looks wrong, use <strong>Report as scam</strong>. It is safe to report something genuine too.</p>') + '</section>';
+            body.innerHTML = stats + badges + history;
+        }
+    })();
+    </script>
+</body>
+</html>
