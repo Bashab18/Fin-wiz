@@ -1682,12 +1682,20 @@
                 (open
                     ? '<div class="util-msg-body">' + escHU(m.body || '') + '</div>' +
                       (m.senderName && m.senderName !== 'System' ? '<div style="font-size:0.75rem;color:var(--color-gray-500);margin-top:6px">From ' + escHU(m.senderName) + (m.senderEmail ? ' &lt;' + escHU(m.senderEmail) + '&gt;' : '') + '</div>' : '') +
-                      action + DigifinwizScam.revealHtml(m) +
+                      action + DigifinwizScam.baitHtml(m) + DigifinwizScam.revealHtml(m) +
                       (m.scamRevealed ? '' : '<div class="util-msg-action"><a onclick="event.stopPropagation();reportUtilMessage(' + Number(m.id) + ')">🚩 Report as scam</a></div>')
                     : '<div class="util-msg-preview">' + escHU(m.body || '') + '</div>') +
             '</div>';
         }).join('');
     }
+
+    // The link in a scam message was clicked: show what it was in place.
+    document.addEventListener('dfw-scam-revealed', function(e) {
+        var m = UTIL_MESSAGES.find(function(x) { return x.id === e.detail.id; });
+        if (!m || !e.detail.result || !e.detail.result.scam) return;
+        m.scamRevealed = { how: 'clicked', redFlags: e.detail.result.redFlags || [] };
+        renderMessagesList();
+    });
 
     function reportUtilMessage(id) {
         DigifinwizScam.reportMessage(id).then(function(result) {

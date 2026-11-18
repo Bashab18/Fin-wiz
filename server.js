@@ -383,8 +383,10 @@ async function buildChallengeContext(userId, stores) {
     const lastPurch = latestByTimestamp(purchs);
 
     const recipientSet = new Set(transfers.map(t => (t.recipient || '') + '|' + (t.account || '')));
+    const scamsReported = await countScamsReported(userId, stores.appModule || null);
 
     return {
+        scamsReported,
         txCount:              transfers.length,
         lastTxAmount:         lastTx ? (Number(lastTx.amount) || 0) : 0,
         lastRecipient:        lastTx ? (lastTx.recipient || null) : null,
@@ -719,6 +721,9 @@ const ALL_DEFAULT_CHALLENGES = [
     { title: 'Rising Star',         description: 'Reach level 5.',                                                    category: 'general',   points: 75,  florins: 0,    condition: 'reach_level',       conditionValue: 5,     active: true },
     { title: 'Financial Explorer',  description: 'Read the Information tab on your Profile page to learn about financial concepts.', category: 'general',   points: 30,  florins: 0,    condition: 'manual',            conditionValue: 0,     active: true },
     { title: 'Profile Complete',    description: 'Fill in your profile name and username in the Profile page.',       category: 'general',   points: 25,  florins: 0,    condition: 'manual',            conditionValue: 0,     active: true },
+    { title: 'Scam Spotter',        description: 'Report your first scam before falling for it.',                     category: 'security',  points: 40,  florins: 0,    condition: 'scams_reported',    conditionValue: 1,     active: true },
+    { title: 'Sharp Eyes',          description: 'Report 3 scams before falling for them.',                           category: 'security',  points: 80,  florins: 0,    condition: 'scams_reported',    conditionValue: 3,     active: true },
+    { title: 'Scam Buster',         description: 'Report 5 scams before falling for them.',                           category: 'security',  points: 150, florins: 25,   condition: 'scams_reported',    conditionValue: 5,     active: true },
     { title: 'Video Learner',       description: 'Watch all 4 tutorial videos.',                                      category: 'general',   points: 30,  florins: 0,    condition: 'manual',            conditionValue: 0,     active: true }
 ];
 const LEVEL_1_REQUIRED_CONDITIONS = ['first_transfer', 'first_purchase', 'first_payment'];
@@ -868,7 +873,7 @@ function addMissingChallenges(rows, userId, category, titles) {
 const CUSTOM_FIELD_WHITELIST = new Set([
     'txCount', 'payCount', 'purchCount', 'lastTxAmount', 'lastItemCount', 'lastPayAmount',
     'totalTransferred', 'totalSpentEcom', 'totalSpentBills', 'userLevel', 'totalXpEarned', 'florinBalance',
-    'checkingBalance', 'savingsBalance', 'uniqueRecipients', 'savingsTransferCount'
+    'checkingBalance', 'savingsBalance', 'uniqueRecipients', 'savingsTransferCount', 'scamsReported'
 ]);
 
 function compareOp(actual, operator, expected) {
@@ -900,6 +905,7 @@ function evaluateCondition(cc, context) {
         case 'total_paid_bills':  return context.totalSpentBills >= val;
         case 'total_xp_earned':   return context.totalXpEarned   >= val;
         case 'florin_balance':    return context.florinBalance   >= val;
+        case 'scams_reported':    return context.scamsReported   >= val;
         case 'checking_balance':        return context.checkingBalance      >= val;
         case 'savings_balance':         return context.savingsBalance       >= val;
         case 'unique_recipients':       return context.uniqueRecipients     >= val;
@@ -3557,6 +3563,7 @@ async function buildStats(userId, stores, knownUser) {
 
     return {
         user: userData,
+        scamsReported: await countScamsReported(userId, stores.appModule || null),
         txCount: txs.length, payCount: pays.length, purchCount: purchs.length,
         totalSpentEcommerce, totalSpentBills, totalTransferred,
         txPts, payPts, purchPts, totalPts,
@@ -3782,6 +3789,7 @@ const SCAM_MESSAGE_TYPES = new Set(['announcement', 'info', 'warning', 'email'])
 const SCAM_DEFAULT_XP   = 50;
 const SCAM_MAX_XP       = 500;
 const SCAM_MAX_FLAGS    = 8;
+const SCAM_MAX_BAIT     = 40;
 const SCAM_SITE         = { bill: 'utilities', request: 'banking' };
 const SCAM_DEFAULT_FLAGS = {
     message: ['It pushes you to act straight away.', 'It asks for something a real sender would never ask for in a message.'],
@@ -3814,7 +3822,41 @@ function learnerMessage(m) {
     if (!m.scamId) return m;
     const out = Object.assign({}, m);
     delete out.scamId;
+    // A link in the message: the learner gets its button text (and the address it claims to
+    // go to), never the fact that clicking it is what the simulation measures.
+    if (m.baitLabel) out.bait = { label: m.baitLabel, url: m.baitUrl || '' };
+    delete out.baitLabel;
+    delete out.baitUrl;
     return out;
+}
+
+// How many of the scams sent to an account it reported before falling for them:
+// for the main account, those sent to it (reported on any site); for a sub-site
+// account, those sent to that account. Used by the Scam Spotter challenges.
+async function countScamsReported(userId, site) {
+    const scams = await readJSON('scams');
+    return scams.filter(s => (site ? (s.accounts || {})[site] === userId : s.userId === userId)
+        && s.reportedAt && !s.paidAt && !s.clickedAt).length;
+}
+
+// Marks every copy of a scam message as revealed ('reported' or 'clicked'), so
+// each inbox shows the warning signs and drops its Report button. Callers hold the lock.
+async function revealScamCopies(scam, how) {
+    for (const site of [null].concat(scam.sites || [])) {
+        const store = scamMessageStore(site);
+        const rows  = await readJSON(store);
+        if (!rows.some(m => m.scamId === scam.id)) continue;
+        await writeJSON(store, rows.map(m => m.scamId === scam.id
+            ? Object.assign({}, m, { scamRevealed: { how, at: Date.now(), redFlags: scam.redFlags || [] } }) : m));
+    }
+}
+
+// After a report, checks the main account's challenges (the Scam Spotter ones live
+// there and nothing else runs a main-site check). Returns the titles it completed.
+async function checkScamChallenges(scam) {
+    const main = storesFor(null);
+    const result = await checkAndCompleteChallengesForUser(scam.userId, await buildChallengeContext(scam.userId, main), main.challengeStore, main.userStore, null);
+    return { titles: (result.completed || []).map(c => c.title), xp: (result.completed || []).reduce((n, c) => n + (c.points || 0), 0) };
 }
 
 // Adds XP to one account under the same level rules as every other reward
@@ -3853,34 +3895,32 @@ async function awardXp(req, userId, points) {
 // inside a locked section; `scams` is the store's rows and is written back.
 async function reportScam(req, scams, scam) {
     const first = !scam.reportedAt;
-    const xp    = first && !scam.paidAt ? (scam.xp || 0) : 0;
+    const fell  = !!(scam.paidAt || scam.clickedAt);
+    const xp    = first && !fell ? (scam.xp || 0) : 0;
     let level   = { leveledUp: false, newLevel: 0 };
+    let challenges = { titles: [], xp: 0 };
     if (first) {
         const idx = scams.findIndex(s => s.id === scam.id);
-        scam = scams[idx] = Object.assign({}, scam, { reportedAt: Date.now(), reportedOn: req.appModule || 'main', xpAwarded: xp });
+        scam = scams[idx] = Object.assign({}, scam, { reportedAt: Date.now(), reportedOn: req.appModule || 'main', reportedBy: req.userId, xpAwarded: xp });
         await writeJSON('scams', scams);
         level = await awardXp(req, req.userId, xp);
         // Every copy of a scam message now says what it was.
-        if (scam.kind === 'message') {
-            for (const site of [null].concat(scam.sites || [])) {
-                const store = scamMessageStore(site);
-                const rows  = await readJSON(store);
-                if (!rows.some(m => m.scamId === scam.id)) continue;
-                await writeJSON(store, rows.map(m => m.scamId === scam.id
-                    ? Object.assign({}, m, { scamRevealed: { reportedAt: scam.reportedAt, redFlags: scam.redFlags || [] } }) : m));
-            }
-        }
+        if (scam.kind === 'message') await revealScamCopies(scam, scam.clickedAt ? 'clicked' : 'reported');
         // A reported scam bill leaves the bill list (a paid one stays as payment history).
         if (scam.kind === 'bill' && !scam.paidAt) {
             const store = MODULE_STORES.utilities.billCycles;
             const rows  = await readJSON(store);
             await writeJSON(store, rows.filter(c => c.scamId !== scam.id));
         }
+        if (xp > 0) challenges = await checkScamChallenges(scam);
     }
     return scamLesson(scam, {
-        firstReport: first, xp, afterPaying: !!scam.paidAt, leveledUp: level.leveledUp, newLevel: level.newLevel,
+        firstReport: first, xp, afterPaying: !!scam.paidAt, afterClicking: !scam.paidAt && !!scam.clickedAt,
+        leveledUp: level.leveledUp, newLevel: level.newLevel,
+        challengesCompleted: challenges.titles, challengeXp: challenges.xp,
         message: !first ? 'You already reported this one.'
             : scam.paidAt ? 'This was a scam, and it was reported after the money was paid, so it earns no XP.'
+            : scam.clickedAt ? 'This was a scam, and it was reported after its link was clicked, so it earns no XP.'
             : 'Well spotted. This was a scam.'
     });
 }
@@ -3944,8 +3984,8 @@ async function scamsWithStatus(scams) {
                 if (stores[site || 'main'].some(m => m.scamId === s.id && (m.readBy || []).includes(reader))) opened = true;
             }
         }
-        const status = s.reportedAt ? (s.paidAt ? 'paid_then_reported' : 'reported') : s.paidAt ? 'paid'
-            : s.declinedAt ? 'declined' : opened ? 'opened' : 'delivered';
+        const status = s.reportedAt ? (s.paidAt ? 'paid_then_reported' : s.clickedAt ? 'clicked_then_reported' : 'reported')
+            : s.paidAt ? 'paid' : s.clickedAt ? 'clicked' : s.declinedAt ? 'declined' : opened ? 'opened' : 'delivered';
         return Object.assign({}, s, { opened, status });
     }).sort((a, b) => b.sentAt - a.sentAt);
 }
@@ -4002,6 +4042,11 @@ app.post('/api/admin/scams', async (req, res) => {
             rec.senderEmail = scamText(b.senderEmail, 120, 'Sender email') || null;
             rec.type        = SCAM_MESSAGE_TYPES.has(b.type) ? b.type : 'email';
             rec.audience    = b.audience === 'all' ? 'all' : 'main';
+            // An optional link: a button in the message that the learner can fall for.
+            rec.baitLabel   = scamText(b.baitLabel, SCAM_MAX_BAIT, 'Link button text') || null;
+            rec.baitUrl     = scamText(b.baitUrl, 120, 'Link address') || null;
+            if (rec.baitUrl && !rec.baitLabel) throw httpError(400, 'Add the link button text, or clear the link address');
+            if (!rec.baitLabel) delete rec.baitUrl;
         } else {
             rec.payee         = scamText(b.payee, 60, b.kind === 'bill' ? 'Biller name' : 'Requester name', true);
             rec.accountNumber = scamText(b.accountNumber, 40, 'Account number') || String(Math.floor(1000000 + Math.random() * 9000000));
@@ -4016,6 +4061,7 @@ app.post('/api/admin/scams', async (req, res) => {
             }
         }
         if (b.redFlags !== undefined && !Array.isArray(b.redFlags)) throw httpError(400, 'redFlags must be a list');
+        rec.template = scamText(b.template, 60, 'Template name') || null;
         rec.redFlags = (b.redFlags || []).map(f => scamText(f, 160, 'Each warning sign')).filter(Boolean);
         if (rec.redFlags.length > SCAM_MAX_FLAGS) throw httpError(400, 'At most ' + SCAM_MAX_FLAGS + ' warning signs');
         if (!rec.redFlags.length) rec.redFlags = SCAM_DEFAULT_FLAGS[b.kind];
@@ -4045,6 +4091,7 @@ app.post('/api/admin/scams', async (req, res) => {
                     subject: rec.subject, body: rec.body, type: rec.type, category: 'system',
                     sentAt: now, readBy: [], scamId: rec.id
                 };
+                if (rec.baitLabel) { message.baitLabel = rec.baitLabel; if (rec.baitUrl) message.baitUrl = rec.baitUrl; }
                 const main = await readJSON('messages');
                 const mainId = nextId(main);
                 main.push(Object.assign({ id: mainId, recipientId: userId }, message));
@@ -4117,6 +4164,78 @@ app.post('/api/me/messages/:id/report', async (req, res) => {
     } catch (err) {
         res.status(err.status || 500).json({ error: err.message || 'Server error' });
     }
+});
+
+// Clicking the link in a scam message. Costs nothing, but the learner is told what
+// it was, and (like paying) it means a later report earns no XP.
+app.post('/api/me/messages/:id/click', async (req, res) => {
+    const id = Number(req.params.id);
+    try {
+        const result = await withUserLock(req.userId, async () => {
+            if (!req.appModule && id >= SUBSITE_MESSAGE_ID_BASE) return NOT_A_SCAM;
+            const msg = (await readJSON(req.messageStore)).find(m => m.id === id && (m.recipientId === 'all' || m.recipientId === req.userId));
+            if (!msg) throw httpError(404, 'Message not found');
+            if (!msg.scamId || !msg.baitLabel) return NOT_A_SCAM;
+            const scams = await readJSON('scams');
+            const idx   = scams.findIndex(s => s.id === msg.scamId);
+            if (idx === -1) return NOT_A_SCAM;
+            let scam = scams[idx];
+            const first = !scam.clickedAt && !scam.reportedAt && !scam.paidAt;
+            if (first) {
+                scam = scams[idx] = Object.assign({}, scam, { clickedAt: Date.now(), clickedOn: req.appModule || 'main', clickedBy: req.userId });
+                await writeJSON('scams', scams);
+                await revealScamCopies(scam, 'clicked');
+                const flags = (scam.redFlags || []).map(f => '\u2022 ' + f).join('\n');
+                await pushSystemMessage(req.userId, {
+                    subject: 'You clicked a scam link: ' + scam.subject,
+                    body: 'The message "' + scam.subject + '" was a practice scam, and its link was the trap. Nothing was taken from you this time.' +
+                          (flags ? '\n\nWarning signs you could have spotted:\n' + flags : '') +
+                          '\n\nNext time, use "Report as scam" instead of clicking.',
+                    type: 'warning', category: req.appModule || 'system'
+                }, req.messageStore);
+            }
+            return scamLesson(scam, {
+                clicked: true, firstClick: first,
+                message: scam.reportedAt ? 'You already reported this one.' : scam.paidAt ? 'You already fell for this one.'
+                    : first ? 'This was a scam, and clicking its link is exactly what it wanted. Nothing was taken from you.' : 'You already clicked this one.'
+            });
+        });
+        res.json(result);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message || 'Server error' });
+    }
+});
+
+// The learner's own scam-spotting record: the scams they have already reported, paid,
+// or clicked (each one's warning signs are known to them by then). Scams still waiting
+// in an inbox are never counted, so the record cannot reveal that one is there.
+const SCAM_BADGES = [
+    { id: 'first_catch', icon: '\uD83D\uDD0E', name: 'First Catch', desc: 'Report your first scam.', goal: 1 },
+    { id: 'sharp_eyes',  icon: '\uD83D\uDC40', name: 'Sharp Eyes',  desc: 'Report 3 scams before falling for them.', goal: 3 },
+    { id: 'scam_buster', icon: '\uD83D\uDEE1\uFE0F', name: 'Scam Buster', desc: 'Report 5 scams before falling for them.', goal: 5 },
+    { id: 'cool_head',   icon: '\uD83E\uDDD8', name: 'Cool Head',   desc: 'Report 3 scams without ever falling for one.', goal: 3, needsNoFall: true }
+];
+app.get('/api/me/scam-record', async (req, res) => {
+    const site = req.appModule || null;
+    const scams = (await readJSON('scams')).filter(s => site ? (s.accounts || {})[site] === req.userId : s.userId === req.userId);
+    const resolved = scams.filter(s => s.reportedAt || s.paidAt || s.clickedAt);
+    const caught = resolved.filter(s => s.reportedAt && !s.paidAt && !s.clickedAt);
+    const fell   = resolved.filter(s => s.paidAt || s.clickedAt);
+    const outcome = s => s.paidAt ? (s.reportedAt ? 'paid_then_reported' : 'paid') : s.clickedAt ? (s.reportedAt ? 'clicked_then_reported' : 'clicked') : 'reported';
+    const when = s => Math.max(s.reportedAt || 0, s.paidAt || 0, s.clickedAt || 0);
+    res.json({
+        reported: caught.length, fellFor: fell.length,
+        lost: parseFloat(fell.reduce((n, s) => n + (Number(s.paidAmount) || 0), 0).toFixed(2)),
+        score: resolved.length ? Math.round(100 * caught.length / (caught.length + fell.length)) : null,
+        badges: SCAM_BADGES.map(b => ({
+            id: b.id, icon: b.icon, name: b.name, desc: b.desc, goal: b.goal,
+            progress: Math.min(caught.length, b.goal), earned: caught.length >= b.goal && !(b.needsNoFall && fell.length)
+        })),
+        history: resolved.sort((a, b) => when(b) - when(a)).map(s => ({
+            id: s.id, kind: s.kind, title: s.kind === 'message' ? s.subject : s.payee, outcome: outcome(s), when: when(s),
+            xp: s.xpAwarded || 0, lost: Number(s.paidAmount) || 0, redFlags: s.redFlags || []
+        }))
+    });
 });
 
 // "Report as scam" on a bill.
@@ -5563,6 +5682,20 @@ const MIGRATIONS = [{
         await sync('main', 'challenges', 'users', null, true);
         for (const key of Object.keys(MODULE_STORES)) await sync(key, MODULE_STORES[key].challenges, MODULE_STORES[key].users, key, false);
         return summary;
+    }
+}, {
+    // The Scam Spotter challenges are new: every approved main-site participant gets them once.
+    id: '2026-11-scam-spotter-challenges',
+    run: async () => {
+        const titles = ['Scam Spotter', 'Sharp Eyes', 'Scam Buster'];
+        const [rows, users] = await Promise.all([readJSON('challenges'), readJSON('users')]);
+        let added = 0;
+        users.filter(u => u.role === 'participant' && u.status === 'approved').forEach(u => {
+            // A user with no challenges yet is seeded the whole set on first use, titles included.
+            if (rows.some(c => c.userId === u.id)) added += addMissingChallenges(rows, u.id, null, titles);
+        });
+        if (added) await writeJSON('challenges', rows);
+        return { added };
     }
 }];
 

@@ -417,6 +417,7 @@
             case 'payment_amount':    cur = stats.lastPayAmount || 0; label = '&#402; in one payment'; break;
             case 'total_paid_bills':  cur = stats.totalSpentBills || 0; label = '&#402; paid in bills'; break;
             case 'total_xp_earned':   cur = stats.totalPts || 0; label = 'XP earned'; break;
+            case 'scams_reported':    cur = stats.scamsReported || 0; label = 'scams reported'; break;
             case 'florin_balance':    cur = (stats.user && stats.user.coins) || 0; label = 'florins'; break;
             case 'checking_balance':  cur = stats.checkingBalance || 0; label = '&#402; in checking'; break;
             case 'savings_balance':   cur = stats.savingsBalance  || 0; label = '&#402; in savings';  break;

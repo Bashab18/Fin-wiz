@@ -459,7 +459,7 @@
                             '</div>' +
                         '</div>' +
                     '</div>' +
-                    '<div class="email-reading-body">' + esc(m.body) + DigifinwizScam.revealHtml(m) + '</div>';
+                    '<div class="email-reading-body">' + esc(m.body) + DigifinwizScam.baitHtml(m) + DigifinwizScam.revealHtml(m) + '</div>';
 
                 // Report as scam: the server says whether it was a practice scam.
                 var reportBtn = document.getElementById('reportScamBtn');
@@ -500,6 +500,14 @@
             }
 
             renderList();
+
+            // The link in a scam message was clicked: show what it was in place.
+            document.addEventListener('dfw-scam-revealed', function(e) {
+                var m = messages.filter(function(x) { return x.id === e.detail.id; })[0];
+                if (!m || !e.detail.result || !e.detail.result.scam) return;
+                m.scamRevealed = { how: 'clicked', redFlags: e.detail.result.redFlags || [] };
+                if (selectedId === m.id) openMessage(m, session);
+            });
         }
     });
     </script>

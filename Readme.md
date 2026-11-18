@@ -126,11 +126,18 @@ From the **Scam Simulations** page an admin sends one user a practice scam to sp
 | Fake payment request | A "Payment requests" card on their DigiBank dashboard (needs a linked DigiBank account) | Same; recorded as a `scam` transaction |
 
 - Nothing sent to the user marks the item as a scam. Every message and every unpaid bill has a **Report as scam** control, so the control itself gives nothing away; reporting something genuine just says so.
-- Reporting a scam shows its warning signs and pays the XP the admin set (default 50, once per scam, to the account that reported it). A report made after paying earns nothing.
+- Reporting a scam shows its warning signs and pays the XP the admin set (default 50, once per scam, to the account that reported it). A report made after paying, or after clicking its link, earns nothing.
+- **Link scams.** A scam message can carry a button (with the address it claims to go to shown under it). Clicking it costs nothing, but the learner is shown the lesson, the message in every inbox is marked as clicked, and a later report earns no XP. Templates cover a fake bank "verify your account", a gift card, a parcel-fee text message, a voicemail transcript and a refund claim.
 - Paying a scam shows the same warning signs and leaves a "You paid a scam" message in that site's inbox. The money is not returned.
-- **Scams Sent** lists each scam with its outcome: delivered, opened, reported, paid, or declined. Deleting a scam removes it from the user's inbox or bill list.
+- **Scams Sent** lists each scam with its outcome: delivered, opened, reported, clicked, paid, or declined. Deleting a scam removes it from the user's inbox or bill list.
+- **Results** (second tab of the Scam Simulations page) shows how many scams were reported before the learner fell for them, how many were paid or clicked, how long reporting took, a 14-day chart, tables by type, template and user, and a CSV export. It is worked out in the page from `GET /api/admin/scams`.
 
-Records live in the `scams` store. Endpoints: `GET/POST /api/admin/scams`, `DELETE /api/admin/scams/:id`, `POST /api/me/messages/:id/report`, `POST /api/me/bills/:cycleId/report`, `GET /api/me/payment-requests`, `POST /api/me/payment-requests/:id/(pay|decline|report)`.
+### What learners get for spotting scams
+
+- Three default challenges in the *Security* category, for main-site accounts only: **Scam Spotter** (report 1), **Sharp Eyes** (report 3) and **Scam Buster** (report 5), using the new `scams_reported` condition (admins can use it in their own challenges too). Only scams reported before falling for them count. A report runs the main account's challenge check, so the reward shows in the report dialog. Existing participants get the three through a one-time migration.
+- **Scam Safety** (`scam-safety.html`, linked from Profile → Progress): reported and fallen-for counts, a spotter score, four badges (First Catch, Sharp Eyes, Scam Buster, Cool Head), a history of the scams already resolved with their warning signs, and a list of common warning signs. Scams still waiting in an inbox are never counted or listed, so the page cannot reveal that one is there. It reads `GET /api/me/scam-record`.
+
+Records live in the `scams` store. Endpoints: `GET/POST /api/admin/scams`, `DELETE /api/admin/scams/:id`, `POST /api/me/messages/:id/report`, `POST /api/me/messages/:id/click`, `GET /api/me/scam-record`, `POST /api/me/bills/:cycleId/report`, `GET /api/me/payment-requests`, `POST /api/me/payment-requests/:id/(pay|decline|report)`.
 
 ## API Reference (key endpoints)
 

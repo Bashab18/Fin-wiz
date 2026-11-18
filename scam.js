@@ -15,17 +15,23 @@ const DigifinwizScam = (() => {
             flags.map(function(f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>';
     }
 
-    // Shows what a report (or a payment) turned out to be. Resolves when closed.
+    // Shows what a report, a click or a payment turned out to be. Resolves when closed.
     function show(result) {
         return new Promise(function(resolve) {
-            var isScam = !!(result && result.scam);
-            var paid   = isScam && result.paid;
-            var tone   = !isScam ? '#2563eb' : paid ? '#dc2626' : '#16a34a';
-            var title  = !isScam ? 'Not a scam' : paid ? 'That was a scam' : 'Scam reported';
-            var lines  = '<p style="margin:0;color:#334155;line-height:1.55">' + esc(result && result.message) + '</p>';
-            if (isScam && !paid && result.xp > 0) {
+            var isScam  = !!(result && result.scam);
+            var paid    = isScam && result.paid;
+            var clicked = isScam && result.clicked;
+            var fell    = paid || clicked;
+            var tone    = !isScam ? '#2563eb' : fell ? '#dc2626' : '#16a34a';
+            var title   = !isScam ? 'Not a scam' : paid ? 'That was a scam' : clicked ? 'You clicked a scam link' : 'Scam reported';
+            var lines   = '<p style="margin:0;color:#334155;line-height:1.55">' + esc(result && result.message) + '</p>';
+            if (isScam && !fell && result.xp > 0) {
                 lines += '<p style="margin:10px 0 0;font-weight:700;color:#16a34a">+' + Number(result.xp) + ' XP' +
                     (result.leveledUp ? ' · Level ' + Number(result.newLevel) + ' reached' : '') + '</p>';
+            }
+            if (isScam && result.challengesCompleted && result.challengesCompleted.length) {
+                lines += '<p style="margin:8px 0 0;font-weight:600;color:#16a34a">🎯 Challenge complete: ' +
+                    result.challengesCompleted.map(esc).join(', ') + (result.challengeXp ? ' (+' + Number(result.challengeXp) + ' XP)' : '') + '</p>';
             }
             if (paid && result.amount) {
                 lines += '<p style="margin:10px 0 0;font-weight:700;color:#dc2626">ƒ' + Number(result.amount).toFixed(2) + ' lost</p>';
@@ -72,13 +78,44 @@ const DigifinwizScam = (() => {
     function reportBill(cycleId)      { return DigifinwizDB.reportBill(cycleId).then(show, failed); }
     function reportPaymentRequest(id) { return DigifinwizDB.reportPaymentRequest(id).then(show, failed); }
 
-    // The note under a message the learner has already reported as a scam.
+    // The note under a message the learner has already reported as a scam, or fallen for.
     function revealHtml(m) {
         if (!m || !m.scamRevealed) return '';
-        return '<div style="margin-top:12px;padding:10px 14px;border-radius:8px;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;font-size:0.85rem;white-space:normal">' +
-            '<strong>You reported this as a scam.</strong>' + flagsHtml(m.scamRevealed.redFlags).replace(/color:#0f172a/, 'color:#166534').replace(/color:#334155/, 'color:#166534') +
+        var clicked = m.scamRevealed.how === 'clicked';
+        return '<div style="margin-top:12px;padding:10px 14px;border-radius:8px;background:' + (clicked ? '#fef2f2' : '#f0fdf4') + ';border:1px solid ' + (clicked ? '#fecaca' : '#bbf7d0') + ';color:' + (clicked ? '#991b1b' : '#166534') + ';font-size:0.85rem;white-space:normal">' +
+            '<strong>' + (clicked ? 'You clicked the link in this scam.' : 'You reported this as a scam.') + '</strong>' +
+            flagsHtml(m.scamRevealed.redFlags).replace(/color:#0f172a/, 'color:inherit').replace(/color:#334155/, 'color:inherit') +
             '</div>';
     }
 
-    return { show, reportMessage, reportBill, reportPaymentRequest, revealHtml };
+    // A link in a message. Looks like any other button; clicking it is what a phishing
+    // message wants. The click is handled for every inbox below.
+    function baitHtml(m) {
+        if (!m || !m.bait || !m.bait.label) return '';
+        var done = !!m.scamRevealed;
+        return '<div style="margin-top:14px">' +
+            '<button type="button" class="dfw-bait-btn" data-msg-id="' + Number(m.id) + '"' + (done ? ' disabled' : '') +
+                ' style="background:' + (done ? '#94a3b8' : '#2563eb') + ';color:#fff;border:0;border-radius:6px;padding:9px 18px;font-weight:600;font-size:0.9rem;cursor:' + (done ? 'default' : 'pointer') + ';font-family:inherit">' +
+                esc(m.bait.label) + '</button>' +
+            (m.bait.url ? '<div style="font-size:0.72rem;color:#94a3b8;margin-top:4px;word-break:break-all">' + esc(m.bait.url) + '</div>' : '') +
+            '</div>';
+    }
+
+    // One handler for the link button in every inbox: ask the server, show the lesson, then
+    // tell the page which message was revealed (it updates its own list).
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest && e.target.closest('.dfw-bait-btn');
+        if (!btn || btn.disabled) return;
+        e.stopPropagation();
+        btn.disabled = true;
+        var id = Number(btn.dataset.msgId);
+        DigifinwizDB.clickMessage(id).then(show).then(function(result) {
+            document.dispatchEvent(new CustomEvent('dfw-scam-revealed', { detail: { id: id, result: result } }));
+        }).catch(function(err) {
+            btn.disabled = false;
+            show({ scam: false, message: (err && err.message) || 'Something went wrong. Please try again.' });
+        });
+    }, true);
+
+    return { show, reportMessage, reportBill, reportPaymentRequest, revealHtml, baitHtml };
 })();
